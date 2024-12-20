@@ -1,0 +1,101 @@
+package iron
+
+import (
+	"context"
+	"sync"
+
+	"go.uber.org/multierr"
+)
+
+type Client struct {
+	env       *Env
+	option    string
+	available chan *conn
+	all       []*conn
+	maxConns  int
+	dialErr   error
+	sync.Mutex
+}
+
+func New(env Env, option string, maxConns int) (*Client, error) {
+	env.ApplyDefaults()
+
+	if maxConns <= 0 {
+		maxConns = 1
+	}
+
+	return &Client{
+		env:       &env,
+		option:    option,
+		available: make(chan *conn, maxConns),
+		maxConns:  maxConns,
+	}, nil
+}
+
+func (c *Client) Connect(ctx context.Context) (Conn, error) {
+	if len(c.available) > 0 {
+		return &returnOnClose{<-c.available, c}, nil
+	}
+
+	c.Lock()
+
+	if len(c.all) < c.maxConns {
+		defer c.Unlock()
+
+		return c.newConn(ctx)
+	}
+
+	c.Unlock()
+
+	return &returnOnClose{<-c.available, c}, nil
+}
+
+func (c *Client) newConn(ctx context.Context) (Conn, error) {
+	if c.dialErr != nil {
+		// Dial has already failed, return the same error without retrying
+		return nil, c.dialErr
+	}
+
+	env := *c.env
+
+	// Only use pam_password for first connection
+	if len(c.all) > 0 && env.AuthScheme != native {
+		env.AuthScheme = native
+		env.Password = c.all[0].NativePassword
+	}
+
+	conn, err := dial(ctx, env, c.option)
+	if err != nil {
+		c.dialErr = err
+
+		return nil, err
+	}
+
+	c.all = append(c.all, conn)
+
+	return &returnOnClose{conn, c}, nil
+}
+
+type returnOnClose struct {
+	*conn
+	client *Client
+}
+
+func (r *returnOnClose) Close() error {
+	r.client.available <- r.conn
+
+	return nil
+}
+
+func (c *Client) Close() error {
+	c.Lock()
+	defer c.Unlock()
+
+	var err error
+
+	for _, conn := range c.all {
+		err = multierr.Append(err, conn.Close())
+	}
+
+	return err
+}

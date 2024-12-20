@@ -1,0 +1,3 @@
+buildGo {
+  name = "iron"
+}
