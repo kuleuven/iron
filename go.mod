@@ -10,5 +10,5 @@ require (
 
 require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+	golang.org/x/sys v0.8.0 // indirect
 )

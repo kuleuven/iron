@@ -60,3 +60,69 @@ type AuthChallengeResponse struct {
 }
 
 type AuthResponse []byte // Empty
+
+type QueryRequest struct {
+	XMLName           xml.Name `xml:"GenQueryInp_PI"`
+	MaxRows           int      `xml:"maxRows"`
+	ContinueIndex     int      `xml:"continueInx"`       // 1 for continueing, 0 for end
+	PartialStartIndex int      `xml:"partialStartIndex"` // unknown
+	Options           int      `xml:"options"`
+	KeyVals           SSKeyVal `xml:"KeyValPair_PI"`
+	Selects           IIKeyVal `xml:"InxIvalPair_PI"`
+	Conditions        ISKeyVal `xml:"InxValPair_PI"`
+}
+
+type SSKeyVal struct {
+	XMLName xml.Name `xml:"KeyValPair_PI"`
+	Length  int      `xml:"ssLen"`
+	Keys    []string `xml:"keyWord,omitempty"`
+	Values  []string `xml:"svalue,omitempty"`
+}
+
+func (kv *SSKeyVal) Add(key string, val string) {
+	kv.Keys = append(kv.Keys, key)
+	kv.Values = append(kv.Values, val)
+	kv.Length++
+}
+
+type IIKeyVal struct {
+	XMLName xml.Name `xml:"InxIvalPair_PI"`
+	Length  int      `xml:"iiLen"`
+	Keys    []int    `xml:"inx,omitempty"`
+	Values  []int    `xml:"ivalue,omitempty"`
+}
+
+func (kv *IIKeyVal) Add(key int, val int) {
+	kv.Keys = append(kv.Keys, key)
+	kv.Values = append(kv.Values, val)
+	kv.Length++
+}
+
+type ISKeyVal struct {
+	XMLName xml.Name `xml:"InxValPair_PI"`
+	Length  int      `xml:"isLen"`
+	Keys    []int    `xml:"inx,omitempty"`
+	Values  []string `xml:"svalue,omitempty"`
+}
+
+func (kv *ISKeyVal) Add(key int, val string) {
+	kv.Keys = append(kv.Keys, key)
+	kv.Values = append(kv.Values, val)
+	kv.Length++
+}
+
+type QueryResponse struct {
+	XMLName        xml.Name    `xml:"GenQueryOut_PI"`
+	RowCount       int         `xml:"rowCnt"`
+	AttributeCount int         `xml:"attriCnt"`
+	ContinueIndex  int         `xml:"continueInx"`
+	TotalRowCount  int         `xml:"totalRowCount"`
+	SQLResult      []SQLResult `xml:"SqlResult_PI"`
+}
+
+type SQLResult struct {
+	XMLName        xml.Name `xml:"SqlResult_PI"`
+	AttributeIndex int      `xml:"attriInx"`
+	ResultLen      int      `xml:"reslen"`
+	Values         []string `xml:"value,omitempty"`
+}

@@ -19,6 +19,7 @@ import (
 type Conn interface {
 	Request(ctx context.Context, apiNumber int32, request, response any) error
 	Close() error
+	Conn() net.Conn
 }
 
 type conn struct {
@@ -88,6 +89,11 @@ func newConn(ctx context.Context, transport net.Conn, env Env, option string) (*
 }
 
 var ErrTLSRequired = fmt.Errorf("TLS is required for authentication but not enabled")
+
+// Conn returns the underlying network connection.
+func (c *conn) Conn() net.Conn {
+	return c.transport
+}
 
 // Handshake performs a handshake with the IRODS server.
 func (c *conn) Handshake(ctx context.Context) error {

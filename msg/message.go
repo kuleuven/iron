@@ -62,7 +62,7 @@ func (header Header) Write(w io.Writer) error {
 }
 
 func (body Body) Write(w io.Writer) error {
-	logrus.Tracef("> body length %d", len(body.Message)+len(body.Error)+len(body.Bs))
+	logrus.Debugf("> %s %s %s", body.Message, body.Error, body.Bs)
 
 	if _, err := w.Write(body.Message); err != nil {
 		return err

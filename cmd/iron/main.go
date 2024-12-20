@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"gitea.icts.kuleuven.be/coz/iron"
+	"gitea.icts.kuleuven.be/coz/iron/query"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,4 +37,22 @@ func main() {
 	}
 
 	defer conn.Close()
+
+	logrus.Print("/" + env.Zone)
+
+	results := query.Query(query.ICAT_COLUMN_COLL_NAME).Where(query.ICAT_COLUMN_COLL_PARENT_NAME, "= '/"+env.Zone+"/home'").Limit(1).Execute(context.Background(), conn)
+
+	defer results.Close()
+
+	for results.Next() {
+		var id string
+
+		if err := results.Scan(&id); err != nil {
+			panic(err)
+		}
+	}
+
+	if err := results.Err(); err != nil {
+		panic(err)
+	}
 }
