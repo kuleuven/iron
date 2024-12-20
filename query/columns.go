@@ -1,3 +1,4 @@
+//nolint:stylecheck
 package query
 
 // ICATColumnNumber is an ICAT Column number type
