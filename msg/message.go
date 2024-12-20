@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/xml"
+	"fmt"
 	"io"
+	"strings"
+	"unicode"
 
 	"github.com/sirupsen/logrus"
 )
@@ -44,7 +47,7 @@ func (header Header) Write(w io.Writer) error {
 		return err
 	}
 
-	logrus.Tracef("> %s", payload)
+	logrus.Tracef("-> %s", payload)
 
 	// Write header
 	headerLenBuffer := make([]byte, 4)
@@ -62,7 +65,11 @@ func (header Header) Write(w io.Writer) error {
 }
 
 func (body Body) Write(w io.Writer) error {
-	logrus.Debugf("> %s %s %s", body.Message, body.Error, body.Bs)
+	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s %s", body.Message, body.Error, body.Bs), "\n", ""); isPrintable(toLog) {
+		logrus.Tracef("-> %s", toLog)
+	} else {
+		logrus.Tracef("-> %d bytes", len(body.Message)+len(body.Error)+len(body.Bs))
+	}
 
 	if _, err := w.Write(body.Message); err != nil {
 		return err
@@ -77,6 +84,16 @@ func (body Body) Write(w io.Writer) error {
 	}
 
 	return nil
+}
+
+func isPrintable(s string) bool {
+	for _, r := range s {
+		if r > unicode.MaxASCII || !unicode.IsPrint(r) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Read decodes an iRODS message from r
@@ -103,7 +120,7 @@ func (header *Header) Read(r io.Reader) error {
 		return err
 	}
 
-	logrus.Tracef("< %s", bytes.ReplaceAll(headerBuffer, []byte("\n"), nil))
+	logrus.Tracef("<- %s", bytes.ReplaceAll(headerBuffer, []byte("\n"), nil))
 
 	return xml.Unmarshal(headerBuffer, &header)
 }
@@ -125,7 +142,11 @@ func (body *Body) Read(r io.Reader, header Header) error {
 		return err
 	}
 
-	logrus.Tracef("< body length %d", len(body.Message)+len(body.Error)+len(body.Bs))
+	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s %s", body.Message, body.Error, body.Bs), "\n", ""); isPrintable(toLog) {
+		logrus.Tracef("<- %s", toLog)
+	} else {
+		logrus.Tracef("<- %d bytes", len(body.Message)+len(body.Error)+len(body.Bs))
+	}
 
 	return nil
 }

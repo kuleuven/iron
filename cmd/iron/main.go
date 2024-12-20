@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	logrus.StandardLogger().SetLevel(logrus.DebugLevel)
+	logrus.StandardLogger().SetLevel(logrus.TraceLevel)
 
 	var env iron.Env
 
