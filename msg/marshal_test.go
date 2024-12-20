@@ -1,6 +1,7 @@
 package msg
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 )
@@ -43,5 +44,55 @@ func TestMarshal(t *testing.T) {
 				t.Fatal("marshaled objects are not equal")
 			}
 		})
+	}
+}
+
+func TestReadWrite(t *testing.T) {
+	objects := []any{
+		AuthRequest{},
+		&AuthRequest{},
+		AuthChallenge{
+			Challenge: "test",
+		},
+		&AuthChallenge{},
+		AuthChallengeResponse{
+			Response: "test",
+			Username: "tes\tt",
+		},
+		&AuthChallengeResponse{},
+		AuthResponse{},
+		&AuthResponse{},
+	}
+
+	buf := bytes.NewBuffer(nil)
+
+	for i := 0; i < len(objects); i += 2 {
+		if err := Write(buf, objects[i], "test", int32(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < len(objects); i += 2 {
+		if info, err := Read(buf, objects[i+1], "test"); err != nil {
+			t.Fatal(err)
+		} else if info != int32(i) {
+			t.Fatalf("expected %d, got %d", i, info)
+		}
+	}
+
+	for i := 0; i < len(objects); i += 2 {
+		marshal1, err := Marshal(objects[i], "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		marshal2, err := Marshal(objects[i+1], "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(marshal1, marshal2) {
+			t.Fatal("marshaled objects are not equal:", marshal1, marshal2)
+		}
 	}
 }
