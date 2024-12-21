@@ -197,7 +197,7 @@ func (r *Result) executeQuery() {
 }
 
 func (r *Result) cleanup() {
-	if r.result.ContinueIndex != 0 {
+	for r.result.ContinueIndex != 0 {
 		r.query.ContinueIndex = r.result.ContinueIndex
 		r.query.MaxRows = 0
 
