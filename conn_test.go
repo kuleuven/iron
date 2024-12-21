@@ -78,7 +78,12 @@ func TestConnNative(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = conn.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,20 +151,58 @@ func TestConnPamPassword(t *testing.T) {
 	}()
 
 	env := Env{
-		Host:                          "localhost",
-		Port:                          1247,
-		Zone:                          "testZone",
-		Username:                      "testUser",
-		Password:                      "testPassword",
-		AuthScheme:                    "pam_password",
-		ClientServerNegotiationPolicy: "CS_NEG_DONT_CARE",
-		SSLVerifyServer:               "none",
+		Zone:            "testZone",
+		Username:        "testUser",
+		Password:        "testPassword",
+		AuthScheme:      "pam_password",
+		SSLVerifyServer: "none",
 	}
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, "test")
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDialer(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			t.Error(err)
+		}
+
+		// Consume startup message
+		_, err = msg.Read(conn, &msg.StartupPack{}, "RODS_CONNECT")
+		if err != nil {
+			t.Error(err)
+		}
+
+		conn.Close()
+	}()
+
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("expected TCP address, got %T", listener.Addr())
+	}
+
+	env := Env{Host: "127.0.0.1", Port: tcpAddr.Port}
+
+	env.ApplyDefaults()
+
+	_, err = Dial(context.Background(), env, "test")
+	if err != io.EOF {
+		t.Fatalf("expected EOF, got %v", err)
 	}
 }

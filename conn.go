@@ -379,7 +379,7 @@ func (c *conn) Request(ctx context.Context, apiNumber int32, request, response a
 }
 
 func (c *conn) Close() error {
-	return c.transport.Close()
+	return c.Conn().Close()
 }
 
 func (c *conn) CloseOnCancel(ctx context.Context) context.CancelFunc {
