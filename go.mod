@@ -9,6 +9,8 @@ require (
 )
 
 require (
+	github.com/acomagu/bufpipe v1.0.4 // indirect
+	github.com/klauspost/readahead v1.4.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 )
