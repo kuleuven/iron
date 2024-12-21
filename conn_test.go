@@ -206,3 +206,31 @@ func TestDialer(t *testing.T) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
+
+func TestTLSRequired1(t *testing.T) {
+	env := Env{
+		AuthScheme:                    "pam_password",
+		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+	}
+
+	env.ApplyDefaults()
+
+	_, err := NewConn(context.Background(), nil, env, "test")
+	if err != ErrTLSRequired {
+		t.Fatalf("expected ErrTLSRequired, got %v", err)
+	}
+}
+
+func TestTLSRequired2(t *testing.T) {
+	env := Env{
+		AuthScheme:              "pam_password",
+		ClientServerNegotiation: "dont_negotiate",
+	}
+
+	env.ApplyDefaults()
+
+	_, err := NewConn(context.Background(), nil, env, "test")
+	if err != ErrTLSRequired {
+		t.Fatalf("expected ErrTLSRequired, got %v", err)
+	}
+}
