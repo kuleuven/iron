@@ -1,4 +1,4 @@
-package query
+package api
 
 import (
 	"context"
@@ -7,28 +7,29 @@ import (
 	"strconv"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
 
 // Query defines a query
 type PreparedQuery struct {
+	api         *api
 	ResultLimit int
 	MaxRows     int
-	Columns     []ICATColumnNumber
-	Conditions  map[ICATColumnNumber]string
+	Columns     []msg.ColumnNumber
+	Conditions  map[msg.ColumnNumber]string
 	AsAdmin     bool
 }
 
-func Query(columns ...ICATColumnNumber) PreparedQuery {
+func (api *api) Query(columns ...msg.ColumnNumber) PreparedQuery {
 	return PreparedQuery{
+		api:        api,
 		Columns:    columns,
 		MaxRows:    500,
-		Conditions: make(map[ICATColumnNumber]string),
+		Conditions: make(map[msg.ColumnNumber]string),
 	}
 }
 
-func (q PreparedQuery) Where(column ICATColumnNumber, condition string) PreparedQuery {
+func (q PreparedQuery) Where(column msg.ColumnNumber, condition string) PreparedQuery {
 	q.Conditions[column] = condition
 
 	return q
@@ -50,11 +51,16 @@ func (q PreparedQuery) Admin() PreparedQuery {
 	return q
 }
 
-func (q PreparedQuery) Execute(ctx context.Context, conn iron.Conn) *Result {
+func (q PreparedQuery) Execute(ctx context.Context) *Result {
+	conn, err := q.api.Connect(ctx)
+	if err != nil {
+		return &Result{err: err}
+	}
+
 	result := &Result{
 		Conn:    conn,
-		Query:   q,
 		Context: ctx,
+		Query:   q,
 	}
 
 	result.buildQuery()
@@ -64,13 +70,14 @@ func (q PreparedQuery) Execute(ctx context.Context, conn iron.Conn) *Result {
 }
 
 type Result struct {
-	Context context.Context //nolint:containedctx
-	Conn    iron.Conn
-	Query   PreparedQuery
-	query   *msg.QueryRequest
-	result  *msg.QueryResponse
-	err     error
-	row     int
+	Conn     Conn
+	Context  context.Context //nolint:containedctx
+	Query    PreparedQuery
+	query    *msg.QueryRequest
+	result   *msg.QueryResponse
+	err      error
+	closeErr error
+	row      int
 }
 
 func (r *Result) Err() error {
@@ -152,7 +159,7 @@ func (r *Result) Scan(dest ...interface{}) error {
 func (r *Result) Close() error {
 	r.cleanup()
 
-	return r.Err()
+	return r.closeErr
 }
 
 func (r *Result) buildQuery() {
@@ -180,7 +187,7 @@ func (r *Result) executeQuery() {
 	r.err = r.Conn.Request(r.Context, 702, r.query, r.result)
 	r.row = -1
 
-	if rodsErr, ok := r.err.(*iron.IRODSError); ok && rodsErr.Code == -808000 { // CAT_NO_ROWS_FOUND
+	if rodsErr, ok := r.err.(*msg.IRODSError); ok && rodsErr.Code == -808000 { // CAT_NO_ROWS_FOUND
 		r.err = nil
 	}
 
@@ -190,14 +197,17 @@ func (r *Result) executeQuery() {
 }
 
 func (r *Result) cleanup() {
-	if r.result.ContinueIndex == 0 {
-		return
+	if r.result.ContinueIndex != 0 {
+		r.query.ContinueIndex = r.result.ContinueIndex
+		r.query.MaxRows = 0
+
+		r.executeQuery()
 	}
 
-	r.query.ContinueIndex = r.result.ContinueIndex
-	r.query.MaxRows = 0
-
-	r.executeQuery()
+	if r.Conn != nil {
+		r.closeErr = r.Conn.Close()
+		r.Conn = nil
+	}
 }
 
 func (r *Result) parseValue(value string, dest interface{}) error {
@@ -239,7 +249,7 @@ func (r *Result) parseValue(value string, dest interface{}) error {
 
 	case reflect.Struct:
 		if reflect.ValueOf(dest).Elem().Type() == reflect.TypeOf(time.Time{}) {
-			t, err := ParseTime(value)
+			t, err := parseTime(value)
 			if err != nil {
 				return fmt.Errorf("%w: %s (time)", err, value)
 			}
@@ -255,4 +265,17 @@ func (r *Result) parseValue(value string, dest interface{}) error {
 	}
 
 	return nil
+}
+
+func parseTime(timestring string) (time.Time, error) {
+	i64, err := strconv.ParseInt(timestring, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("cannot parse IRODS time string '%s'", timestring)
+	}
+
+	if i64 <= 0 {
+		return time.Time{}, nil
+	}
+
+	return time.Unix(i64, 0), nil
 }

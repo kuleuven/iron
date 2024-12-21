@@ -12,25 +12,27 @@ import (
 	"strconv"
 	"time"
 
+	"gitea.icts.kuleuven.be/coz/iron/api"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/hashicorp/go-rootcerts"
 )
 
 type Conn interface {
+	Conn() net.Conn
 	Request(ctx context.Context, apiNumber int32, request, response any) error
 	Close() error
-	Conn() net.Conn
+	api.API
 }
 
 type conn struct {
-	transport net.Conn
-	env       *Env
-	option    string
-
+	transport       net.Conn
+	env             *Env
+	option          string
 	UseTLS          bool
 	Version         *msg.Version
 	ClientSignature string
 	NativePassword  string // Only used for non-native authentication
+	api.API
 }
 
 var Dialer = net.Dialer{
@@ -80,6 +82,11 @@ func newConn(ctx context.Context, transport net.Conn, env Env, option string) (*
 
 		c.env.ClientServerNegotiationPolicy = ClientServerRequireTLS
 	}
+
+	// Register API
+	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
+		return c, nil
+	})
 
 	ctx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
 
@@ -334,15 +341,6 @@ func GenerateAuthResponse(challenge []byte, password string) string {
 	return base64.StdEncoding.EncodeToString(encodedPassword[:authResponseLen])
 }
 
-type IRODSError struct {
-	Code    int32
-	Message string
-}
-
-func (e *IRODSError) Error() string {
-	return fmt.Sprintf("IRODS error %d: %s", e.Code, e.Message)
-}
-
 // Request sends an API request to the server and expects a API reply.
 // If a negative IntInfo is received, an IRODSError is returned.
 func (c *conn) Request(ctx context.Context, apiNumber int32, request, response any) error {
@@ -365,7 +363,7 @@ func (c *conn) Request(ctx context.Context, apiNumber int32, request, response a
 	}
 
 	if m.Header.IntInfo < 0 {
-		err := &IRODSError{
+		err := &msg.IRODSError{
 			Code:    m.Header.IntInfo,
 			Message: string(m.Body.Error),
 		}

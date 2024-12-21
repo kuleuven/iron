@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"gitea.icts.kuleuven.be/coz/iron/api"
 	"go.uber.org/multierr"
 )
 
@@ -14,7 +15,8 @@ type Client struct {
 	all       []*conn
 	maxConns  int
 	dialErr   error
-	sync.Mutex
+	lock      sync.Mutex
+	api.API
 }
 
 func New(env Env, option string, maxConns int) (*Client, error) {
@@ -24,12 +26,19 @@ func New(env Env, option string, maxConns int) (*Client, error) {
 		maxConns = 1
 	}
 
-	return &Client{
+	c := &Client{
 		env:       &env,
 		option:    option,
 		available: make(chan *conn, maxConns),
 		maxConns:  maxConns,
-	}, nil
+	}
+
+	// Register api
+	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
+		return c.Connect(ctx)
+	})
+
+	return c, nil
 }
 
 func (c *Client) Connect(ctx context.Context) (Conn, error) {
@@ -37,15 +46,15 @@ func (c *Client) Connect(ctx context.Context) (Conn, error) {
 		return &returnOnClose{<-c.available, c}, nil
 	}
 
-	c.Lock()
+	c.lock.Lock()
 
 	if len(c.all) < c.maxConns {
-		defer c.Unlock()
+		defer c.lock.Unlock()
 
 		return c.newConn(ctx)
 	}
 
-	c.Unlock()
+	c.lock.Unlock()
 
 	return &returnOnClose{<-c.available, c}, nil
 }
@@ -88,8 +97,8 @@ func (r *returnOnClose) Close() error {
 }
 
 func (c *Client) Close() error {
-	c.Lock()
-	defer c.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	var err error
 

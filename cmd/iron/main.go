@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"gitea.icts.kuleuven.be/coz/iron"
-	"gitea.icts.kuleuven.be/coz/iron/query"
+	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,7 +40,7 @@ func main() {
 
 	logrus.Print("/" + env.Zone)
 
-	results := query.Query(query.ICAT_COLUMN_COLL_NAME).Where(query.ICAT_COLUMN_COLL_PARENT_NAME, "= '/"+env.Zone+"/home'").Limit(1).Execute(context.Background(), conn)
+	results := conn.Query(msg.ICAT_COLUMN_COLL_NAME).Where(msg.ICAT_COLUMN_COLL_PARENT_NAME, "= '/"+env.Zone+"/home'").Limit(1).Execute(context.Background())
 
 	defer results.Close()
 
