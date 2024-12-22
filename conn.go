@@ -270,9 +270,7 @@ func (c *conn) handshakeTLS() error {
 	}
 
 	c.transport = tlsConn
-
-	// Generate encryption key
-	encryptionKey := make([]byte, c.env.EncryptionKeySize)
+	encryptionKey := make([]byte, c.env.EncryptionKeySize) // Generate encryption key
 
 	if _, err := rand.Read(encryptionKey); err != nil {
 		return err
@@ -290,7 +288,6 @@ func (c *conn) handshakeTLS() error {
 		return err
 	}
 
-	// The encryption key is sent as raw packet
 	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), "SHARED_SECRET", 0)
 }
 
