@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -58,7 +59,9 @@ func TestConnNative(t *testing.T) {
 		Result: "CS_NEG_DONT_CARE",
 	}, "RODS_CS_NEG_T", 0)
 
-	msg.Write(server, msg.Version{}, "RODS_VERSION", 0)
+	msg.Write(server, msg.Version{
+		ReleaseVersion: "rods4.3.0",
+	}, "RODS_VERSION", 0)
 
 	msg.Write(server, msg.AuthChallenge{
 		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
@@ -120,7 +123,9 @@ func pamResponses(server net.Conn) {
 		Result: "CS_NEQ_REQUIRE",
 	}, "RODS_CS_NEG_T", 0))
 	assert(msg.Read(server, &msg.ClientServerNegotiation{}, "RODS_CS_NEG_T"))
-	assert(msg.Write(server, msg.Version{}, "RODS_VERSION", 0))
+	assert(msg.Write(server, msg.Version{
+		ReleaseVersion: "rods4.3.0",
+	}, "RODS_VERSION", 0))
 
 	// Switch to TLS
 	cert, err := tls.X509KeyPair(certPem, keyPem)
@@ -329,5 +334,35 @@ func TestTLSRequired2(t *testing.T) {
 	_, err := NewConn(context.Background(), nil, env, "test")
 	if err != ErrTLSRequired {
 		t.Fatalf("expected ErrTLSRequired, got %v", err)
+	}
+}
+
+func TestOldVersion(t *testing.T) {
+	ctx := context.Background()
+	transport, server := connPipe()
+
+	msg.Write(server, msg.ClientServerNegotiation{
+		Result: "CS_NEG_DONT_CARE",
+	}, "RODS_CS_NEG_T", 0)
+
+	msg.Write(server, msg.Version{
+		ReleaseVersion: "rods4.2.9",
+	}, "RODS_VERSION", 0)
+
+	env := Env{
+		Host:                          "localhost",
+		Port:                          1247,
+		Zone:                          "testZone",
+		Username:                      "testUser",
+		Password:                      "testPassword",
+		AuthScheme:                    "native",
+		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+	}
+
+	env.ApplyDefaults()
+
+	_, err := NewConn(ctx, transport, env, "test")
+	if !errors.Is(err, ErrUnsupportedVersion) {
+		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
 	}
 }

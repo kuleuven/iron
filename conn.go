@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/api"
@@ -112,6 +113,8 @@ func (c *conn) Handshake(ctx context.Context) error {
 	return c.authenticate(ctx)
 }
 
+var ErrUnsupportedVersion = fmt.Errorf("unsupported server version")
+
 func (c *conn) startup(ctx context.Context) error {
 	cancel := c.CloseOnCancel(ctx)
 
@@ -144,6 +147,10 @@ func (c *conn) startup(ctx context.Context) error {
 		return err
 	}
 
+	if !checkVersion(version) {
+		return fmt.Errorf("%w: server version %v", ErrUnsupportedVersion, version.ReleaseVersion)
+	}
+
 	c.Version = &version
 
 	if !c.UseTLS {
@@ -151,6 +158,26 @@ func (c *conn) startup(ctx context.Context) error {
 	}
 
 	return c.handshakeTLS()
+}
+
+func checkVersion(version msg.Version) bool {
+	parts := strings.Split(version.ReleaseVersion[4:], ".")
+
+	if len(parts) != 3 {
+		return false
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+
+	return major > 4 || (major == 4 && minor > 2)
 }
 
 var ErrSSLNegotiationFailed = fmt.Errorf("SSL negotiation failed")
