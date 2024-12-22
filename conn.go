@@ -199,6 +199,35 @@ var ErrUnknownSSLVerifyPolicy = fmt.Errorf("unknown SSL verification policy")
 // Make configurable for testing
 var tlsTime = time.Now
 
+func verifyPeerCertificateNoHostname(tlsConfig *tls.Config, certificates [][]byte) error {
+	certs := make([]*x509.Certificate, len(certificates))
+
+	for i, asn1Data := range certificates {
+		cert, err := x509.ParseCertificate(asn1Data)
+		if err != nil {
+			return err
+		}
+
+		certs[i] = cert
+	}
+
+	opts := x509.VerifyOptions{
+		Roots:         tlsConfig.RootCAs,
+		CurrentTime:   tlsConfig.Time(),
+		Intermediates: x509.NewCertPool(),
+	}
+
+	for _, cert := range certs[1:] {
+		opts.Intermediates.AddCert(cert)
+	}
+
+	if _, err := certs[0].Verify(opts); err != nil {
+		return &tls.CertificateVerificationError{UnverifiedCertificates: certs, Err: err}
+	}
+
+	return nil
+}
+
 func (c *conn) handshakeTLS() error {
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
@@ -214,33 +243,8 @@ func (c *conn) handshakeTLS() error {
 		}
 	case "host":
 		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = func(certificates [][]byte, verifiedChains [][]*x509.Certificate) error {
-			certs := make([]*x509.Certificate, len(certificates))
-
-			for i, asn1Data := range certificates {
-				cert, err := x509.ParseCertificate(asn1Data)
-				if err != nil {
-					return err
-				}
-
-				certs[i] = cert
-			}
-
-			opts := x509.VerifyOptions{
-				Roots:         tlsConfig.RootCAs,
-				CurrentTime:   tlsConfig.Time(),
-				Intermediates: x509.NewCertPool(),
-			}
-
-			for _, cert := range certs[1:] {
-				opts.Intermediates.AddCert(cert)
-			}
-
-			if _, err := certs[0].Verify(opts); err != nil {
-				return &tls.CertificateVerificationError{UnverifiedCertificates: certs, Err: err}
-			}
-
-			return nil
+		tlsConfig.VerifyPeerCertificate = func(certificates [][]byte, _ [][]*x509.Certificate) error {
+			return verifyPeerCertificateNoHostname(tlsConfig, certificates)
 		}
 	case "none":
 		tlsConfig.InsecureSkipVerify = true
