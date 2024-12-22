@@ -77,7 +77,6 @@ func TestClientNative(t *testing.T) {
 		}, "RODS_API_REPLY", 0)
 		msg.Read(conn, &msg.AuthChallengeResponse{}, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthResponse{}, "RODS_API_REPLY", 0)
-
 		conn.Close()
 	}()
 
@@ -111,7 +110,6 @@ func TestClientNative(t *testing.T) {
 		}
 
 		conn.Close()
-
 		close(done)
 	}()
 
