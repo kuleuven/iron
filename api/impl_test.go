@@ -14,3 +14,11 @@ func TestCreateCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreateCollectionAll(t *testing.T) {
+	testConn.NextResponse = msg.CreateCollectionResponse{}
+
+	if err := testAPI.Admin().CreateCollectionAll(context.Background(), "test"); err != nil {
+		t.Fatal(err)
+	}
+}

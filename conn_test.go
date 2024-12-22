@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net"
-	"runtime/debug"
+	"os"
 	"testing"
 	"time"
 
@@ -108,47 +108,48 @@ EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 -----END EC PRIVATE KEY-----`)
 )
 
+func pamResponses(server net.Conn) {
+	assert := func(args ...any) {
+		if err := args[len(args)-1]; err != nil {
+			panic(err)
+		}
+	}
+
+	assert(msg.Read(server, &msg.StartupPack{}, "RODS_CONNECT"))
+	assert(msg.Write(server, msg.ClientServerNegotiation{
+		Result: "CS_NEQ_REQUIRE",
+	}, "RODS_CS_NEG_T", 0))
+	assert(msg.Read(server, &msg.ClientServerNegotiation{}, "RODS_CS_NEG_T"))
+	assert(msg.Write(server, msg.Version{}, "RODS_VERSION", 0))
+
+	// Switch to TLS
+	cert, err := tls.X509KeyPair(certPem, keyPem)
+	assert(err)
+
+	serverTLS := tls.Server(server, &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{cert},
+	})
+
+	assert((&msg.Header{}).Read(serverTLS))
+	assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, "SHARED_SECRET"))
+	assert(msg.Read(serverTLS, &msg.PamAuthRequest{}, "RODS_API_REQ"))
+	assert(msg.Write(serverTLS, msg.PamAuthResponse{
+		GeneratedPassword: "testNativePassword",
+	}, "RODS_API_REPLY", 0))
+	assert(msg.Read(serverTLS, &msg.AuthRequest{}, "RODS_API_REQ"))
+	assert(msg.Write(serverTLS, msg.AuthChallenge{
+		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+	}, "RODS_API_REPLY", 0))
+	assert(msg.Read(serverTLS, &msg.AuthChallengeResponse{}, "RODS_API_REQ"))
+	assert(msg.Write(serverTLS, msg.AuthResponse{}, "RODS_API_REPLY", 0))
+}
+
 func TestConnPamPassword(t *testing.T) {
 	ctx := context.Background()
 	transport, server := connPipe()
 
-	assert := func(args ...any) {
-		if err := args[len(args)-1]; err != nil {
-			debug.PrintStack()
-			t.Fatal(err)
-		}
-	}
-
-	go func() {
-		assert(msg.Read(server, &msg.StartupPack{}, "RODS_CONNECT"))
-		assert(msg.Write(server, msg.ClientServerNegotiation{
-			Result: "CS_NEQ_REQUIRE",
-		}, "RODS_CS_NEG_T", 0))
-		assert(msg.Read(server, &msg.ClientServerNegotiation{}, "RODS_CS_NEG_T"))
-		assert(msg.Write(server, msg.Version{}, "RODS_VERSION", 0))
-
-		// Switch to TLS
-		cert, err := tls.X509KeyPair(certPem, keyPem)
-		assert(err)
-
-		serverTLS := tls.Server(server, &tls.Config{
-			MinVersion:   tls.VersionTLS12,
-			Certificates: []tls.Certificate{cert},
-		})
-
-		assert((&msg.Header{}).Read(serverTLS))
-		assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, "SHARED_SECRET"))
-		assert(msg.Read(serverTLS, &msg.PamAuthRequest{}, "RODS_API_REQ"))
-		assert(msg.Write(serverTLS, msg.PamAuthResponse{
-			GeneratedPassword: "testNativePassword",
-		}, "RODS_API_REPLY", 0))
-		assert(msg.Read(serverTLS, &msg.AuthRequest{}, "RODS_API_REQ"))
-		assert(msg.Write(serverTLS, msg.AuthChallenge{
-			Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-		}, "RODS_API_REPLY", 0))
-		assert(msg.Read(serverTLS, &msg.AuthChallengeResponse{}, "RODS_API_REQ"))
-		assert(msg.Write(serverTLS, msg.AuthResponse{}, "RODS_API_REPLY", 0))
-	}()
+	go pamResponses(server)
 
 	env := Env{
 		Zone:            "testZone",
@@ -159,6 +160,102 @@ func TestConnPamPassword(t *testing.T) {
 	}
 
 	env.ApplyDefaults()
+
+	conn, err := NewConn(ctx, transport, env, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConnPamPasswordTLS(t *testing.T) {
+	ctx := context.Background()
+	transport, server := connPipe()
+
+	go pamResponses(server)
+
+	f, err := os.CreateTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Remove(f.Name())
+
+	if _, err = f.Write(certPem); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	env := Env{
+		SSLServerName:        "localhost",
+		Zone:                 "testZone",
+		Username:             "testUser",
+		Password:             "testPassword",
+		AuthScheme:           "pam_password",
+		SSLVerifyServer:      "host",
+		SSLCACertificateFile: f.Name(),
+	}
+
+	env.ApplyDefaults()
+
+	tlsTime = func() time.Time {
+		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+
+	conn, err := NewConn(ctx, transport, env, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConnPamPasswordTLS2(t *testing.T) {
+	ctx := context.Background()
+	transport, server := connPipe()
+
+	go pamResponses(server)
+
+	f, err := os.CreateTemp("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Remove(f.Name())
+
+	if _, err = f.Write(certPem); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	env := Env{
+		SSLServerName:        "localhost:5453",
+		Zone:                 "testZone",
+		Username:             "testUser",
+		Password:             "testPassword",
+		AuthScheme:           "pam_password",
+		SSLVerifyServer:      "cert",
+		SSLCACertificateFile: f.Name(),
+	}
+
+	env.ApplyDefaults()
+
+	tlsTime = func() time.Time {
+		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
 
 	conn, err := NewConn(ctx, transport, env, "test")
 	if err != nil {
