@@ -126,3 +126,13 @@ type SQLResult struct {
 	ResultLen      int      `xml:"reslen"`
 	Values         []string `xml:"value,omitempty"`
 }
+
+type CreateCollectionRequest struct {
+	XMLName       xml.Name `xml:"CollInpNew_PI"`
+	Name          string   `xml:"collName"`
+	Flags         int      `xml:"flags"`   // unused
+	OperationType int      `xml:"oprType"` // unused
+	KeyVals       SSKeyVal `xml:"KeyValPair_PI"`
+}
+
+type CreateCollectionResponse []byte // Empty

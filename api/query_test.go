@@ -26,7 +26,7 @@ func TestQuery(t *testing.T) {
 
 	testConn.NextResponse = resp
 
-	results := testAPI.Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Admin().Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Limit(2).Execute(context.Background())
+	results := testAPI.Admin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Limit(2).Execute(context.Background())
 
 	var items int
 

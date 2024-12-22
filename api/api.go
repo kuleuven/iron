@@ -7,7 +7,7 @@ import (
 )
 
 type Conn interface {
-	Request(ctx context.Context, apiNumber int32, request, response any) error
+	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
 	Close() error
 }
 
@@ -18,5 +18,36 @@ func New(connect func(context.Context) (Conn, error)) API {
 }
 
 type API interface {
+	Admin() API
 	Query(columns ...msg.ColumnNumber) PreparedQuery
+	CreateCollection(ctx context.Context, name string) error
+	CreateCollectionAll(ctx context.Context, name string) error
+}
+
+type api struct {
+	Connect func(context.Context) (Conn, error)
+	admin   bool
+}
+
+func (api api) Admin() API {
+	api.admin = true
+
+	return &api
+}
+
+func (api *api) SetFlags(ptr *msg.SSKeyVal) {
+	if api.admin {
+		ptr.Add(msg.ADMIN_KW, "true")
+	}
+}
+
+func (api *api) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return conn.Request(ctx, apiNumber, request, response)
 }

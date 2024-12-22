@@ -19,7 +19,7 @@ import (
 
 type Conn interface {
 	Conn() net.Conn
-	Request(ctx context.Context, apiNumber int32, request, response any) error
+	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
 	Close() error
 	api.API
 }
@@ -202,10 +202,10 @@ func (c *conn) handshakeTLS() error {
 
 	switch c.env.SSLVerifyServer {
 	case "cert":
+		tlsConfig.ServerName = c.env.Host
+
 		if c.env.SSLServerName != "" {
 			tlsConfig.ServerName = c.env.SSLServerName
-		} else {
-			tlsConfig.ServerName = c.env.Host
 		}
 	case "host":
 		// Do not verify server name
@@ -271,7 +271,7 @@ func (c *conn) authenticate(ctx context.Context) error {
 	// Request challenge
 	challenge := msg.AuthChallenge{}
 
-	if err := c.Request(ctx, 703, msg.AuthRequest{}, &challenge); err != nil {
+	if err := c.Request(ctx, msg.AUTH_REQUEST_AN, msg.AuthRequest{}, &challenge); err != nil {
 		return err
 	}
 
@@ -295,7 +295,7 @@ func (c *conn) authenticate(ctx context.Context) error {
 		Username: c.env.ProxyUsername,
 	}
 
-	return c.Request(ctx, 704, response, &msg.AuthResponse{})
+	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
 
 func (c *conn) authenticatePAM(ctx context.Context) error {
@@ -307,7 +307,7 @@ func (c *conn) authenticatePAM(ctx context.Context) error {
 
 	response := msg.PamAuthResponse{}
 
-	if err := c.Request(ctx, 725, request, &response); err != nil {
+	if err := c.Request(ctx, msg.PAM_AUTH_REQUEST_AN, request, &response); err != nil {
 		return err
 	}
 
@@ -343,12 +343,12 @@ func GenerateAuthResponse(challenge []byte, password string) string {
 
 // Request sends an API request to the server and expects a API reply.
 // If a negative IntInfo is received, an IRODSError is returned.
-func (c *conn) Request(ctx context.Context, apiNumber int32, request, response any) error {
+func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
 	cancel := c.CloseOnCancel(ctx)
 
 	defer cancel()
 
-	if err := msg.Write(c.transport, request, "RODS_API_REQ", apiNumber); err != nil {
+	if err := msg.Write(c.transport, request, "RODS_API_REQ", int32(apiNumber)); err != nil {
 		return err
 	}
 

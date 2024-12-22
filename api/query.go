@@ -17,7 +17,6 @@ type PreparedQuery struct {
 	MaxRows     int
 	Columns     []msg.ColumnNumber
 	Conditions  map[msg.ColumnNumber]string
-	AsAdmin     bool
 }
 
 func (api *api) Query(columns ...msg.ColumnNumber) PreparedQuery {
@@ -41,12 +40,6 @@ func (q PreparedQuery) Limit(limit int) PreparedQuery {
 	if q.MaxRows > limit && limit > 0 {
 		q.MaxRows = limit
 	}
-
-	return q
-}
-
-func (q PreparedQuery) Admin() PreparedQuery {
-	q.AsAdmin = true
 
 	return q
 }
@@ -176,9 +169,7 @@ func (r *Result) buildQuery() {
 		r.query.Conditions.Add(int(col), condition)
 	}
 
-	if r.Query.AsAdmin {
-		r.query.KeyVals.Add(msg.ADMIN_KW, "true")
-	}
+	r.Query.api.SetFlags(&r.query.KeyVals)
 }
 
 func (r *Result) executeQuery() {

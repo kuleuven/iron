@@ -20,7 +20,7 @@ type mockConn struct {
 	LastRequest  any
 }
 
-func (c *mockConn) Request(ctx context.Context, apiNumber int32, request, response any) error {
+func (c *mockConn) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
 	val := reflect.ValueOf(response)
 
 	// Marshal argument must be a pointer
