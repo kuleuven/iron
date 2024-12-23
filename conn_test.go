@@ -381,7 +381,7 @@ func TestRequest(t *testing.T) {
 
 	msg.Write(server, msg.AuthResponse{}, "RODS_API_REPLY", 0)
 
-	msg.Write(server, msg.CreateCollectionResponse{}, "RODS_API_REPLY", msg.SYS_SVR_TO_CLI_COLL_STAT)
+	msg.Write(server, msg.EmptyResponse{}, "RODS_API_REPLY", msg.SYS_SVR_TO_CLI_COLL_STAT)
 
 	msg.Write(server, msg.CollectionOperationStat{}, "RODS_API_REPLY", 0)
 

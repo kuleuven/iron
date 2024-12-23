@@ -135,7 +135,7 @@ type CreateCollectionRequest struct {
 	KeyVals       SSKeyVal `xml:"KeyValPair_PI"`
 }
 
-type CreateCollectionResponse []byte // Empty
+type EmptyResponse []byte // Empty
 
 type CollectionOperationStat struct {
 	XMLName        xml.Name `xml:"collOprStat_t"`
@@ -143,4 +143,36 @@ type CollectionOperationStat struct {
 	TotalFileCount int      `xml:"totalFileCnt"`
 	BytesWritten   int64    `xml:"bytesWritten"`
 	LastObjectPath string   `xml:"lastObjPath"`
+}
+
+type DataObjectCopyRequest struct {
+	XMLName xml.Name `xml:"DataObjCopyInp_PI"`
+	Paths   []DataObjectRequest
+}
+
+type DataObjectRequest struct {
+	XMLName                  xml.Name           `xml:"DataObjInp_PI"`
+	Path                     string             `xml:"objPath"`
+	CreateMode               int                `xml:"createMode"`
+	OpenFlags                int                `xml:"openFlags"`
+	Offset                   int64              `xml:"offset"`
+	Size                     int64              `xml:"dataSize"`
+	Threads                  int                `xml:"numThreads"`
+	OperationType            OperationType      `xml:"oprType"`
+	SpecialCollectionPointer *SpecialCollection `xml:"SpecColl_PI"`
+	KeyVals                  SSKeyVal           `xml:"KeyValPair_PI"`
+}
+
+type SpecialCollection struct {
+	XMLName           xml.Name `xml:"SpecColl_PI"`
+	CollectionClass   int      `xml:"collClass"`
+	Type              int      `xml:"type"`
+	Collection        string   `xml:"collection"`
+	ObjectPath        string   `xml:"objPath"`
+	Resource          string   `xml:"resource"`
+	ResourceHierarchy string   `xml:"rescHier"`
+	PhysicalPath      string   `xml:"phyPath"`
+	CacheDirectory    string   `xml:"cacheDir"`
+	CacheDirty        int      `xml:"cacheDirty"`
+	ReplicationNumber int      `xml:"replNum"`
 }

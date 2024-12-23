@@ -24,6 +24,7 @@ type API interface {
 	CreateCollectionAll(ctx context.Context, name string) error
 	DeleteCollection(ctx context.Context, name string, force bool) error
 	DeleteCollectionAll(ctx context.Context, name string, force bool) error
+	RenameCollection(ctx context.Context, oldName, newName string) error
 }
 
 type api struct {
