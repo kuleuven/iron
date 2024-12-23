@@ -136,3 +136,11 @@ type CreateCollectionRequest struct {
 }
 
 type CreateCollectionResponse []byte // Empty
+
+type CollectionOperationStat struct {
+	XMLName        xml.Name `xml:"collOprStat_t"`
+	FileCount      int      `xml:"filesCnt"`
+	TotalFileCount int      `xml:"totalFileCnt"`
+	BytesWritten   int64    `xml:"bytesWritten"`
+	LastObjectPath string   `xml:"lastObjPath"`
+}

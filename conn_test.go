@@ -366,3 +366,51 @@ func TestOldVersion(t *testing.T) {
 		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
 	}
 }
+
+func TestRequest(t *testing.T) {
+	ctx := context.Background()
+	transport, server := connPipe()
+
+	msg.Write(server, msg.Version{
+		ReleaseVersion: "rods4.3.0",
+	}, "RODS_VERSION", 0)
+
+	msg.Write(server, msg.AuthChallenge{
+		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+	}, "RODS_API_REPLY", 0)
+
+	msg.Write(server, msg.AuthResponse{}, "RODS_API_REPLY", 0)
+
+	msg.Write(server, msg.CreateCollectionResponse{}, "RODS_API_REPLY", msg.SYS_SVR_TO_CLI_COLL_STAT)
+
+	msg.Write(server, msg.CollectionOperationStat{}, "RODS_API_REPLY", 0)
+
+	env := Env{
+		Host:                    "localhost",
+		Port:                    1247,
+		Zone:                    "testZone",
+		Username:                "testUser",
+		Password:                "testPassword",
+		AuthScheme:              "native",
+		ClientServerNegotiation: "dont_negotiate",
+	}
+
+	env.ApplyDefaults()
+
+	conn, err := NewConn(ctx, transport, env, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = conn.Request(ctx, msg.RM_COLL_AN, msg.CreateCollectionRequest{
+		Name: "testColl",
+	}, &msg.CollectionOperationStat{})
+	if err != nil {
+		t.Fatalf("expected error, got nil")
+	}
+}

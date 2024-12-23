@@ -22,6 +22,8 @@ type API interface {
 	Query(columns ...msg.ColumnNumber) PreparedQuery
 	CreateCollection(ctx context.Context, name string) error
 	CreateCollectionAll(ctx context.Context, name string) error
+	DeleteCollection(ctx context.Context, name string, force bool) error
+	DeleteCollectionAll(ctx context.Context, name string, force bool) error
 }
 
 type api struct {

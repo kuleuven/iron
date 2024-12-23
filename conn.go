@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -410,6 +411,49 @@ func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, re
 	defer cancel()
 
 	if err := msg.Write(c.transport, request, "RODS_API_REQ", int32(apiNumber)); err != nil {
+		return err
+	}
+
+	m := msg.Message{}
+
+	if err := m.Read(c.transport); err != nil {
+		return err
+	}
+
+	if expectedMsgType := "RODS_API_REPLY"; m.Header.Type != expectedMsgType {
+		return fmt.Errorf("%w: expected %s, got %s", msg.ErrUnexpectedMessage, expectedMsgType, m.Header.Type)
+	}
+
+	// The api call RM_COLL_AN is a special case, an extended version of irods returns the payload
+	// only if we request it using a special code. However it is still optional, so it is possible that
+	// the server returns a zero IntInfo and an empty response, but this is fine as UnmarshalXML will
+	// not complain in this case if the message length is zero.
+	if apiNumber == msg.RM_COLL_AN || m.Header.IntInfo == msg.SYS_SVR_TO_CLI_COLL_STAT {
+		return c.handleCollStat(response)
+	}
+
+	if m.Header.IntInfo < 0 {
+		err := &msg.IRODSError{
+			Code:    m.Header.IntInfo,
+			Message: string(m.Body.Error),
+		}
+
+		if m.Header.ErrorLen == 0 {
+			err.Message = string(m.Body.Message)
+		}
+
+		return err
+	}
+
+	return msg.Unmarshal(m, response)
+}
+
+func (c *conn) handleCollStat(response any) error {
+	// Send special code
+	replyBuffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(replyBuffer, uint32(msg.SYS_CLI_TO_SVR_COLL_STAT_REPLY))
+
+	if _, err := c.transport.Write(replyBuffer); err != nil {
 		return err
 	}
 

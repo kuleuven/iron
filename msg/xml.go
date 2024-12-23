@@ -56,6 +56,11 @@ func MarshalXML(obj any, msgType string) (*Message, error) {
 
 func UnmarshalXML(msg Message, obj any) error {
 	if msg.Header.MessageLen == 0 {
+		// A CollectionOperationStat is a special case and allowed to be empty if the server doesn't send it
+		if _, ok := obj.(*CollectionOperationStat); ok {
+			return nil
+		}
+
 		return fmt.Errorf("message length is zero")
 	}
 
