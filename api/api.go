@@ -82,6 +82,14 @@ type File interface {
 
 	// Write writes data to the file
 	Write(b []byte) (int, error)
+
+	// Reopen reopens the file using another connection.
+	// When called using iron.Client, nil can be passed instead of a connection,
+	// and another connection from the pool will be used and blocked until the
+	// file is closed. When called using iron.Conn directly, the caller is
+	// responsible for providing a valid connection.
+	// Reopen takes ownership of the connection, and closes it when done.
+	Reopen(conn Conn, mode int) (File, error)
 }
 
 type api struct {

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"go.uber.org/multierr"
 )
 
 func (api *api) CreateCollection(ctx context.Context, name string) error {
@@ -158,12 +159,24 @@ func (api *api) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 
 	api.SetFlags(&request.KeyVals)
 
-	h := handle{
-		api: api,
-		ctx: ctx,
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	err := api.Request(ctx, msg.DATA_OBJ_CREATE_AN, request, &h.FileDescriptor)
+	h := handle{
+		api:  api,
+		conn: conn,
+		ctx:  ctx,
+		path: path,
+	}
+
+	err = api.Request(ctx, msg.DATA_OBJ_CREATE_AN, request, &h.FileDescriptor)
+	if err != nil {
+		err = multierr.Append(err, conn.Close())
+
+		return nil, err
+	}
 
 	return &h, err
 }
@@ -183,15 +196,28 @@ func (api *api) OpenDataObject(ctx context.Context, path string, mode int) (File
 
 	api.SetFlags(&request.KeyVals)
 
-	h := handle{
-		api: api,
-		ctx: ctx,
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	err := api.Request(ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
+	h := handle{
+		api:  api,
+		conn: conn,
+		ctx:  ctx,
+		path: path,
+	}
+
+	err = conn.Request(ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
 	if err == nil && mode&O_APPEND != 0 {
 		// Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)
+	}
+
+	if err != nil {
+		err = multierr.Append(err, conn.Close())
+
+		return nil, err
 	}
 
 	return &h, err

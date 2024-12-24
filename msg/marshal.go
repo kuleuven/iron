@@ -1,6 +1,7 @@
 package msg
 
 import (
+	"encoding/xml"
 	"fmt"
 	"io"
 	"reflect"
@@ -22,8 +23,12 @@ func Marshal(obj any, msgType string) (*Message, error) {
 		return MarshalBytes(val.Bytes(), msgType)
 	}
 
-	if val.Kind() == reflect.Struct {
+	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
 		return MarshalXML(obj, msgType)
+	}
+
+	if val.Kind() == reflect.Struct {
+		return MarshalJSON(obj, msgType)
 	}
 
 	if val.Kind() == reflect.Int32 {
@@ -57,8 +62,12 @@ func Unmarshal(msg Message, obj any) error {
 		return nil
 	}
 
-	if val.Kind() == reflect.Struct {
+	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
 		return UnmarshalXML(msg, obj)
+	}
+
+	if val.Kind() == reflect.Struct {
+		return UnmarshalJSON(msg, obj)
 	}
 
 	if val.Kind() == reflect.Int32 {

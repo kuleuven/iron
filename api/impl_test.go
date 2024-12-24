@@ -74,16 +74,34 @@ func TestCopyDataObject(t *testing.T) {
 }
 
 func TestCreateDataObject(t *testing.T) {
-	testConn.NextResponse = msg.FileDescriptor(1)
+	testConn.NextResponses = []any{
+		msg.FileDescriptor(1),
+		msg.GetDescriptorInfoResponse{},
+		msg.EmptyResponse{},
+	}
+
+	testConn2 := &mockConn{}
+
+	testConn2.NextResponses = []any{
+		msg.FileDescriptor(2),
+		msg.EmptyResponse{},
+	}
 
 	file, err := testAPI.CreateDataObject(context.Background(), "test", os.O_CREATE|os.O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	testConn.NextResponse = msg.EmptyResponse{}
+	file2, err := file.Reopen(testConn2, os.O_WRONLY)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := file2.Close(); err != nil {
 		t.Fatal(err)
 	}
 }
