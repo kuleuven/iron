@@ -191,6 +191,8 @@ const (
 	ATOMIC_APPLY_METADATA_OPERATIONS_APN APINumber = 20002
 	REPLICA_CLOSE_APN                    APINumber = 20004
 	TOUCH_APN                            APINumber = 20007
+
+	REPLICA_TRUNCATE_AN APINumber = 802 //nolint:stylecheck
 )
 
 // response codes

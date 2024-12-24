@@ -165,10 +165,11 @@ func (api *api) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 	}
 
 	h := handle{
-		api:  api,
-		conn: conn,
-		ctx:  ctx,
-		path: path,
+		api:          api,
+		conn:         conn,
+		ctx:          ctx,
+		path:         path,
+		truncateSize: -1,
 	}
 
 	err = api.Request(ctx, msg.DATA_OBJ_CREATE_AN, request, &h.FileDescriptor)
@@ -202,10 +203,11 @@ func (api *api) OpenDataObject(ctx context.Context, path string, mode int) (File
 	}
 
 	h := handle{
-		api:  api,
-		conn: conn,
-		ctx:  ctx,
-		path: path,
+		api:          api,
+		conn:         conn,
+		ctx:          ctx,
+		path:         path,
+		truncateSize: -1,
 	}
 
 	err = conn.Request(ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)

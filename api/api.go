@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
@@ -83,6 +84,14 @@ type File interface {
 
 	// Write writes data to the file
 	Write(b []byte) (int, error)
+
+	// Truncate truncates the file
+	Truncate(size int64) error
+
+	// Touch changes the modification time of the file
+	// A zero value for mtime means the current time
+	// Touch does not support the admin keyword
+	Touch(mtime time.Time) error
 
 	// Reopen reopens the file using another connection.
 	// When called using iron.Client, nil can be passed instead of a connection,

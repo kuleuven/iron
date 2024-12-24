@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
@@ -73,49 +74,6 @@ func TestCopyDataObject(t *testing.T) {
 	}
 }
 
-func TestCreateDataObject(t *testing.T) {
-	testConn.NextResponses = []any{
-		msg.FileDescriptor(1),
-		msg.GetDescriptorInfoResponse{},
-		msg.EmptyResponse{},
-	}
-
-	testConn2 := &mockConn{}
-
-	testConn2.NextResponses = []any{
-		msg.FileDescriptor(2),
-		msg.EmptyResponse{},
-	}
-
-	file, err := testAPI.CreateDataObject(context.Background(), "test", os.O_CREATE|os.O_WRONLY)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	file2, err := file.Reopen(testConn2, os.O_WRONLY)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ch := make(chan error)
-
-	go func() {
-		ch <- file.Close()
-	}()
-
-	go func() {
-		ch <- file2.Close()
-	}()
-
-	if err := <-ch; err != nil {
-		t.Fatal(err)
-	}
-
-	if err := <-ch; err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestOpenDataObject(t *testing.T) {
 	testConn.NextResponses = []any{
 		msg.FileDescriptor(1),
@@ -143,6 +101,126 @@ func TestOpenDataObject(t *testing.T) {
 	}
 
 	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTouchDataObject(t *testing.T) {
+	testConn.NextResponses = []any{
+		msg.FileDescriptor(1),
+		msg.GetDescriptorInfoResponse{
+			DataObjectInfo: map[string]any{
+				"replica_number":     1,
+				"resource_hierarchy": "string",
+			},
+		},
+		msg.EmptyResponse{},
+		msg.EmptyResponse{},
+	}
+
+	testConn.NextBin = []byte("testcontent")
+
+	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = file.Touch(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTruncateDataObject(t *testing.T) {
+	testConn.NextResponses = []any{
+		msg.FileDescriptor(1),
+		msg.GetDescriptorInfoResponse{
+			DataObjectInfo: map[string]any{
+				"replica_number":     1,
+				"resource_hierarchy": "string",
+			},
+		},
+		msg.EmptyResponse{},
+		msg.EmptyResponse{},
+	}
+
+	testConn.NextBin = []byte("testcontent")
+
+	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = file.Truncate(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateDataObjectTruncate(t *testing.T) {
+	testConn.NextResponses = []any{
+		msg.FileDescriptor(1),
+		msg.GetDescriptorInfoResponse{
+			DataObjectInfo: map[string]any{
+				"replica_number":     1,
+				"resource_hierarchy": "string",
+			},
+		},
+		msg.GetDescriptorInfoResponse{
+			DataObjectInfo: map[string]any{
+				"replica_number":     1,
+				"resource_hierarchy": "string",
+			},
+		},
+		msg.EmptyResponse{},
+		msg.EmptyResponse{},
+	}
+
+	testConn2 := &mockConn{}
+
+	testConn2.NextResponses = []any{
+		msg.FileDescriptor(2),
+		msg.EmptyResponse{},
+	}
+
+	file, err := testAPI.CreateDataObject(context.Background(), "test", os.O_CREATE|os.O_WRONLY)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file2, err := file.Reopen(testConn2, os.O_WRONLY)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = file2.Truncate(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch := make(chan error)
+
+	go func() {
+		ch <- file.Close()
+	}()
+
+	go func() {
+		ch <- file2.Close()
+	}()
+
+	if err := <-ch; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := <-ch; err != nil {
 		t.Fatal(err)
 	}
 }

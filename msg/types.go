@@ -243,3 +243,14 @@ type CloseDataObjectReplicaRequest struct { // No xml.Name means this is a json 
 	ComputeChecksum           bool           `json:"compute_checksum"`
 	PreserveReplicaStateTable bool           `json:"preserve_replica_state_table"`
 }
+
+type TouchDataObjectReplicaRequest struct { // No xml.Name means this is a json struct
+	Path    string       `json:"logical_path"`
+	Options TouchOptions `json:"options"`
+}
+
+type TouchOptions struct {
+	SecondsSinceEpoch int64 `json:"seconds_since_epoch,omitempty"`
+	ReplicaNumber     int   `json:"replica_number,omitempty"`
+	NoCreate          bool  `json:"no_create,omitempty"`
+}
