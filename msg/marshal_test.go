@@ -21,6 +21,8 @@ func TestMarshal(t *testing.T) {
 		&AuthChallengeResponse{},
 		AuthResponse{},
 		&AuthResponse{},
+		GetDescriptorInfoRequest{FileDescriptor: 1},
+		&GetDescriptorInfoRequest{},
 	}
 
 	for i := 0; i < len(objects); i += 2 {
