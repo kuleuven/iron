@@ -22,23 +22,65 @@ func New(connect func(context.Context) (Conn, error), resource string) API {
 type API interface {
 	Admin() API
 	WithDefaultResource(resource string) API
+
+	// Query prepares a query to read from the irods catalog.
 	Query(columns ...msg.ColumnNumber) PreparedQuery
+
+	// CreateCollection creates a collection.
+	// If the collection already exists, an error is returned.
 	CreateCollection(ctx context.Context, name string) error
+
+	// CreateCollectionAll creates a collection and its parents recursively.
+	// If the collection already exists, nothing happens.
 	CreateCollectionAll(ctx context.Context, name string) error
+
+	// DeleteCollection deletes a collection.
+	// If the collection is not empty, an error is returned.
+	// If force is true, the collection is not moved to the trash.
 	DeleteCollection(ctx context.Context, name string, force bool) error
+
+	// DeleteCollectionAll deletes a collection and its children recursively.
+	// If force is true, the collection is not moved to the trash.
 	DeleteCollectionAll(ctx context.Context, name string, force bool) error
+
+	// RenameCollection renames a collection.
 	RenameCollection(ctx context.Context, oldName, newName string) error
+
+	// DeleteDataObject deletes a data object.
+	// If force is true, the data object is not moved to the trash.
 	DeleteDataObject(ctx context.Context, path string, force bool) error
+
+	// RenameDataObject renames a data object.
 	RenameDataObject(ctx context.Context, oldPath, newPath string) error
+
+	// CopyDataObject copies a data object.
+	// A target resource can be specified with WithDefaultResource() first if needed.
 	CopyDataObject(ctx context.Context, oldPath, newPath string) error
+
+	// CreateDataObject creates a data object.
+	// A target resource can be specified with WithDefaultResource() first if needed.
+	// When called using iron.Client, this method blocks an irods connection
+	// until the file has been closed.
 	CreateDataObject(ctx context.Context, path string, mode int) (File, error)
+
+	// OpenDataObject opens a data object.
+	// A target resource can be specified with WithDefaultResource() first if needed.
+	// When called using iron.Client, this method blocks an irods connection
+	// until the file has been closed.
 	OpenDataObject(ctx context.Context, path string, mode int) (File, error)
 }
 
 type File interface {
+	// Close closes the file
 	Close() error
+
+	// Seek moves file pointer of a data object, returns offset
 	Seek(offset int64, whence int) (int64, error)
+
+	// Read reads data from the file
 	Read(b []byte) (int, error)
+
+	// Write writes data to the file
 	Write(b []byte) (int, error)
 }
 

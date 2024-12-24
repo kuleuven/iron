@@ -28,12 +28,16 @@ func (api *api) Query(columns ...msg.ColumnNumber) PreparedQuery {
 	}
 }
 
+// Where adds a condition to the query for the specified column.
+// The condition is a string that will be used to filter results
+// based on the specified column.
 func (q PreparedQuery) Where(column msg.ColumnNumber, condition string) PreparedQuery {
 	q.Conditions[column] = condition
 
 	return q
 }
 
+// Limit limits the number of results.
 func (q PreparedQuery) Limit(limit int) PreparedQuery {
 	q.ResultLimit = limit
 
@@ -44,6 +48,11 @@ func (q PreparedQuery) Limit(limit int) PreparedQuery {
 	return q
 }
 
+// Execute executes the query.
+// When called using iron.Client, this method blocks an irods connection
+// until the result has been closed.
+// When called using iron.Conn directly, the caller is responsible for not
+// running a second query on the same connection.
 func (q PreparedQuery) Execute(ctx context.Context) *Result {
 	conn, err := q.api.Connect(ctx)
 	if err != nil {
@@ -73,10 +82,12 @@ type Result struct {
 	row      int
 }
 
+// Err returns an error if the result has one.
 func (r *Result) Err() error {
 	return r.err
 }
 
+// Next returns true if there are more results.
 func (r *Result) Next() bool {
 	if r.err != nil {
 		return false
@@ -120,6 +131,10 @@ var ErrAttributeOutOfBound = fmt.Errorf("attribute count out of bound")
 
 var ErrNoSQLResults = fmt.Errorf("no sql results")
 
+// Scan reads the values in the current row into the values pointed
+// to by dest, in order.  If an error occurs during scanning, the
+// error is returned. The values pointed to by dest before the error
+// occurred might be modified.
 func (r *Result) Scan(dest ...interface{}) error {
 	if r.err != nil {
 		return r.err
@@ -149,6 +164,8 @@ func (r *Result) Scan(dest ...interface{}) error {
 	return nil
 }
 
+// Close releases all resources associated with the result.
+// It's safe to call Close multiple times.
 func (r *Result) Close() error {
 	r.cleanup()
 
