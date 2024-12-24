@@ -23,7 +23,7 @@ func TestClient(t *testing.T) {
 		}
 
 		// Consume startup message
-		msg.Read(conn, &msg.StartupPack{}, "RODS_CONNECT")
+		msg.Read(conn, &msg.StartupPack{}, nil, "RODS_CONNECT")
 
 		conn.Close()
 	}()
@@ -67,16 +67,16 @@ func TestClientNative(t *testing.T) {
 			panic(err)
 		}
 
-		msg.Read(conn, &msg.StartupPack{}, "RODS_CONNECT")
+		msg.Read(conn, &msg.StartupPack{}, nil, "RODS_CONNECT")
 		msg.Write(conn, msg.Version{
 			ReleaseVersion: "rods4.3.0",
-		}, "RODS_VERSION", 0)
-		msg.Read(conn, &msg.AuthRequest{}, "RODS_API_REQ")
+		}, nil, "RODS_VERSION", 0)
+		msg.Read(conn, &msg.AuthRequest{}, nil, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthChallenge{
 			Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-		}, "RODS_API_REPLY", 0)
-		msg.Read(conn, &msg.AuthChallengeResponse{}, "RODS_API_REQ")
-		msg.Write(conn, msg.AuthResponse{}, "RODS_API_REPLY", 0)
+		}, nil, "RODS_API_REPLY", 0)
+		msg.Read(conn, &msg.AuthChallengeResponse{}, nil, "RODS_API_REQ")
+		msg.Write(conn, msg.AuthResponse{}, nil, "RODS_API_REPLY", 0)
 		conn.Close()
 	}()
 

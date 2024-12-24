@@ -8,6 +8,8 @@ import (
 
 var ErrUnrecognizedType = fmt.Errorf("unrecognized type")
 
+// Marshal marshals the argument into a message.
+// The Message is initialized with Bin unset.
 func Marshal(obj any, msgType string) (*Message, error) {
 	val := reflect.ValueOf(obj)
 
@@ -24,9 +26,15 @@ func Marshal(obj any, msgType string) (*Message, error) {
 		return MarshalXML(obj, msgType)
 	}
 
+	if val.Kind() == reflect.Int32 {
+		return MarshalInt32(int32(val.Int()), msgType)
+	}
+
 	return nil, fmt.Errorf("%w: %T", ErrUnrecognizedType, obj)
 }
 
+// Unmarshal unmarshals the Message into the argument.
+// This will ignore the Bin field.
 func Unmarshal(msg Message, obj any) error {
 	ptr := reflect.ValueOf(obj)
 
@@ -53,13 +61,27 @@ func Unmarshal(msg Message, obj any) error {
 		return UnmarshalXML(msg, obj)
 	}
 
+	if val.Kind() == reflect.Int32 {
+		var result int32
+
+		if err := UnmarshalInt32(msg, &result); err != nil {
+			return err
+		}
+
+		val.SetInt(int64(result))
+
+		return nil
+	}
+
 	return fmt.Errorf("%w: %T", ErrUnrecognizedType, obj)
 }
 
 var ErrUnexpectedMessage = fmt.Errorf("unexpected message type")
 
-func Read(r io.Reader, obj any, expectedMsgType string) (int32, error) {
-	msg := Message{}
+func Read(r io.Reader, obj any, buf []byte, expectedMsgType string) (int32, error) {
+	msg := Message{
+		Bin: buf,
+	}
 
 	if err := msg.Read(r); err != nil {
 		return 0, err
@@ -72,13 +94,22 @@ func Read(r io.Reader, obj any, expectedMsgType string) (int32, error) {
 	return msg.Header.IntInfo, Unmarshal(msg, obj)
 }
 
-func Write(w io.Writer, obj any, msgType string, intInfo int32) error {
+func Write(w io.Writer, obj any, buf []byte, msgType string, intInfo int32) error {
 	msg, err := Marshal(obj, msgType)
 	if err != nil {
 		return err
 	}
 
+	msg.Bin = buf
+	msg.Header.BsLen = uint32(len(buf))
 	msg.Header.IntInfo = intInfo
 
-	return msg.Write(w)
+	err = msg.Write(w)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(buf)
+
+	return err
 }

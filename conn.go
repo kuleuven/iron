@@ -23,6 +23,7 @@ import (
 type Conn interface {
 	Conn() net.Conn
 	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
+	RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error
 	Close() error
 	api.API
 }
@@ -89,7 +90,7 @@ func newConn(ctx context.Context, transport net.Conn, env Env, option string) (*
 	// Register API
 	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
 		return c, nil
-	})
+	}, env.DefaultResource)
 
 	ctx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
 
@@ -132,7 +133,7 @@ func (c *conn) startup(ctx context.Context) error {
 		Option:         fmt.Sprintf("%s;%s", c.option, c.env.ClientServerNegotiation),
 	}
 
-	if err := msg.Write(c.transport, pack, "RODS_CONNECT", 0); err != nil {
+	if err := msg.Write(c.transport, pack, nil, "RODS_CONNECT", 0); err != nil {
 		return err
 	}
 
@@ -144,7 +145,7 @@ func (c *conn) startup(ctx context.Context) error {
 
 	version := msg.Version{}
 
-	if _, err := msg.Read(c.transport, &version, "RODS_VERSION"); err != nil {
+	if _, err := msg.Read(c.transport, &version, nil, "RODS_VERSION"); err != nil {
 		return err
 	}
 
@@ -186,7 +187,7 @@ var ErrSSLNegotiationFailed = fmt.Errorf("SSL negotiation failed")
 func (c *conn) handshakeNegotiation() error {
 	neg := msg.ClientServerNegotiation{}
 
-	if _, err := msg.Read(c.transport, &neg, "RODS_CS_NEG_T"); err != nil {
+	if _, err := msg.Read(c.transport, &neg, nil, "RODS_CS_NEG_T"); err != nil {
 		return err
 	}
 
@@ -197,14 +198,14 @@ func (c *conn) handshakeNegotiation() error {
 
 	if neg.Result == ClientServerRefuseTLS && c.env.ClientServerNegotiationPolicy == ClientServerRequireTLS {
 		// Report failure
-		msg.Write(c.transport, failure, "RODS_CS_NEG_T", 0) //nolint:errcheck
+		msg.Write(c.transport, failure, nil, "RODS_CS_NEG_T", 0) //nolint:errcheck
 
 		return fmt.Errorf("%w: server refuses SSL, client requires SSL", ErrSSLNegotiationFailed)
 	}
 
 	if neg.Result == ClientServerRequireTLS && c.env.ClientServerNegotiationPolicy == ClientServerRefuseTLS {
 		// Report failure
-		msg.Write(c.transport, failure, "RODS_CS_NEG_T", 0) //nolint:errcheck
+		msg.Write(c.transport, failure, nil, "RODS_CS_NEG_T", 0) //nolint:errcheck
 
 		return fmt.Errorf("%w: client refuses SSL, server requires SSL", ErrSSLNegotiationFailed)
 	}
@@ -219,7 +220,7 @@ func (c *conn) handshakeNegotiation() error {
 
 	neg.Status = 1
 
-	return msg.Write(c.transport, neg, "RODS_CS_NEG_T", 0)
+	return msg.Write(c.transport, neg, nil, "RODS_CS_NEG_T", 0)
 }
 
 var ErrUnknownSSLVerifyPolicy = fmt.Errorf("unknown SSL verification policy")
@@ -316,7 +317,7 @@ func (c *conn) handshakeTLS() error {
 		return err
 	}
 
-	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), "SHARED_SECRET", 0)
+	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), nil, "SHARED_SECRET", 0)
 }
 
 var ErrNotImplemented = fmt.Errorf("not implemented")
@@ -406,15 +407,24 @@ func GenerateAuthResponse(challenge []byte, password string) string {
 // Request sends an API request to the server and expects a API reply.
 // If a negative IntInfo is received, an IRODSError is returned.
 func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
+	return c.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
+}
+
+// Request sends an API request to the server and expects a API reply,
+// with possible request and response buffers.
+// If a negative IntInfo is received, an IRODSError is returned.
+func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
 	cancel := c.CloseOnCancel(ctx)
 
 	defer cancel()
 
-	if err := msg.Write(c.transport, request, "RODS_API_REQ", int32(apiNumber)); err != nil {
+	if err := msg.Write(c.transport, request, requestBuf, "RODS_API_REQ", int32(apiNumber)); err != nil {
 		return err
 	}
 
-	m := msg.Message{}
+	m := msg.Message{
+		Bin: responseBuf,
+	}
 
 	if err := m.Read(c.transport); err != nil {
 		return err
@@ -429,7 +439,7 @@ func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, re
 	// the server returns a zero IntInfo and an empty response, but this is fine as UnmarshalXML will
 	// not complain in this case if the message length is zero.
 	if apiNumber == msg.RM_COLL_AN || m.Header.IntInfo == msg.SYS_SVR_TO_CLI_COLL_STAT {
-		return c.handleCollStat(response)
+		return c.handleCollStat(response, responseBuf)
 	}
 
 	if m.Header.IntInfo < 0 {
@@ -448,7 +458,7 @@ func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, re
 	return msg.Unmarshal(m, response)
 }
 
-func (c *conn) handleCollStat(response any) error {
+func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 	// Send special code
 	replyBuffer := make([]byte, 4)
 	binary.BigEndian.PutUint32(replyBuffer, uint32(msg.SYS_CLI_TO_SVR_COLL_STAT_REPLY))
@@ -457,7 +467,9 @@ func (c *conn) handleCollStat(response any) error {
 		return err
 	}
 
-	m := msg.Message{}
+	m := msg.Message{
+		Bin: responseBuf,
+	}
 
 	if err := m.Read(c.transport); err != nil {
 		return err

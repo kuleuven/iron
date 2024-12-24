@@ -13,14 +13,9 @@ func MarshalBytes(body []byte, msgType string) (*Message, error) {
 		Header: Header{
 			Type:       msgType,
 			MessageLen: uint32(len(body)),
-			ErrorLen:   0,
-			BsLen:      0,
-			IntInfo:    0,
 		},
 		Body: Body{
 			Message: body,
-			Error:   nil,
-			Bs:      nil,
 		},
 	}, nil
 }

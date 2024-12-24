@@ -176,3 +176,23 @@ type SpecialCollection struct {
 	CacheDirty        int      `xml:"cacheDirty"`
 	ReplicationNumber int      `xml:"replNum"`
 }
+
+type FileDescriptor int32
+
+type OpenedDataObjectRequest struct {
+	XMLName        xml.Name       `xml:"OpenedDataObjInp_PI"`
+	FileDescriptor FileDescriptor `xml:"l1descInx"`
+	Size           int64          `xml:"len"`
+	Whence         int            `xml:"whence"`
+	OperationType  int            `xml:"oprType"`
+	Offset         int64          `xml:"offset"`
+	BytesWritten   int64          `xml:"bytesWritten"`
+	KeyVals        SSKeyVal       `xml:"KeyValPair_PI"`
+}
+
+type SeekResponse struct {
+	XMLName xml.Name `xml:"fileLseekOut_PI"`
+	Offset  int64    `xml:"offset"`
+}
+
+type ReadResponse uint32

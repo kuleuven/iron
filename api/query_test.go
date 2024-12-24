@@ -24,7 +24,14 @@ func TestQuery(t *testing.T) {
 		},
 	}
 
-	testConn.NextResponse = resp
+	testConn.NextResponses = []any{
+		resp,
+		resp,
+	}
+
+	resp.ContinueIndex = 0
+
+	testConn.NextResponses = append(testConn.NextResponses, resp)
 
 	results := testAPI.Admin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Limit(2).Execute(context.Background())
 
@@ -49,11 +56,6 @@ func TestQuery(t *testing.T) {
 		}
 
 		items++
-
-		if items >= 2 {
-			resp.ContinueIndex = 0
-			testConn.NextResponse = resp
-		}
 	}
 
 	if err := results.Err(); err != nil {

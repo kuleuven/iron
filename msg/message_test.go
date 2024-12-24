@@ -16,15 +16,12 @@ func TestMessage(t *testing.T) {
 		Header: Header{
 			Type:       "test",
 			MessageLen: uint32(len(body)),
-			ErrorLen:   0,
-			BsLen:      0,
-			IntInfo:    0,
 		},
 		Body: Body{
 			Message: body,
 			Error:   []byte{},
-			Bs:      []byte{},
 		},
+		Bin: nil,
 	}
 
 	if err := msg.Write(buf); err != nil {
@@ -41,6 +38,6 @@ func TestMessage(t *testing.T) {
 	msg2.Header.XMLName = xml.Name{}
 
 	if !reflect.DeepEqual(msg, msg2) {
-		t.Fatalf("expected %v, got %v", msg.Body, msg2)
+		t.Fatalf("expected %v, got %v", msg, msg2)
 	}
 }

@@ -24,12 +24,12 @@ type Header struct {
 type Body struct {
 	Message []byte
 	Error   []byte
-	Bs      []byte
 }
 
 type Message struct {
 	Header Header
 	Body   Body
+	Bin    []byte
 }
 
 // Write writes an iRODS message to w
@@ -38,7 +38,15 @@ func (msg Message) Write(w io.Writer) error {
 		return err
 	}
 
-	return msg.Body.Write(w)
+	if err := msg.Body.Write(w); err != nil {
+		return err
+	}
+
+	logrus.Tracef("-> bin: %d bytes", len(msg.Bin))
+
+	_, err := w.Write(msg.Bin)
+
+	return err
 }
 
 func (header Header) Write(w io.Writer) error {
@@ -65,10 +73,10 @@ func (header Header) Write(w io.Writer) error {
 }
 
 func (body Body) Write(w io.Writer) error {
-	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s %s", body.Message, body.Error, body.Bs), "\n", ""); isPrintable(toLog) {
+	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s", body.Message, body.Error), "\n", ""); isPrintable(toLog) {
 		logrus.Tracef("-> %s", toLog)
 	} else {
-		logrus.Tracef("-> %d bytes", len(body.Message)+len(body.Error)+len(body.Bs))
+		logrus.Tracef("-> %d bytes", len(body.Message)+len(body.Error))
 	}
 
 	if _, err := w.Write(body.Message); err != nil {
@@ -76,10 +84,6 @@ func (body Body) Write(w io.Writer) error {
 	}
 
 	if _, err := w.Write(body.Error); err != nil {
-		return err
-	}
-
-	if _, err := w.Write(body.Bs); err != nil {
 		return err
 	}
 
@@ -96,13 +100,32 @@ func isPrintable(s string) bool {
 	return true
 }
 
-// Read decodes an iRODS message from r
+// Read decodes an iRODS message from r.
+// The caller should provide an empty Message with a large enough Bin buffer.
+// If the provided buffer is too small, a larger one will be allocated.
 func (msg *Message) Read(r io.Reader) error {
 	if err := msg.Header.Read(r); err != nil {
 		return err
 	}
 
-	return msg.Body.Read(r, msg.Header)
+	if err := msg.Body.Read(r, msg.Header); err != nil {
+		return err
+	}
+
+	if len(msg.Bin) < int(msg.Header.BsLen) {
+		logrus.Warnf("expected %d bytes, got %d, cannot use provided buffer", msg.Header.BsLen, len(msg.Bin))
+
+		msg.Bin = make([]byte, msg.Header.BsLen)
+	}
+
+	logrus.Tracef("<- bin: %d bytes", len(msg.Bin))
+
+	_, err := io.ReadFull(r, msg.Bin)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (header *Header) Read(r io.Reader) error {
@@ -128,7 +151,6 @@ func (header *Header) Read(r io.Reader) error {
 func (body *Body) Read(r io.Reader, header Header) error {
 	body.Message = make([]byte, header.MessageLen)
 	body.Error = make([]byte, header.ErrorLen)
-	body.Bs = make([]byte, header.BsLen)
 
 	if _, err := io.ReadFull(r, body.Message); err != nil {
 		return err
@@ -138,14 +160,10 @@ func (body *Body) Read(r io.Reader, header Header) error {
 		return err
 	}
 
-	if _, err := io.ReadFull(r, body.Bs); err != nil {
-		return err
-	}
-
-	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s %s", body.Message, body.Error, body.Bs), "\n", ""); isPrintable(toLog) {
+	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s", body.Message, body.Error), "\n", ""); isPrintable(toLog) {
 		logrus.Tracef("<- %s", toLog)
 	} else {
-		logrus.Tracef("<- %d bytes", len(body.Message)+len(body.Error)+len(body.Bs))
+		logrus.Tracef("<- %d bytes", len(body.Message)+len(body.Error))
 	}
 
 	return nil

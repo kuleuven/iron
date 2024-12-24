@@ -36,7 +36,7 @@ func New(env Env, option string, maxConns int) (*Client, error) {
 	// Register api
 	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
 		return c.Connect(ctx)
-	})
+	}, env.DefaultResource)
 
 	return c, nil
 }

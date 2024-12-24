@@ -39,17 +39,14 @@ func TestXMLMarshal(t *testing.T) {
 func TestXMLUnmarshalError(t *testing.T) {
 	msg := Message{
 		Header: Header{
-			Type:       "test",
-			MessageLen: 0,
-			ErrorLen:   5,
-			BsLen:      0,
-			IntInfo:    0,
+			Type:     "test",
+			ErrorLen: 5,
 		},
 		Body: Body{
 			Message: []byte{},
 			Error:   []byte("error"),
-			Bs:      []byte{},
 		},
+		Bin: []byte{},
 	}
 
 	var obj AuthChallengeResponse
