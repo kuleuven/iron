@@ -234,3 +234,12 @@ type GetDescriptorInfoResponse struct { // No xml.Name means this is a json stru
 	InPDMO                  string                 `json:"in_pdmo"`
 	ReplicaToken            string                 `json:"replica_token"`
 }
+
+type CloseDataObjectReplicaRequest struct { // No xml.Name means this is a json struct
+	FileDescriptor            FileDescriptor `json:"fd"`
+	SendNotification          bool           `json:"send_notification"`
+	UpdateSize                bool           `json:"update_size"`
+	UpdateStatus              bool           `json:"update_status"`
+	ComputeChecksum           bool           `json:"compute_checksum"`
+	PreserveReplicaStateTable bool           `json:"preserve_replica_state_table"`
+}

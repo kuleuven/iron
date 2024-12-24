@@ -174,6 +174,7 @@ func (c *conn) startup(ctx context.Context) error {
 	return c.handshakeTLS()
 }
 
+// checkVersion returns true if the server version is greater than or equal to 4.3.2
 func checkVersion(version msg.Version) bool {
 	parts := strings.Split(version.ReleaseVersion[4:], ".")
 
@@ -191,7 +192,12 @@ func checkVersion(version msg.Version) bool {
 		return false
 	}
 
-	return major > 4 || (major == 4 && minor > 2)
+	release, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return false
+	}
+
+	return major > 4 || (major == 4 && minor > 3) || (major == 4 && minor == 3 && release > 1)
 }
 
 var ErrSSLNegotiationFailed = fmt.Errorf("SSL negotiation failed")

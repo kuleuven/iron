@@ -71,7 +71,8 @@ type API interface {
 }
 
 type File interface {
-	// Close closes the file
+	// Close closes the file.
+	// If the file was reopened, Close() will block until the additional handles are closed.
 	Close() error
 
 	// Seek moves file pointer of a data object, returns offset
@@ -89,6 +90,7 @@ type File interface {
 	// file is closed. When called using iron.Conn directly, the caller is
 	// responsible for providing a valid connection.
 	// Reopen takes ownership of the connection, and closes it when done.
+	// A reopened file must be closed before the original handle is closed.
 	Reopen(conn Conn, mode int) (File, error)
 }
 

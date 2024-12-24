@@ -97,11 +97,21 @@ func TestCreateDataObject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := file.Close(); err != nil {
+	ch := make(chan error)
+
+	go func() {
+		ch <- file.Close()
+	}()
+
+	go func() {
+		ch <- file2.Close()
+	}()
+
+	if err := <-ch; err != nil {
 		t.Fatal(err)
 	}
 
-	if err := file2.Close(); err != nil {
+	if err := <-ch; err != nil {
 		t.Fatal(err)
 	}
 }

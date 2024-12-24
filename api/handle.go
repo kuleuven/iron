@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"go.uber.org/multierr"
@@ -17,9 +18,27 @@ type handle struct {
 	conn           Conn
 	path           string
 	FileDescriptor msg.FileDescriptor
+	origin         *handle        // If this handle is a reopened handle, this contains the original handle
+	wg             sync.WaitGroup // Waitgroup if the file was reopened, for the reopened handle to be closed
 }
 
 func (h *handle) Close() error {
+	if h.origin != nil {
+		defer h.origin.wg.Done()
+
+		request := msg.CloseDataObjectReplicaRequest{
+			FileDescriptor: h.FileDescriptor,
+		}
+
+		err := h.conn.Request(h.ctx, msg.REPLICA_CLOSE_APN, request, &msg.EmptyResponse{})
+
+		err = multierr.Append(err, h.conn.Close())
+
+		return err
+	}
+
+	h.wg.Wait()
+
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 	}
@@ -110,10 +129,11 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	h.api.SetFlags(&request.KeyVals)
 
 	h2 := handle{
-		api:  h.api,
-		conn: conn,
-		ctx:  h.ctx,
-		path: h.path,
+		api:    h.api,
+		conn:   conn,
+		ctx:    h.ctx,
+		path:   h.path,
+		origin: h,
 	}
 
 	err = conn.Request(h.ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
@@ -127,6 +147,9 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 
 		return nil, err
 	}
+
+	// Add to waitgroup
+	h.wg.Add(1)
 
 	return &h2, nil
 }

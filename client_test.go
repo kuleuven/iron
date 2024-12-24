@@ -69,7 +69,7 @@ func TestClientNative(t *testing.T) {
 
 		msg.Read(conn, &msg.StartupPack{}, nil, "RODS_CONNECT")
 		msg.Write(conn, msg.Version{
-			ReleaseVersion: "rods4.3.0",
+			ReleaseVersion: "rods4.3.2",
 		}, nil, "RODS_VERSION", 0)
 		msg.Read(conn, &msg.AuthRequest{}, nil, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthChallenge{

@@ -51,7 +51,7 @@ func connPipe() (net.Conn, net.Conn) {
 	return &mockConn{r, W}, &mockConn{R, w}
 }
 
-const releaseVer = "rods4.3.0"
+const releaseVer = "rods4.3.2"
 
 func TestConnNative(t *testing.T) {
 	ctx := context.Background()
