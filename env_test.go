@@ -13,11 +13,7 @@ func TestEnvLoadFromFile(t *testing.T) {
 
 	defer os.Remove(f.Name())
 
-	if _, err = f.Write([]byte(`{"irods_zone_name": "testZone"}`)); err != nil {
-		t.Fatal(err)
-	}
-
-	if err = f.Close(); err != nil {
+	if err = os.WriteFile(f.Name(), []byte(`{"irods_zone_name": "testZone"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
