@@ -48,6 +48,8 @@ func TestMarshal(t *testing.T) {
 }
 
 func TestReadWrite(t *testing.T) {
+	var fd FileDescriptor
+
 	objects := []any{
 		AuthRequest{},
 		&AuthRequest{},
@@ -62,6 +64,8 @@ func TestReadWrite(t *testing.T) {
 		&AuthChallengeResponse{},
 		AuthResponse{},
 		&AuthResponse{},
+		FileDescriptor(8), // 8th item in list, IntInfo is overwitten by Write call so should match
+		&fd,
 	}
 
 	buf := bytes.NewBuffer(nil)
