@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"os"
 	"testing"
 
@@ -93,14 +94,25 @@ func TestOpenDataObject(t *testing.T) {
 		msg.SeekResponse{
 			Offset: 100,
 		},
+		msg.ReadResponse(11),
+		msg.EmptyResponse{},
+		msg.EmptyResponse{},
 	}
+
+	testConn.NextBin = []byte("testcontent")
 
 	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_APPEND)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	testConn.NextResponse = msg.EmptyResponse{}
+	if _, err := file.Read(make([]byte, 15)); err != io.EOF {
+		t.Fatalf("expected EOF, got %v", err)
+	}
+
+	if _, err := file.Write([]byte("test")); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := file.Close(); err != nil {
 		t.Fatal(err)

@@ -19,11 +19,5 @@ func UnmarshalInt32(msg Message, body *int32) error {
 
 	*body = msg.Header.IntInfo
 
-	if msg.Header.BsLen > 0 && msg.Header.IntInfo == 0 {
-		logrus.Warnf("intInfo is zero, but bsLen is %d; TODO: rewrite code", msg.Header.BsLen)
-
-		*body = int32(msg.Header.BsLen)
-	}
-
 	return nil
 }

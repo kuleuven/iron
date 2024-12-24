@@ -13,11 +13,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/api"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/hashicorp/go-rootcerts"
+	"go.uber.org/multierr"
 )
 
 type Conn interface {
@@ -36,6 +38,8 @@ type conn struct {
 	Version         *msg.Version
 	ClientSignature string
 	NativePassword  string // Only used for non-native authentication
+	closeOnce       sync.Once
+	doRequest       sync.Mutex
 	api.API
 }
 
@@ -89,7 +93,7 @@ func newConn(ctx context.Context, transport net.Conn, env Env, option string) (*
 
 	// Register API
 	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
-		return c, nil
+		return &dummyCloser{c}, nil
 	}, env.DefaultResource)
 
 	ctx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
@@ -97,6 +101,14 @@ func newConn(ctx context.Context, transport net.Conn, env Env, option string) (*
 	defer cancel()
 
 	return c, c.Handshake(ctx)
+}
+
+type dummyCloser struct {
+	*conn
+}
+
+func (*dummyCloser) Close() error {
+	return nil
 }
 
 var ErrTLSRequired = fmt.Errorf("TLS is required for authentication but not enabled")
@@ -414,6 +426,10 @@ func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, re
 // with possible request and response buffers.
 // If a negative IntInfo is received, an IRODSError is returned.
 func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
+	c.doRequest.Lock()
+
+	defer c.doRequest.Unlock()
+
 	cancel := c.CloseOnCancel(ctx)
 
 	defer cancel()
@@ -496,7 +512,19 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 }
 
 func (c *conn) Close() error {
-	return c.Conn().Close()
+	var err error
+
+	c.closeOnce.Do(func() {
+		c.doRequest.Lock()
+
+		defer c.doRequest.Unlock()
+
+		err = msg.Write(c.transport, msg.EmptyResponse{}, nil, "RODS_DISCONNECT", 0)
+	})
+
+	err = multierr.Append(err, c.Conn().Close())
+
+	return err
 }
 
 func (c *conn) CloseOnCancel(ctx context.Context) context.CancelFunc {

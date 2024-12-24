@@ -19,6 +19,7 @@ var testConn = &mockConn{}
 type mockConn struct {
 	NextResponse  any
 	NextResponses []any
+	NextBin       []byte
 	LastRequest   any
 }
 
@@ -26,7 +27,7 @@ func (c *mockConn) Request(ctx context.Context, apiNumber msg.APINumber, request
 	return c.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
 }
 
-func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, _, _ []byte) error {
+func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, _, responseBuf []byte) error {
 	val := reflect.ValueOf(response)
 
 	// Marshal argument must be a pointer
@@ -47,6 +48,9 @@ func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumb
 	default:
 		return errors.New("no response found")
 	}
+
+	n := copy(responseBuf, c.NextBin)
+	c.NextBin = c.NextBin[n:]
 
 	// Save the last request
 	c.LastRequest = request

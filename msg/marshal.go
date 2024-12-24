@@ -104,12 +104,5 @@ func Write(w io.Writer, obj any, buf []byte, msgType string, intInfo int32) erro
 	msg.Header.BsLen = uint32(len(buf))
 	msg.Header.IntInfo = intInfo
 
-	err = msg.Write(w)
-	if err != nil {
-		return err
-	}
-
-	_, err = w.Write(buf)
-
-	return err
+	return msg.Write(w)
 }

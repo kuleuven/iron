@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"gitea.icts.kuleuven.be/coz/iron"
-	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,21 +37,33 @@ func main() {
 
 	defer conn.Close()
 
-	logrus.Print("/" + env.Zone)
+	testFile := "/" + env.Zone + "/home/coz/testFile2"
 
-	results := conn.Query(msg.ICAT_COLUMN_COLL_NAME).Where(msg.ICAT_COLUMN_COLL_PARENT_NAME, "= '/"+env.Zone+"/home'").Limit(1).Execute(context.Background())
-
-	defer results.Close()
-
-	for results.Next() {
-		var id string
-
-		if err := results.Scan(&id); err != nil {
-			panic(err)
-		}
-	}
-
-	if err := results.Err(); err != nil {
+	handle, err := conn.CreateDataObject(context.Background(), testFile, os.O_RDWR)
+	if err != nil {
 		panic(err)
 	}
+
+	defer handle.Close()
+
+	n, err := handle.Write([]byte("test"))
+	if err != nil {
+		panic(err)
+	}
+
+	logrus.Printf("wrote %d bytes", n)
+
+	_, err = handle.Seek(0, 0)
+	if err != nil {
+		panic(err)
+	}
+
+	b := make([]byte, 4)
+
+	n, err = handle.Read(b)
+	if err != nil {
+		panic(err)
+	}
+
+	logrus.Printf("read %d bytes: %s", n, string(b))
 }

@@ -195,4 +195,4 @@ type SeekResponse struct {
 	Offset  int64    `xml:"offset"`
 }
 
-type ReadResponse uint32
+type ReadResponse int32

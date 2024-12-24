@@ -51,6 +51,8 @@ func connPipe() (net.Conn, net.Conn) {
 	return &mockConn{r, W}, &mockConn{R, w}
 }
 
+const releaseVer = "rods4.3.0"
+
 func TestConnNative(t *testing.T) {
 	ctx := context.Background()
 	transport, server := connPipe()
@@ -60,7 +62,7 @@ func TestConnNative(t *testing.T) {
 	}, nil, "RODS_CS_NEG_T", 0)
 
 	msg.Write(server, msg.Version{
-		ReleaseVersion: "rods4.3.0",
+		ReleaseVersion: releaseVer,
 	}, nil, "RODS_VERSION", 0)
 
 	msg.Write(server, msg.AuthChallenge{
@@ -124,7 +126,7 @@ func pamResponses(server net.Conn) {
 	}, nil, "RODS_CS_NEG_T", 0))
 	assert(msg.Read(server, &msg.ClientServerNegotiation{}, nil, "RODS_CS_NEG_T"))
 	assert(msg.Write(server, msg.Version{
-		ReleaseVersion: "rods4.3.0",
+		ReleaseVersion: releaseVer,
 	}, nil, "RODS_VERSION", 0))
 
 	// Switch to TLS
@@ -372,7 +374,7 @@ func TestRequest(t *testing.T) {
 	transport, server := connPipe()
 
 	msg.Write(server, msg.Version{
-		ReleaseVersion: "rods4.3.0",
+		ReleaseVersion: releaseVer,
 	}, nil, "RODS_VERSION", 0)
 
 	msg.Write(server, msg.AuthChallenge{

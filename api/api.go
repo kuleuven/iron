@@ -37,6 +37,9 @@ type API interface {
 
 type File interface {
 	Close() error
+	Seek(offset int64, whence int) (int64, error)
+	Read(b []byte) (int, error)
+	Write(b []byte) (int, error)
 }
 
 type api struct {
