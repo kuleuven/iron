@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"go.uber.org/multierr"
@@ -223,4 +225,30 @@ func (api *api) OpenDataObject(ctx context.Context, path string, mode int) (File
 	}
 
 	return &h, err
+}
+
+func (api *api) ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error {
+	if api.admin {
+		accessLevel = fmt.Sprintf("admin:%s", accessLevel)
+	}
+
+	var zone string
+
+	if parts := strings.SplitN(user, "#", 2); len(parts) == 2 {
+		user = parts[0]
+		zone = parts[1]
+	}
+
+	request := msg.ModifyAccessRequest{
+		Path:        path,
+		UserName:    user,
+		Zone:        zone,
+		AccessLevel: accessLevel,
+	}
+
+	if recursive {
+		request.RecursiveFlag = 1
+	}
+
+	return api.Request(ctx, msg.MOD_ACCESS_CONTROL_AN, request, &msg.EmptyResponse{})
 }

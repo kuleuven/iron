@@ -254,3 +254,12 @@ type TouchOptions struct {
 	ReplicaNumber     int   `json:"replica_number,omitempty"`
 	NoCreate          bool  `json:"no_create,omitempty"`
 }
+
+type ModifyAccessRequest struct {
+	XMLName       xml.Name `xml:"modAccessControlInp_PI"`
+	RecursiveFlag int      `xml:"recursiveFlag"`
+	AccessLevel   string   `xml:"accessLevel"`
+	UserName      string   `xml:"userName"`
+	Zone          string   `xml:"zone"`
+	Path          string   `xml:"path"`
+}

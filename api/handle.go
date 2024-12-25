@@ -199,6 +199,10 @@ func (h *handle) Touch(mtime time.Time) error {
 var ErrSameConnection = errors.New("same connection")
 
 func (h *handle) Reopen(conn Conn, mode int) (File, error) {
+	if h.origin != nil {
+		return h.origin.Reopen(conn, mode)
+	}
+
 	if conn == nil {
 		var err error
 

@@ -224,3 +224,17 @@ func TestCreateDataObjectTruncate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestModifyAccess(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.ModifyAccess(context.Background(), "/test", "test", "own", false); err != nil {
+		t.Fatal(err)
+	}
+
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.ModifyAccess(context.Background(), "/test", "test#remoteZone", "own", false); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -69,6 +69,10 @@ type API interface {
 	// When called using iron.Client, this method blocks an irods connection
 	// until the file has been closed.
 	OpenDataObject(ctx context.Context, path string, mode int) (File, error)
+
+	// ModifyAccess modifies the access level of a data object or collection.
+	// For users of federated zones, specify <name>#<zone> as user.
+	ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error
 }
 
 type File interface {
