@@ -133,10 +133,6 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 
 	defer h.Unlock()
 
-	return h.seek(offset, whence)
-}
-
-func (h *handle) seek(offset int64, whence int) (int64, error) {
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 		Whence:         whence,
@@ -257,15 +253,6 @@ func (h *handle) Truncate(size int64) error {
 	defer h.Unlock()
 
 	h.setTruncatedSize(size)
-
-	// If the current offset is greater than the new size, set it to the new size
-	// Note: if the file was reopened, we don't seek the other handles as unix
-	// wouldn't do either.
-	if h.curOffset > size {
-		_, err := h.seek(size, io.SeekStart)
-
-		return err
-	}
 
 	return nil
 }
