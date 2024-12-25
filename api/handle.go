@@ -157,6 +157,20 @@ func (h *handle) Read(b []byte) (int, error) {
 
 	defer h.Unlock()
 
+	truncatedSize := h.truncatedSize()
+
+	if truncatedSize >= 0 && truncatedSize <= h.curOffset {
+		return 0, io.EOF
+	}
+
+	var returnEOF bool
+
+	if truncatedSize >= 0 && h.curOffset+int64(len(b)) > truncatedSize {
+		b = b[:truncatedSize-h.curOffset]
+
+		returnEOF = true
+	}
+
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 		Size:           int64(len(b)),
@@ -171,11 +185,15 @@ func (h *handle) Read(b []byte) (int, error) {
 	n := int(response)
 	h.curOffset += int64(n)
 
-	if n >= len(b) {
-		return n, nil
+	if n < len(b) {
+		returnEOF = true
 	}
 
-	return n, io.EOF
+	if returnEOF {
+		return n, io.EOF
+	}
+
+	return n, nil
 }
 
 func (h *handle) Write(b []byte) (int, error) {
@@ -194,7 +212,37 @@ func (h *handle) Write(b []byte) (int, error) {
 
 	h.curOffset += int64(len(b))
 
+	if h.truncatedSize() >= 0 && h.curOffset > h.truncatedSize() {
+		h.setTruncatedSize(h.curOffset)
+	}
+
 	return len(b), nil
+}
+
+func (h *handle) truncatedSize() int64 {
+	if h.origin != nil {
+		h.origin.Lock()
+
+		defer h.origin.Unlock()
+
+		return h.origin.truncatedSize()
+	}
+
+	return h.truncateSize
+}
+
+func (h *handle) setTruncatedSize(size int64) {
+	if h.origin != nil {
+		h.origin.Lock()
+
+		defer h.origin.Unlock()
+
+		h.origin.truncateSize = size
+
+		return
+	}
+
+	h.truncateSize = size
 }
 
 var ErrInvalidSize = errors.New("invalid size")
@@ -208,15 +256,11 @@ func (h *handle) Truncate(size int64) error {
 
 	defer h.Unlock()
 
-	if h.origin == nil {
-		h.truncateSize = size
-	} else {
-		h.origin.Lock()
-		h.origin.truncateSize = size
-		h.origin.Unlock()
-	}
+	h.setTruncatedSize(size)
 
 	// If the current offset is greater than the new size, set it to the new size
+	// Note: if the file was reopened, we don't seek the other handles as unix
+	// wouldn't do either.
 	if h.curOffset > size {
 		_, err := h.seek(size, io.SeekStart)
 
