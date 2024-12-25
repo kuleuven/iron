@@ -24,6 +24,8 @@ type handle struct {
 	wg           sync.WaitGroup // Waitgroup if the file was reopened, for the reopened handle to be closed
 	truncateSize int64          // If nonnegative, truncate the file to this size after closing
 	touchTime    time.Time      // If non-zero, touch the file to this time after closing
+	curOffset    int64          // Current offset of the file
+	sync.Mutex
 }
 
 func (h *handle) Close() error {
@@ -32,6 +34,10 @@ func (h *handle) Close() error {
 	}
 
 	h.wg.Wait()
+
+	h.Lock()
+
+	defer h.Unlock()
 
 	var replicaInfo *ReplicaAccessInfo
 
@@ -123,6 +129,14 @@ func (h *handle) doTouch(replicaInfo *ReplicaAccessInfo) error {
 }
 
 func (h *handle) Seek(offset int64, whence int) (int64, error) {
+	h.Lock()
+
+	defer h.Unlock()
+
+	return h.seek(offset, whence)
+}
+
+func (h *handle) seek(offset int64, whence int) (int64, error) {
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 		Whence:         whence,
@@ -133,10 +147,16 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 
 	err := h.conn.Request(h.ctx, msg.DATA_OBJ_LSEEK_AN, request, &response)
 
+	h.curOffset = response.Offset
+
 	return response.Offset, err
 }
 
 func (h *handle) Read(b []byte) (int, error) {
+	h.Lock()
+
+	defer h.Unlock()
+
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 		Size:           int64(len(b)),
@@ -149,6 +169,7 @@ func (h *handle) Read(b []byte) (int, error) {
 	}
 
 	n := int(response)
+	h.curOffset += int64(n)
 
 	if n >= len(b) {
 		return n, nil
@@ -158,31 +179,58 @@ func (h *handle) Read(b []byte) (int, error) {
 }
 
 func (h *handle) Write(b []byte) (int, error) {
+	h.Lock()
+
+	defer h.Unlock()
+
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 		Size:           int64(len(b)),
 	}
 
-	return len(b), h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_WRITE_AN, request, &msg.EmptyResponse{}, b, nil)
+	if err := h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_WRITE_AN, request, &msg.EmptyResponse{}, b, nil); err != nil {
+		return 0, err
+	}
+
+	h.curOffset += int64(len(b))
+
+	return len(b), nil
 }
 
 var ErrInvalidSize = errors.New("invalid size")
 
 func (h *handle) Truncate(size int64) error {
-	if h.origin != nil {
-		return h.origin.Truncate(size)
-	}
-
 	if size < 0 {
 		return ErrInvalidSize
 	}
 
-	h.truncateSize = size
+	h.Lock()
+
+	defer h.Unlock()
+
+	if h.origin == nil {
+		h.truncateSize = size
+	} else {
+		h.origin.Lock()
+		h.origin.truncateSize = size
+		h.origin.Unlock()
+	}
+
+	// If the current offset is greater than the new size, set it to the new size
+	if h.curOffset > size {
+		_, err := h.seek(size, io.SeekStart)
+
+		return err
+	}
 
 	return nil
 }
 
 func (h *handle) Touch(mtime time.Time) error {
+	h.Lock()
+
+	defer h.Unlock()
+
 	if h.origin != nil {
 		return h.origin.Touch(mtime)
 	}
@@ -202,6 +250,10 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	if h.origin != nil {
 		return h.origin.Reopen(conn, mode)
 	}
+
+	h.Lock()
+
+	defer h.Unlock()
 
 	if conn == nil {
 		var err error
