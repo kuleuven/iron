@@ -23,10 +23,22 @@ import (
 )
 
 type Conn interface {
+	// Conn returns the underlying net.Conn
 	Conn() net.Conn
+
+	// Request sends an API request for the given API number and expects a response.
+	// Both request and response should represent a type such as in `msg/types.go`.
+	// The request and response will be marshaled and unmarshaled automatically.
+	// If a negative IntInfo is returned, an appropriate error will be returned.
 	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
+
+	// RequestWithBuffers behaves as Request, with provided buffers for the request
+	// and response binary data. Both requestBuf and responseBuf could be nil.
 	RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error
+
+	// Close closes the connection.
 	Close() error
+
 	api.API
 }
 
@@ -56,9 +68,9 @@ type Option struct {
 // The caller is responsible for closing the connection when it is no longer needed.
 func Dial(ctx context.Context, env Env, option Option) (Conn, error) {
 	if option.ConnectAtFirstUse {
-		return &deferred{
+		return &Deferred{
 			Context: ctx,
-			Env:     env,
+			Env:     func() (Env, error) { return env, nil },
 			Option:  option,
 		}, nil
 	}

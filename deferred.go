@@ -8,9 +8,15 @@ import (
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
 
-type deferred struct {
+var _ Conn = (*Deferred)(nil)
+
+// Deferred represents a deferred connection to an iRODS server.
+// The provided Env function is only called on first use by a Request method,
+// to retrieve connection parameters and dial the connection.
+// Option.ConnectAtFirstUse is ignored (or assumed to be true).
+type Deferred struct {
 	Context context.Context //nolint:containedctx
-	Env     Env
+	Env     func() (Env, error)
 	Option  Option
 
 	*conn
@@ -18,7 +24,9 @@ type deferred struct {
 	sync.Mutex
 }
 
-func (d *deferred) Conn() net.Conn {
+// Conn returns the underlying network connection.
+// If the connection is not yet established, nil is returned.
+func (d *Deferred) Conn() net.Conn {
 	d.Lock()
 	defer d.Unlock()
 
@@ -29,11 +37,17 @@ func (d *deferred) Conn() net.Conn {
 	return d.conn.Conn()
 }
 
-func (d *deferred) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
+// Request sends an API request to the server and expects a API reply.
+// The underlying connection is established on first use, using the provided Env
+// function to retrieve connection parameters and dial the connection.
+func (d *Deferred) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
 	return d.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
 }
 
-func (d *deferred) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
+// RequestWithBuffers sends an API request to the server and expects a API reply.
+// The underlying connection is established on first use, using the provided Env
+// function to retrieve connection parameters and dial the connection.
+func (d *Deferred) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
 	d.Lock()
 	defer d.Unlock()
 
@@ -42,17 +56,25 @@ func (d *deferred) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumb
 	}
 
 	if d.conn == nil {
-		d.conn, d.dialErr = dial(ctx, d.Env, d.Option)
-	}
+		env, err := d.Env()
+		if err != nil {
+			d.dialErr = err
 
-	if d.dialErr != nil {
-		return d.dialErr
+			return err
+		}
+
+		d.conn, d.dialErr = dial(ctx, env, d.Option)
+		if d.dialErr != nil {
+			return d.dialErr
+		}
 	}
 
 	return d.conn.RequestWithBuffers(ctx, apiNumber, request, response, requestBuf, responseBuf)
 }
 
-func (d *deferred) Close() error {
+// Close closes the underlying connection if it was established.
+// If the connection was not yet established, this is a no-op.
+func (d *Deferred) Close() error {
 	d.Lock()
 	defer d.Unlock()
 

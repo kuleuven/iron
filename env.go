@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Env contains the IRODS connection parameters to establish a connection.
 type Env struct {
 	Host                          string `json:"irods_host"`
 	Port                          int    `json:"irods_port"`
