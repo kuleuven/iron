@@ -252,3 +252,48 @@ func (api *api) ModifyAccess(ctx context.Context, path string, user string, acce
 
 	return api.Request(ctx, msg.MOD_ACCESS_CONTROL_AN, request, &msg.EmptyResponse{})
 }
+
+func (api *api) AddMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+	request := &msg.ModifyMetadataRequest{
+		Operation: "add",
+		ItemType:  string(itemType),
+		ItemName:  path,
+		AttrName:  value.Name,
+		AttrValue: value.Value,
+		AttrUnits: value.Units,
+	}
+
+	api.SetFlags(&request.KeyVals)
+
+	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+}
+
+func (api *api) RemoveMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+	request := &msg.ModifyMetadataRequest{
+		Operation: "rm",
+		ItemType:  string(itemType),
+		ItemName:  path,
+		AttrName:  value.Name,
+		AttrValue: value.Value,
+		AttrUnits: value.Units,
+	}
+
+	api.SetFlags(&request.KeyVals)
+
+	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+}
+
+func (api *api) SetMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+	request := &msg.ModifyMetadataRequest{
+		Operation: "set",
+		ItemType:  string(itemType),
+		ItemName:  path,
+		AttrName:  value.Name,
+		AttrValue: value.Value,
+		AttrUnits: value.Units,
+	}
+
+	api.SetFlags(&request.KeyVals)
+
+	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+}

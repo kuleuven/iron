@@ -238,3 +238,36 @@ func TestModifyAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAddMetadata(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.AddMetadata(context.Background(), "/test", Collection, Metadata{
+		Name:  "test",
+		Value: "test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRemoveMetadata(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.RemoveMetadata(context.Background(), "/test", Collection, Metadata{
+		Name:  "test",
+		Value: "test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSetMetadata(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.SetMetadata(context.Background(), "/test", Collection, Metadata{
+		Name:  "test",
+		Value: "test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

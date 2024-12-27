@@ -263,3 +263,18 @@ type ModifyAccessRequest struct {
 	Zone          string   `xml:"zone"`
 	Path          string   `xml:"path"`
 }
+
+type ModifyMetadataRequest struct {
+	XMLName      xml.Name `xml:"ModAVUMetadataInp_PI"`
+	Operation    string   `xml:"arg0"` // add, adda, rm, rmw, rmi, cp, mod, set
+	ItemType     string   `xml:"arg1"` // -d, -D, -c, -C, -r, -R, -u, -U
+	ItemName     string   `xml:"arg2"`
+	AttrName     string   `xml:"arg3"`
+	AttrValue    string   `xml:"arg4"`
+	AttrUnits    string   `xml:"arg5"`
+	NewAttrName  string   `xml:"arg6"` // new attr name (for mod)
+	NewAttrValue string   `xml:"arg7"` // new attr value (for mod)
+	NewAttrUnits string   `xml:"arg8"` // new attr unit (for mod)
+	Arg9         string   `xml:"arg9"` // unused
+	KeyVals      SSKeyVal `xml:"KeyValPair_PI"`
+}

@@ -73,6 +73,30 @@ type API interface {
 	// ModifyAccess modifies the access level of a data object or collection.
 	// For users of federated zones, specify <name>#<zone> as user.
 	ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error
+
+	// AddMetadata adds metadata of a data object, collection, user or resource.
+	AddMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
+
+	// RemoveMetadata removes metadata of a data object, collection, user or resource.
+	RemoveMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
+
+	// SetMetadata sets metadata of a data object, collection, user or resource.
+	SetMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
+}
+
+type ObjectType string
+
+const (
+	User       ObjectType = "-u"
+	Collection ObjectType = "-C"
+	DataObject ObjectType = "-d"
+	Resource   ObjectType = "-R"
+)
+
+type Metadata struct {
+	Name  string
+	Value string
+	Units string
 }
 
 type File interface {
@@ -90,11 +114,17 @@ type File interface {
 	Write(b []byte) (int, error)
 
 	// Truncate truncates the file
+	// In our implementation, the file seems to be truncated in further read/write operations
+	// on this handle or on reopened handles, but the file is not truncated on the server
+	// until Close() is called.
+	// Truncate requires retrieving file descriptor information, and this does not support
+	// the admin keyword.
 	Truncate(size int64) error
 
 	// Touch changes the modification time of the file
-	// A zero value for mtime means the current time
-	// Touch does not support the admin keyword
+	// A zero value for mtime means the current time. The file is not touched on the server
+	// until Close() is called.
+	// Touch does not support the admin keyword.
 	Touch(mtime time.Time) error
 
 	// Reopen reopens the file using another connection.

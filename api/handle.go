@@ -139,6 +139,8 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 		Offset:         offset,
 	}
 
+	h.api.SetFlags(&request.KeyVals)
+
 	var response msg.SeekResponse
 
 	err := h.conn.Request(h.ctx, msg.DATA_OBJ_LSEEK_AN, request, &response)
@@ -172,6 +174,8 @@ func (h *handle) Read(b []byte) (int, error) {
 		Size:           int64(len(b)),
 	}
 
+	h.api.SetFlags(&request.KeyVals)
+
 	var response msg.ReadResponse
 
 	if err := h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_READ_AN, request, &response, nil, b); err != nil {
@@ -201,6 +205,8 @@ func (h *handle) Write(b []byte) (int, error) {
 		FileDescriptor: h.FileDescriptor,
 		Size:           int64(len(b)),
 	}
+
+	h.api.SetFlags(&request.KeyVals)
 
 	if err := h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_WRITE_AN, request, &msg.EmptyResponse{}, b, nil); err != nil {
 		return 0, err
