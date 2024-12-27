@@ -253,6 +253,16 @@ func (api *api) ModifyAccess(ctx context.Context, path string, user string, acce
 	return api.Request(ctx, msg.MOD_ACCESS_CONTROL_AN, request, &msg.EmptyResponse{})
 }
 
+func (api *api) SetCollectionInheritance(ctx context.Context, path string, inherit bool, recursive bool) error {
+	inheritStr := "inherit"
+
+	if !inherit {
+		inheritStr = "noinherit"
+	}
+
+	return api.ModifyAccess(ctx, path, "", inheritStr, recursive)
+}
+
 func (api *api) AddMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "add",

@@ -239,6 +239,20 @@ func TestModifyAccess(t *testing.T) {
 	}
 }
 
+func TestSetCollectionInheritance(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.SetCollectionInheritance(context.Background(), "/test", true, true); err != nil {
+		t.Fatal(err)
+	}
+
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.SetCollectionInheritance(context.Background(), "/test", false, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAddMetadata(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 

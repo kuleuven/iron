@@ -74,6 +74,9 @@ type API interface {
 	// For users of federated zones, specify <name>#<zone> as user.
 	ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error
 
+	// SetCollectionInheritance sets the inheritance of a collection.
+	SetCollectionInheritance(ctx context.Context, path string, inherit bool, recursive bool) error
+
 	// AddMetadata adds a single metadata value of a data object, collection, user or resource.
 	AddMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
 
