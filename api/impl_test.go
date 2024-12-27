@@ -271,3 +271,25 @@ func TestSetMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestModifyMetadata(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	add := []Metadata{
+		{
+			Name:  "test",
+			Value: "test",
+		},
+	}
+
+	remove := []Metadata{
+		{
+			Name:  "test2",
+			Value: "test",
+		},
+	}
+
+	if err := testAPI.ModifyMetadata(context.Background(), "/test", Collection, add, remove); err != nil {
+		t.Fatal(err)
+	}
+}

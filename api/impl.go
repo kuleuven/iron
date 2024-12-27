@@ -256,7 +256,7 @@ func (api *api) ModifyAccess(ctx context.Context, path string, user string, acce
 func (api *api) AddMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "add",
-		ItemType:  string(itemType),
+		ItemType:  fmt.Sprintf("-%s", string(itemType)),
 		ItemName:  path,
 		AttrName:  value.Name,
 		AttrValue: value.Value,
@@ -271,7 +271,7 @@ func (api *api) AddMetadata(ctx context.Context, path string, itemType ObjectTyp
 func (api *api) RemoveMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "rm",
-		ItemType:  string(itemType),
+		ItemType:  fmt.Sprintf("-%s", string(itemType)),
 		ItemName:  path,
 		AttrName:  value.Name,
 		AttrValue: value.Value,
@@ -286,7 +286,7 @@ func (api *api) RemoveMetadata(ctx context.Context, path string, itemType Object
 func (api *api) SetMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "set",
-		ItemType:  string(itemType),
+		ItemType:  fmt.Sprintf("-%s", string(itemType)),
 		ItemName:  path,
 		AttrName:  value.Name,
 		AttrValue: value.Value,
@@ -296,4 +296,32 @@ func (api *api) SetMetadata(ctx context.Context, path string, itemType ObjectTyp
 	api.SetFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+}
+
+func (api *api) ModifyMetadata(ctx context.Context, path string, itemType ObjectType, add, remove []Metadata) error {
+	request := &msg.AtomicMetadataRequest{
+		AdminMode: api.admin,
+		ItemName:  path,
+		ItemType:  string(itemType),
+	}
+
+	for _, value := range remove {
+		request.Operations = append(request.Operations, msg.MetadataOperation{
+			Operation: "remove",
+			Name:      value.Name,
+			Value:     value.Value,
+			Units:     value.Units,
+		})
+	}
+
+	for _, value := range add {
+		request.Operations = append(request.Operations, msg.MetadataOperation{
+			Operation: "add",
+			Name:      value.Name,
+			Value:     value.Value,
+			Units:     value.Units,
+		})
+	}
+
+	return api.Request(ctx, msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, request, &msg.EmptyResponse{})
 }

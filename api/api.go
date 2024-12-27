@@ -74,23 +74,26 @@ type API interface {
 	// For users of federated zones, specify <name>#<zone> as user.
 	ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error
 
-	// AddMetadata adds metadata of a data object, collection, user or resource.
+	// AddMetadata adds a single metadata value of a data object, collection, user or resource.
 	AddMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
 
-	// RemoveMetadata removes metadata of a data object, collection, user or resource.
+	// RemoveMetadata removes a single metadata value of a data object, collection, user or resource.
 	RemoveMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
 
-	// SetMetadata sets metadata of a data object, collection, user or resource.
+	// SetMetadata add a single metadata value for the given key and removes old metadata values with the same key.
 	SetMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
+
+	// ModifyMetadata does a bulk update of metadata, removing and adding the given values.
+	ModifyMetadata(ctx context.Context, path string, objectType ObjectType, add, remove []Metadata) error
 }
 
 type ObjectType string
 
 const (
-	User       ObjectType = "-u"
-	Collection ObjectType = "-C"
-	DataObject ObjectType = "-d"
-	Resource   ObjectType = "-R"
+	User       ObjectType = "u"
+	Collection ObjectType = "C"
+	DataObject ObjectType = "d"
+	Resource   ObjectType = "R"
 )
 
 type Metadata struct {

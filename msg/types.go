@@ -278,3 +278,17 @@ type ModifyMetadataRequest struct {
 	Arg9         string   `xml:"arg9"` // unused
 	KeyVals      SSKeyVal `xml:"KeyValPair_PI"`
 }
+
+type AtomicMetadataRequest struct { // No xml.Name means this is a json struct
+	AdminMode  bool                `json:"admin_mode"`
+	ItemName   string              `json:"entity_name"`
+	ItemType   string              `json:"entity_type"` // d, C, R, u
+	Operations []MetadataOperation `json:"operations"`
+}
+
+type MetadataOperation struct {
+	Operation string `json:"operation"` // add, remove
+	Name      string `json:"attribute"`
+	Value     string `json:"value"`
+	Units     string `json:"units,omitempty"`
+}
