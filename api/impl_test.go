@@ -256,7 +256,7 @@ func TestSetCollectionInheritance(t *testing.T) {
 func TestAddMetadata(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 
-	if err := testAPI.AddMetadata(context.Background(), "/test", Collection, Metadata{
+	if err := testAPI.AddMetadata(context.Background(), "/test", CollectionType, Metadata{
 		Name:  "test",
 		Value: "test",
 	}); err != nil {
@@ -267,7 +267,7 @@ func TestAddMetadata(t *testing.T) {
 func TestRemoveMetadata(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 
-	if err := testAPI.RemoveMetadata(context.Background(), "/test", Collection, Metadata{
+	if err := testAPI.RemoveMetadata(context.Background(), "/test", CollectionType, Metadata{
 		Name:  "test",
 		Value: "test",
 	}); err != nil {
@@ -278,7 +278,7 @@ func TestRemoveMetadata(t *testing.T) {
 func TestSetMetadata(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 
-	if err := testAPI.SetMetadata(context.Background(), "/test", Collection, Metadata{
+	if err := testAPI.SetMetadata(context.Background(), "/test", CollectionType, Metadata{
 		Name:  "test",
 		Value: "test",
 	}); err != nil {
@@ -303,7 +303,7 @@ func TestModifyMetadata(t *testing.T) {
 		},
 	}
 
-	if err := testAPI.ModifyMetadata(context.Background(), "/test", Collection, add, remove); err != nil {
+	if err := testAPI.ModifyMetadata(context.Background(), "/test", CollectionType, add, remove); err != nil {
 		t.Fatal(err)
 	}
 }

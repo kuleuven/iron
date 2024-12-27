@@ -13,18 +13,18 @@ import (
 // Query defines a query
 type PreparedQuery struct {
 	api         *api
-	ResultLimit int
-	MaxRows     int
-	Columns     []msg.ColumnNumber
-	Conditions  map[msg.ColumnNumber]string
+	resultLimit int
+	maxRows     int
+	columns     []msg.ColumnNumber
+	conditions  map[msg.ColumnNumber]string
 }
 
 func (api *api) Query(columns ...msg.ColumnNumber) PreparedQuery {
 	return PreparedQuery{
 		api:        api,
-		Columns:    columns,
-		MaxRows:    500,
-		Conditions: make(map[msg.ColumnNumber]string),
+		columns:    columns,
+		maxRows:    500,
+		conditions: make(map[msg.ColumnNumber]string),
 	}
 }
 
@@ -32,17 +32,17 @@ func (api *api) Query(columns ...msg.ColumnNumber) PreparedQuery {
 // The condition is a string that will be used to filter results
 // based on the specified column.
 func (q PreparedQuery) Where(column msg.ColumnNumber, condition string) PreparedQuery {
-	q.Conditions[column] = condition
+	q.conditions[column] = condition
 
 	return q
 }
 
 // Limit limits the number of results.
 func (q PreparedQuery) Limit(limit int) PreparedQuery {
-	q.ResultLimit = limit
+	q.resultLimit = limit
 
-	if q.MaxRows > limit && limit > 0 {
-		q.MaxRows = limit
+	if q.maxRows > limit && limit > 0 {
+		q.maxRows = limit
 	}
 
 	return q
@@ -101,7 +101,7 @@ func (r *Result) Next() bool {
 
 	r.row++
 
-	if r.row >= r.Query.ResultLimit && r.Query.ResultLimit > 0 {
+	if r.row >= r.Query.resultLimit && r.Query.resultLimit > 0 {
 		r.cleanup()
 
 		return false
@@ -118,7 +118,7 @@ func (r *Result) Next() bool {
 	}
 
 	r.query.ContinueIndex = r.result.ContinueIndex
-	r.Query.ResultLimit -= r.result.RowCount
+	r.Query.resultLimit -= r.result.RowCount
 
 	r.executeQuery()
 
@@ -156,7 +156,7 @@ func (r *Result) Scan(dest ...interface{}) error {
 
 		value := col.Values[r.row]
 
-		if err := r.parseValue(value, dest[attr]); err != nil {
+		if err := parseValue(value, dest[attr]); err != nil {
 			return err
 		}
 	}
@@ -174,15 +174,15 @@ func (r *Result) Close() error {
 
 func (r *Result) buildQuery() {
 	r.query = &msg.QueryRequest{
-		MaxRows: r.Query.MaxRows,
+		MaxRows: r.Query.maxRows,
 		Options: 0x20,
 	}
 
-	for _, col := range r.Query.Columns {
+	for _, col := range r.Query.columns {
 		r.query.Selects.Add(int(col), 1)
 	}
 
-	for col, condition := range r.Query.Conditions {
+	for col, condition := range r.Query.conditions {
 		r.query.Conditions.Add(int(col), condition)
 	}
 
@@ -218,7 +218,7 @@ func (r *Result) cleanup() {
 	}
 }
 
-func (r *Result) parseValue(value string, dest interface{}) error {
+func parseValue(value string, dest interface{}) error {
 	switch reflect.ValueOf(dest).Elem().Kind() { //nolint:exhaustive
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i, err := strconv.ParseInt(value, 10, 64)
@@ -286,4 +286,74 @@ func parseTime(timestring string) (time.Time, error) {
 	}
 
 	return time.Unix(i64, 0), nil
+}
+
+type PreparedSingleRowQuery PreparedQuery
+
+func (api *api) QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery {
+	return PreparedSingleRowQuery{
+		api:         api,
+		columns:     columns,
+		resultLimit: 1,
+		maxRows:     1,
+		conditions:  make(map[msg.ColumnNumber]string),
+	}
+}
+
+// Where adds a condition to the query for the specified column.
+// The condition is a string that will be used to filter results
+// based on the specified column.
+func (r PreparedSingleRowQuery) Where(column msg.ColumnNumber, condition string) PreparedSingleRowQuery {
+	r.conditions[column] = condition
+
+	return r
+}
+
+// Execute executes the query.
+func (r PreparedSingleRowQuery) Execute(ctx context.Context) *SingleRowResult {
+	result := PreparedQuery(r).Execute(ctx)
+
+	defer result.Close()
+
+	if result.Next() {
+		return &SingleRowResult{result: result.result}
+	}
+
+	if result.Err() != nil {
+		return &SingleRowResult{err: result.Err()}
+	}
+
+	return &SingleRowResult{err: ErrNoRowFound}
+}
+
+type SingleRowResult struct {
+	result *msg.QueryResponse
+	err    error
+}
+
+var ErrNoRowFound = fmt.Errorf("no row found")
+
+// Scan reads the values in the current row into the values pointed
+// to by dest, in order.  If an error occurs during scanning, the
+// error is returned. The values pointed to by dest before the error
+// occurred might be modified.
+func (r *SingleRowResult) Scan(dest ...interface{}) error {
+	if r.err != nil {
+		return r.err
+	}
+
+	for attr := range dest {
+		col := r.result.SQLResult[attr]
+		if len(col.Values) == 0 {
+			return fmt.Errorf("%w: row 1 is missing from column %d", ErrNoSQLResults, attr)
+		}
+
+		value := col.Values[0]
+
+		if err := parseValue(value, dest[attr]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

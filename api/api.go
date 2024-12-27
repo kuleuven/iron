@@ -27,6 +27,9 @@ type API interface {
 	// Query prepares a query to read from the irods catalog.
 	Query(columns ...msg.ColumnNumber) PreparedQuery
 
+	// QueryRow prepares a query to read a single row from the irods catalog.
+	QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery
+
 	// CreateCollection creates a collection.
 	// If the collection already exists, an error is returned.
 	CreateCollection(ctx context.Context, name string) error
@@ -93,10 +96,10 @@ type API interface {
 type ObjectType string
 
 const (
-	User       ObjectType = "u"
-	Collection ObjectType = "C"
-	DataObject ObjectType = "d"
-	Resource   ObjectType = "R"
+	UserType       ObjectType = "u"
+	CollectionType ObjectType = "C"
+	DataObjectType ObjectType = "d"
+	ResourceType   ObjectType = "R"
 )
 
 type Metadata struct {
