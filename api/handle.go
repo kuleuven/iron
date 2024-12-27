@@ -30,7 +30,11 @@ type handle struct {
 
 func (h *handle) Close() error {
 	if h.origin != nil {
-		return h.closeReopenedHandle()
+		err := h.closeReopenedHandle()
+
+		err = multierr.Append(err, h.conn.Close())
+
+		return err
 	}
 
 	h.wg.Wait()
@@ -46,24 +50,31 @@ func (h *handle) Close() error {
 		replicaInfo, err = h.GetReplicaAccessInfo()
 		if err != nil {
 			err = multierr.Append(err, h.closeOriginalHandle())
+			err = multierr.Append(err, h.conn.Close())
 
 			return err
 		}
 	}
 
 	if err := h.closeOriginalHandle(); err != nil {
+		err = multierr.Append(err, h.conn.Close())
+
 		return err
 	}
 
 	if err := h.doTruncate(replicaInfo); err != nil {
+		err = multierr.Append(err, h.conn.Close())
+
 		return err
 	}
 
 	if err := h.doTouch(replicaInfo); err != nil {
+		err = multierr.Append(err, h.conn.Close())
+
 		return err
 	}
 
-	return nil
+	return h.conn.Close()
 }
 
 func (h *handle) closeReopenedHandle() error {
@@ -73,11 +84,7 @@ func (h *handle) closeReopenedHandle() error {
 		FileDescriptor: h.FileDescriptor,
 	}
 
-	err := h.conn.Request(h.ctx, msg.REPLICA_CLOSE_APN, request, &msg.EmptyResponse{})
-
-	err = multierr.Append(err, h.conn.Close())
-
-	return err
+	return h.conn.Request(h.ctx, msg.REPLICA_CLOSE_APN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) closeOriginalHandle() error {
@@ -85,11 +92,7 @@ func (h *handle) closeOriginalHandle() error {
 		FileDescriptor: h.FileDescriptor,
 	}
 
-	err := h.conn.Request(h.ctx, msg.DATA_OBJ_CLOSE_AN, request, &msg.EmptyResponse{})
-
-	err = multierr.Append(err, h.conn.Close())
-
-	return err
+	return h.conn.Request(h.ctx, msg.DATA_OBJ_CLOSE_AN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) doTruncate(replicaInfo *ReplicaAccessInfo) error {
@@ -107,7 +110,7 @@ func (h *handle) doTruncate(replicaInfo *ReplicaAccessInfo) error {
 
 	h.api.SetFlags(&request.KeyVals)
 
-	return h.api.Request(h.ctx, msg.REPLICA_TRUNCATE_AN, request, &msg.EmptyResponse{})
+	return h.conn.Request(h.ctx, msg.REPLICA_TRUNCATE_AN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) doTouch(replicaInfo *ReplicaAccessInfo) error {
@@ -124,7 +127,7 @@ func (h *handle) doTouch(replicaInfo *ReplicaAccessInfo) error {
 		},
 	}
 
-	return h.api.Request(h.ctx, msg.TOUCH_APN, request, &msg.EmptyResponse{})
+	return h.conn.Request(h.ctx, msg.TOUCH_APN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) Seek(offset int64, whence int) (int64, error) {
