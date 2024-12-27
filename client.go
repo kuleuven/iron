@@ -9,8 +9,9 @@ import (
 )
 
 type Client struct {
+	ctx       context.Context //nolint:containedctx
 	env       *Env
-	option    string
+	option    Option
 	available chan *conn
 	all       []*conn
 	maxConns  int
@@ -19,7 +20,11 @@ type Client struct {
 	api.API
 }
 
-func New(env Env, option string, maxConns int) (*Client, error) {
+// New creates a new Client instance with the provided environment settings, maximum connections, and options.
+// The context and environment settings are used for dialing new connections.
+// The maximum number of connections is the maximum number of connections that can be established at any given time.
+// The options are used to customize the behavior of the client.
+func New(ctx context.Context, env Env, maxConns int, option Option) (*Client, error) {
 	env.ApplyDefaults()
 
 	if maxConns <= 0 {
@@ -27,6 +32,7 @@ func New(env Env, option string, maxConns int) (*Client, error) {
 	}
 
 	c := &Client{
+		ctx:       ctx,
 		env:       &env,
 		option:    option,
 		available: make(chan *conn, maxConns),
@@ -35,13 +41,28 @@ func New(env Env, option string, maxConns int) (*Client, error) {
 
 	// Register api
 	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
-		return c.Connect(ctx)
+		return c.Connect()
 	}, env.DefaultResource)
+
+	// Test first connection unless deferred
+	if !option.ConnectAtFirstUse {
+		conn, err := dial(ctx, env, c.option)
+		if err != nil {
+			return nil, err
+		}
+
+		c.all = append(c.all, conn)
+
+		c.available <- conn
+	}
 
 	return c, nil
 }
 
-func (c *Client) Connect(ctx context.Context) (Conn, error) {
+// Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
+// If all connections are busy, it will create a new one up to the maximum number of connections.
+// If the maximum number of connections has been reached, it will block until a connection becomes available.
+func (c *Client) Connect() (Conn, error) {
 	if len(c.available) > 0 {
 		return &returnOnClose{<-c.available, c}, nil
 	}
@@ -51,7 +72,7 @@ func (c *Client) Connect(ctx context.Context) (Conn, error) {
 	if len(c.all) < c.maxConns {
 		defer c.lock.Unlock()
 
-		return c.newConn(ctx)
+		return c.newConn()
 	}
 
 	c.lock.Unlock()
@@ -59,7 +80,7 @@ func (c *Client) Connect(ctx context.Context) (Conn, error) {
 	return &returnOnClose{<-c.available, c}, nil
 }
 
-func (c *Client) newConn(ctx context.Context) (Conn, error) {
+func (c *Client) newConn() (Conn, error) {
 	if c.dialErr != nil {
 		// Dial has already failed, return the same error without retrying
 		return nil, c.dialErr
@@ -73,7 +94,7 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		env.Password = c.all[0].NativePassword
 	}
 
-	conn, err := dial(ctx, env, c.option)
+	conn, err := dial(c.ctx, env, c.option)
 	if err != nil {
 		c.dialErr = err
 
@@ -96,6 +117,10 @@ func (r *returnOnClose) Close() error {
 	return nil
 }
 
+// Close closes all connections managed by the client, ensuring that any errors
+// encountered during the closing process are aggregated and returned. The method
+// is safe to call multiple times and locks the client during execution to prevent
+// concurrent modifications to the connections.
 func (c *Client) Close() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -107,4 +132,9 @@ func (c *Client) Close() error {
 	}
 
 	return err
+}
+
+// Context returns the context used by the client for all of its operations.
+func (c *Client) Context() context.Context {
+	return c.ctx
 }

@@ -23,14 +23,14 @@ func main() {
 		panic(err)
 	}
 
-	client, err := iron.New(env, "iron", 1)
+	client, err := iron.New(context.Background(), env, 1, iron.Option{ClientName: "iron"})
 	if err != nil {
 		panic(err)
 	}
 
 	defer client.Close()
 
-	conn, err := client.Connect(context.Background())
+	conn, err := client.Connect()
 	if err != nil {
 		panic(err)
 	}

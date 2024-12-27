@@ -305,7 +305,7 @@ func TestDialer(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	_, err = Dial(context.Background(), env, "test")
+	_, err = Dial(context.Background(), env, Option{ClientName: "test"})
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}

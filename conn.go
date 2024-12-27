@@ -47,19 +47,32 @@ var Dialer = net.Dialer{
 	Timeout: time.Minute,
 }
 
+type Option struct {
+	ClientName        string // Passed to the server as the client type
+	ConnectAtFirstUse bool   // If true, connect to the server only on first use
+}
+
 // Dial connects to an IRODS server and creates a new connection.
 // The caller is responsible for closing the connection when it is no longer needed.
-func Dial(ctx context.Context, env Env, option string) (Conn, error) {
+func Dial(ctx context.Context, env Env, option Option) (Conn, error) {
+	if option.ConnectAtFirstUse {
+		return &deferred{
+			Context: ctx,
+			Env:     env,
+			Option:  option,
+		}, nil
+	}
+
 	return dial(ctx, env, option)
 }
 
-func dial(ctx context.Context, env Env, option string) (*conn, error) {
+func dial(ctx context.Context, env Env, option Option) (*conn, error) {
 	conn, err := Dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
 	if err != nil {
 		return nil, err
 	}
 
-	return newConn(ctx, conn, env, option)
+	return newConn(ctx, conn, env, option.ClientName)
 }
 
 var HandshakeTimeout = time.Minute
@@ -67,15 +80,15 @@ var HandshakeTimeout = time.Minute
 // NewConn initializes a new Conn instance with the provided network connection and environment settings.
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // Returns an error if the handshake fails.
-func NewConn(ctx context.Context, transport net.Conn, env Env, option string) (Conn, error) {
-	return newConn(ctx, transport, env, option)
+func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string) (Conn, error) {
+	return newConn(ctx, transport, env, clientName)
 }
 
-func newConn(ctx context.Context, transport net.Conn, env Env, option string) (*conn, error) {
+func newConn(ctx context.Context, transport net.Conn, env Env, clientName string) (*conn, error) {
 	c := &conn{
 		transport: transport,
 		env:       &env,
-		option:    option,
+		option:    clientName,
 	}
 
 	// Make sure TLS is required when not using native authentication

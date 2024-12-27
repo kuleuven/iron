@@ -37,19 +37,22 @@ func TestClient(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	client, err := New(env, "test", 1)
+	client, err := New(context.Background(), env, 1, Option{
+		ClientName:        "test",
+		ConnectAtFirstUse: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer client.Close()
 
-	_, err = client.Connect(context.Background())
+	_, err = client.Connect()
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 
-	_, err = client.Connect(context.Background())
+	_, err = client.Connect()
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
@@ -77,6 +80,7 @@ func TestClientNative(t *testing.T) {
 		}, nil, "RODS_API_REPLY", 0)
 		msg.Read(conn, &msg.AuthChallengeResponse{}, nil, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthResponse{}, nil, "RODS_API_REPLY", 0)
+		msg.Read(conn, msg.EmptyResponse{}, nil, "RODS_DISCONNECT")
 		conn.Close()
 	}()
 
@@ -89,14 +93,19 @@ func TestClientNative(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	client, err := New(env, "test", 1)
+	client, err := New(context.Background(), env, 1, Option{ClientName: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer client.Close()
+	defer func() {
+		err = client.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 
-	conn, err := client.Connect(context.Background())
+	conn, err := client.Connect()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +113,7 @@ func TestClientNative(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		conn, err := client.Connect(context.Background())
+		conn, err := client.Connect()
 		if err != nil {
 			panic(err)
 		}
