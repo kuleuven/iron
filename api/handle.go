@@ -19,7 +19,7 @@ type handle struct {
 	path           string
 	FileDescriptor msg.FileDescriptor
 
-	// Housekeeping for reopened handles
+	// Housekeeping
 	origin       *handle        // If this handle is a reopened handle, this contains the original handle
 	wg           sync.WaitGroup // Waitgroup if the file was reopened, for the reopened handle to be closed
 	truncateSize int64          // If nonnegative, truncate the file to this size after closing
@@ -36,7 +36,6 @@ func (h *handle) Close() error {
 	h.wg.Wait()
 
 	h.Lock()
-
 	defer h.Unlock()
 
 	var replicaInfo *ReplicaAccessInfo
@@ -130,7 +129,6 @@ func (h *handle) doTouch(replicaInfo *ReplicaAccessInfo) error {
 
 func (h *handle) Seek(offset int64, whence int) (int64, error) {
 	h.Lock()
-
 	defer h.Unlock()
 
 	request := msg.OpenedDataObjectRequest{
@@ -152,7 +150,6 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 
 func (h *handle) Read(b []byte) (int, error) {
 	h.Lock()
-
 	defer h.Unlock()
 
 	truncatedSize := h.truncatedSize()
@@ -198,7 +195,6 @@ func (h *handle) Read(b []byte) (int, error) {
 
 func (h *handle) Write(b []byte) (int, error) {
 	h.Lock()
-
 	defer h.Unlock()
 
 	request := msg.OpenedDataObjectRequest{
@@ -224,7 +220,6 @@ func (h *handle) Write(b []byte) (int, error) {
 func (h *handle) truncatedSize() int64 {
 	if h.origin != nil {
 		h.origin.Lock()
-
 		defer h.origin.Unlock()
 
 		return h.origin.truncatedSize()
@@ -236,7 +231,6 @@ func (h *handle) truncatedSize() int64 {
 func (h *handle) setTruncatedSize(size int64) {
 	if h.origin != nil {
 		h.origin.Lock()
-
 		defer h.origin.Unlock()
 
 		h.origin.truncateSize = size
@@ -255,7 +249,6 @@ func (h *handle) Truncate(size int64) error {
 	}
 
 	h.Lock()
-
 	defer h.Unlock()
 
 	h.setTruncatedSize(size)
@@ -265,7 +258,6 @@ func (h *handle) Truncate(size int64) error {
 
 func (h *handle) Touch(mtime time.Time) error {
 	h.Lock()
-
 	defer h.Unlock()
 
 	if h.origin != nil {
