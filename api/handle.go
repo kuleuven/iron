@@ -138,6 +138,14 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 	h.Lock()
 	defer h.Unlock()
 
+	if whence == 0 && offset == h.curOffset {
+		return h.curOffset, nil
+	}
+
+	if whence == 1 && offset == 0 {
+		return h.curOffset, nil
+	}
+
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
 		Whence:         whence,
