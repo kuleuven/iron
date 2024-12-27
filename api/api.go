@@ -103,6 +103,9 @@ type Metadata struct {
 }
 
 type File interface {
+	// Name returns the name of the file as passed to OpenDataObject or CreateDataObject.
+	Name() string
+
 	// Close closes the file.
 	// If the file was reopened, Close() will block until the additional handles are closed.
 	Close() error

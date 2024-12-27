@@ -28,6 +28,10 @@ type handle struct {
 	sync.Mutex
 }
 
+func (h *handle) Name() string {
+	return h.path
+}
+
 func (h *handle) Close() error {
 	if h.origin != nil {
 		err := h.closeReopenedHandle()
