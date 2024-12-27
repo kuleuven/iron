@@ -289,7 +289,6 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	}
 
 	h.Lock()
-
 	defer h.Unlock()
 
 	if conn == nil {
@@ -301,8 +300,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 		}
 	}
 
-	// Check that the caller didn't provide the same connection
-	if conn == h.conn {
+	if conn == h.conn { // Check that the caller didn't provide the same connection
 		return nil, ErrSameConnection
 	}
 
@@ -333,8 +331,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	}
 
 	err = conn.Request(h.ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
-	if err == nil && mode&O_APPEND != 0 {
-		// Irods does not support O_APPEND, we need to seek to the end
+	if err == nil && mode&O_APPEND != 0 { // Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)
 	}
 
@@ -344,8 +341,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 		return nil, err
 	}
 
-	// Add to waitgroup
-	h.wg.Add(1)
+	h.wg.Add(1) // Add to waitgroup
 
 	return &h2, nil
 }
