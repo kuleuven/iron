@@ -23,6 +23,9 @@ import (
 )
 
 type Conn interface {
+	// Env returns the connection environment
+	Env() Env
+
 	// Conn returns the underlying net.Conn
 	Conn() net.Conn
 
@@ -69,9 +72,9 @@ type Option struct {
 func Dial(ctx context.Context, env Env, option Option) (Conn, error) {
 	if option.ConnectAtFirstUse {
 		return &Deferred{
-			Context: ctx,
-			Env:     func() (Env, error) { return env, nil },
-			Option:  option,
+			Context:     ctx,
+			EnvCallback: func() (Env, error) { return env, nil },
+			Option:      option,
 		}, nil
 	}
 
@@ -137,6 +140,11 @@ func (*dummyCloser) Close() error {
 }
 
 var ErrTLSRequired = fmt.Errorf("TLS is required for authentication but not enabled")
+
+// Env returns the connection environment
+func (c *conn) Env() Env {
+	return *c.env
+}
 
 // Conn returns the underlying network connection.
 func (c *conn) Conn() net.Conn {

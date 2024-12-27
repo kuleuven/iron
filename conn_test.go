@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -402,6 +403,10 @@ func TestRequest(t *testing.T) {
 	conn, err := NewConn(ctx, transport, env, "test")
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(conn.Env(), env) {
+		t.Error(err)
 	}
 
 	err = conn.Close()

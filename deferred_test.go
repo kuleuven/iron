@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net"
+	"reflect"
 	"testing"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -54,9 +55,17 @@ func TestDeferredNative(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if !reflect.DeepEqual(conn.Env(), Env{}) {
+		t.Error(err)
+	}
+
 	err = conn.Request(context.Background(), 702, msg.QueryRequest{}, &msg.EmptyResponse{})
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(conn.Env(), env) {
+		t.Error(err)
 	}
 
 	err = conn.Close()
