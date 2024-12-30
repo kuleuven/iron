@@ -54,6 +54,10 @@ type API interface {
 	// RenameCollection renames a collection.
 	RenameCollection(ctx context.Context, oldName, newName string) error
 
+	// GetDataObject returns a data object for the path
+	// Use Query for more complex queries
+	GetDataObject(ctx context.Context, path string) (*DataObject, error)
+
 	// DeleteDataObject deletes a data object.
 	// If force is true, the data object is not moved to the trash.
 	DeleteDataObject(ctx context.Context, path string, force bool) error
@@ -76,6 +80,14 @@ type API interface {
 	// When called using iron.Client, this method blocks an irods connection
 	// until the file has been closed.
 	OpenDataObject(ctx context.Context, path string, mode int) (File, error)
+
+	// GetResource returns information about a resource, identified by its name
+	// Use Query for more complex queries
+	GetResource(ctx context.Context, name string) (*Resource, error)
+
+	// GetUser returns information about a user, identified by its name
+	// Use Query for more complex queries
+	GetUser(ctx context.Context, name string) (*User, error)
 
 	// ModifyAccess modifies the access level of a data object or collection.
 	// For users of federated zones, specify <name>#<zone> as user.
