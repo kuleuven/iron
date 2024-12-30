@@ -221,3 +221,101 @@ func (api *api) GetUser(ctx context.Context, name string) (*User, error) {
 
 	return &u, nil
 }
+
+func (api *api) ListDataObjects(ctx context.Context, collectionPath string) ([]DataObject, error) {
+	result := []DataObject{}
+	mapping := map[int64]*DataObject{}
+	results := api.Query(
+		msg.ICAT_COLUMN_D_DATA_ID,
+		msg.ICAT_COLUMN_COLL_ID,
+		msg.ICAT_COLUMN_DATA_SIZE,
+		msg.ICAT_COLUMN_DATA_TYPE_NAME,
+		msg.ICAT_COLUMN_DATA_REPL_NUM,
+		msg.ICAT_COLUMN_D_OWNER_NAME,
+		msg.ICAT_COLUMN_D_DATA_CHECKSUM,
+		msg.ICAT_COLUMN_D_REPL_STATUS,
+		msg.ICAT_COLUMN_D_RESC_NAME,
+		msg.ICAT_COLUMN_D_DATA_PATH,
+		msg.ICAT_COLUMN_D_RESC_HIER,
+		msg.ICAT_COLUMN_D_CREATE_TIME,
+		msg.ICAT_COLUMN_D_MODIFY_TIME,
+	).Where(
+		msg.ICAT_COLUMN_COLL_NAME,
+		fmt.Sprintf("= '%s'", collectionPath),
+	).Execute(ctx)
+
+	defer results.Close()
+
+	for results.Next() {
+		var (
+			object  DataObject
+			replica Replica
+		)
+
+		err := results.Scan(
+			&object.ID,
+			&object.CollectionID,
+			&object.Size,
+			&object.DataType,
+			&replica.Number,
+			&replica.Owner,
+			&replica.Checksum,
+			&replica.Status,
+			&replica.ResourceName,
+			&replica.PhysicalPath,
+			&replica.ResourceHierarchy,
+			&replica.CreatedAt,
+			&replica.ModifiedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if prev, ok := mapping[object.ID]; ok {
+			prev.Replicas = append(prev.Replicas, replica)
+
+			continue
+		}
+
+		object.Replicas = append(object.Replicas, replica)
+		result = append(result, object)
+		mapping[object.ID] = &result[len(result)-1]
+	}
+
+	return result, results.Err()
+}
+
+func (api *api) ListSubCollections(ctx context.Context, collectionPath string) ([]Collection, error) {
+	var out []Collection
+
+	results := api.Query(
+		msg.ICAT_COLUMN_COLL_ID,
+		msg.ICAT_COLUMN_COLL_NAME,
+		msg.ICAT_COLUMN_COLL_OWNER_NAME,
+		msg.ICAT_COLUMN_COLL_CREATE_TIME,
+		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
+	).Where(
+		msg.ICAT_COLUMN_COLL_PARENT_NAME,
+		fmt.Sprintf("= '%s'", collectionPath),
+	).Execute(ctx)
+
+	defer results.Close()
+
+	for results.Next() {
+		var c Collection
+
+		if err := results.Scan(
+			&c.ID,
+			&c.Path,
+			&c.Owner,
+			&c.CreatedAt,
+			&c.ModifiedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		out = append(out, c)
+	}
+
+	return out, results.Err()
+}

@@ -34,6 +34,14 @@ type API interface {
 	// Use Query for more complex queries
 	GetCollection(ctx context.Context, path string) (*Collection, error)
 
+	// ListSubCollections returns a list of collections for the path
+	// Use Query for more complex queries
+	ListSubCollections(ctx context.Context, path string) ([]Collection, error)
+
+	// ListDataObjects returns a list of data objects for the path
+	// Use Query for more complex queries
+	ListDataObjects(ctx context.Context, path string) ([]DataObject, error)
+
 	// CreateCollection creates a collection.
 	// If the collection already exists, an error is returned.
 	CreateCollection(ctx context.Context, name string) error
