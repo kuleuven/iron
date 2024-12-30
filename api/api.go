@@ -30,6 +30,10 @@ type API interface {
 	// QueryRow prepares a query to read a single row from the irods catalog.
 	QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery
 
+	// GetCollection returns a collection for the path
+	// Use Query for more complex queries
+	GetCollection(ctx context.Context, path string) (*Collection, error)
+
 	// CreateCollection creates a collection.
 	// If the collection already exists, an error is returned.
 	CreateCollection(ctx context.Context, name string) error
