@@ -59,6 +59,8 @@ type User struct {
 	ModifiedAt time.Time
 }
 
+const equalTo = "= '%s'"
+
 func (api *api) GetCollection(ctx context.Context, path string) (*Collection, error) {
 	var c Collection
 
@@ -70,7 +72,7 @@ func (api *api) GetCollection(ctx context.Context, path string) (*Collection, er
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
 	).Where(
 		msg.ICAT_COLUMN_COLL_NAME,
-		fmt.Sprintf("= '%s'", path),
+		fmt.Sprintf(equalTo, path),
 	).Execute(ctx).Scan(
 		&c.ID,
 		&c.Path,
@@ -108,10 +110,10 @@ func (api *api) GetDataObject(ctx context.Context, path string) (*DataObject, er
 		msg.ICAT_COLUMN_D_MODIFY_TIME,
 	).Where(
 		msg.ICAT_COLUMN_COLL_NAME,
-		fmt.Sprintf("= '%s'", coll),
+		fmt.Sprintf(equalTo, coll),
 	).Where(
 		msg.ICAT_COLUMN_DATA_NAME,
-		fmt.Sprintf("= '%s'", name),
+		fmt.Sprintf(equalTo, name),
 	).Execute(ctx)
 
 	defer results.Close()
@@ -174,7 +176,7 @@ func (api *api) GetResource(ctx context.Context, name string) (*Resource, error)
 		msg.ICAT_COLUMN_R_MODIFY_TIME,
 	).Where(
 		msg.ICAT_COLUMN_R_RESC_NAME,
-		fmt.Sprintf("= '%s'", name),
+		fmt.Sprintf(equalTo, name),
 	).Execute(ctx).Scan(
 		&r.ID,
 		&r.Name,
@@ -206,7 +208,7 @@ func (api *api) GetUser(ctx context.Context, name string) (*User, error) {
 		msg.ICAT_COLUMN_USER_MODIFY_TIME,
 	).Where(
 		msg.ICAT_COLUMN_USER_NAME,
-		fmt.Sprintf("= '%s'", name),
+		fmt.Sprintf(equalTo, name),
 	).Execute(ctx).Scan(
 		&u.ID,
 		&u.Name,
@@ -241,7 +243,7 @@ func (api *api) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 		msg.ICAT_COLUMN_D_MODIFY_TIME,
 	).Where(
 		msg.ICAT_COLUMN_COLL_NAME,
-		fmt.Sprintf("= '%s'", collectionPath),
+		fmt.Sprintf(equalTo, collectionPath),
 	).Execute(ctx)
 
 	defer results.Close()
@@ -296,7 +298,7 @@ func (api *api) ListSubCollections(ctx context.Context, collectionPath string) (
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
 	).Where(
 		msg.ICAT_COLUMN_COLL_PARENT_NAME,
-		fmt.Sprintf("= '%s'", collectionPath),
+		fmt.Sprintf(equalTo, collectionPath),
 	).Execute(ctx)
 
 	defer results.Close()
