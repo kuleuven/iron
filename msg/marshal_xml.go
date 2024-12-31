@@ -27,7 +27,7 @@ var (
 // ErrInvalidUTF8 is returned if an invalid utf-8 character is found.
 var ErrInvalidUTF8 = errors.New("invalid utf-8 character")
 
-func MarshalXML(obj any, msgType string) (*Message, error) {
+func marshalXML(obj any, msgType string) (*Message, error) {
 	body, err := xml.Marshal(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal irods message to xml: %w", err)
@@ -49,7 +49,7 @@ func MarshalXML(obj any, msgType string) (*Message, error) {
 	}, nil
 }
 
-func UnmarshalXML(msg Message, obj any) error {
+func unmarshalXML(msg Message, obj any) error {
 	if msg.Header.MessageLen == 0 {
 		// A CollectionOperationStat is a special case and allowed to be empty if the server doesn't send it
 		if _, ok := obj.(*CollectionOperationStat); ok {

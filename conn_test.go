@@ -60,17 +60,17 @@ func TestConnNative(t *testing.T) {
 
 	msg.Write(server, msg.ClientServerNegotiation{
 		Result: "CS_NEG_DONT_CARE",
-	}, nil, "RODS_CS_NEG_T", 0)
+	}, nil, msg.XML, "RODS_CS_NEG_T", 0)
 
 	msg.Write(server, msg.Version{
 		ReleaseVersion: releaseVer,
-	}, nil, "RODS_VERSION", 0)
+	}, nil, msg.XML, "RODS_VERSION", 0)
 
 	msg.Write(server, msg.AuthChallenge{
 		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-	}, nil, "RODS_API_REPLY", 0)
+	}, nil, msg.XML, "RODS_API_REPLY", 0)
 
-	msg.Write(server, msg.AuthResponse{}, nil, "RODS_API_REPLY", 0)
+	msg.Write(server, msg.AuthResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
 
 	env := Env{
 		Host:                          "localhost",
@@ -121,14 +121,14 @@ func pamResponses(server net.Conn) {
 		}
 	}
 
-	assert(msg.Read(server, &msg.StartupPack{}, nil, "RODS_CONNECT"))
+	assert(msg.Read(server, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT"))
 	assert(msg.Write(server, msg.ClientServerNegotiation{
 		Result: "CS_NEQ_REQUIRE",
-	}, nil, "RODS_CS_NEG_T", 0))
-	assert(msg.Read(server, &msg.ClientServerNegotiation{}, nil, "RODS_CS_NEG_T"))
+	}, nil, msg.XML, "RODS_CS_NEG_T", 0))
+	assert(msg.Read(server, &msg.ClientServerNegotiation{}, nil, msg.XML, "RODS_CS_NEG_T"))
 	assert(msg.Write(server, msg.Version{
 		ReleaseVersion: releaseVer,
-	}, nil, "RODS_VERSION", 0))
+	}, nil, msg.XML, "RODS_VERSION", 0))
 
 	// Switch to TLS
 	cert, err := tls.X509KeyPair(certPem, keyPem)
@@ -140,17 +140,17 @@ func pamResponses(server net.Conn) {
 	})
 
 	assert((&msg.Header{}).Read(serverTLS))
-	assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, nil, "SHARED_SECRET"))
-	assert(msg.Read(serverTLS, &msg.PamAuthRequest{}, nil, "RODS_API_REQ"))
+	assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, nil, msg.XML, "SHARED_SECRET"))
+	assert(msg.Read(serverTLS, &msg.PamAuthRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.PamAuthResponse{
 		GeneratedPassword: "testNativePassword",
-	}, nil, "RODS_API_REPLY", 0))
-	assert(msg.Read(serverTLS, &msg.AuthRequest{}, nil, "RODS_API_REQ"))
+	}, nil, msg.XML, "RODS_API_REPLY", 0))
+	assert(msg.Read(serverTLS, &msg.AuthRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthChallenge{
 		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-	}, nil, "RODS_API_REPLY", 0))
-	assert(msg.Read(serverTLS, &msg.AuthChallengeResponse{}, nil, "RODS_API_REQ"))
-	assert(msg.Write(serverTLS, msg.AuthResponse{}, nil, "RODS_API_REPLY", 0))
+	}, nil, msg.XML, "RODS_API_REPLY", 0))
+	assert(msg.Read(serverTLS, &msg.AuthChallengeResponse{}, nil, msg.XML, "RODS_API_REQ"))
+	assert(msg.Write(serverTLS, msg.AuthResponse{}, nil, msg.XML, "RODS_API_REPLY", 0))
 }
 
 func TestConnPamPassword(t *testing.T) {
@@ -289,7 +289,7 @@ func TestDialer(t *testing.T) {
 		}
 
 		// Consume startup message
-		_, err = msg.Read(conn, &msg.StartupPack{}, nil, "RODS_CONNECT")
+		_, err = msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
 		if err != nil {
 			t.Error(err)
 		}
@@ -346,11 +346,11 @@ func TestOldVersion(t *testing.T) {
 
 	msg.Write(server, msg.ClientServerNegotiation{
 		Result: "CS_NEG_DONT_CARE",
-	}, nil, "RODS_CS_NEG_T", 0)
+	}, nil, msg.XML, "RODS_CS_NEG_T", 0)
 
 	msg.Write(server, msg.Version{
 		ReleaseVersion: "rods4.2.9",
-	}, nil, "RODS_VERSION", 0)
+	}, nil, msg.XML, "RODS_VERSION", 0)
 
 	env := Env{
 		Host:                          "localhost",
@@ -376,17 +376,17 @@ func TestRequest(t *testing.T) {
 
 	msg.Write(server, msg.Version{
 		ReleaseVersion: releaseVer,
-	}, nil, "RODS_VERSION", 0)
+	}, nil, msg.XML, "RODS_VERSION", 0)
 
 	msg.Write(server, msg.AuthChallenge{
 		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-	}, nil, "RODS_API_REPLY", 0)
+	}, nil, msg.XML, "RODS_API_REPLY", 0)
 
-	msg.Write(server, msg.AuthResponse{}, nil, "RODS_API_REPLY", 0)
+	msg.Write(server, msg.AuthResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
 
-	msg.Write(server, msg.EmptyResponse{}, nil, "RODS_API_REPLY", msg.SYS_SVR_TO_CLI_COLL_STAT)
+	msg.Write(server, msg.EmptyResponse{}, nil, msg.XML, "RODS_API_REPLY", msg.SYS_SVR_TO_CLI_COLL_STAT)
 
-	msg.Write(server, msg.CollectionOperationStat{}, nil, "RODS_API_REPLY", 0)
+	msg.Write(server, msg.CollectionOperationStat{}, nil, msg.XML, "RODS_API_REPLY", 0)
 
 	env := Env{
 		Host:                    "localhost",

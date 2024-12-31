@@ -9,9 +9,16 @@ import (
 
 var ErrUnrecognizedType = fmt.Errorf("unrecognized type")
 
+type Protocol int
+
+const (
+	C Protocol = iota
+	XML
+)
+
 // Marshal marshals the argument into a message.
 // The Message is initialized with Bin unset.
-func Marshal(obj any, msgType string) (*Message, error) {
+func Marshal(obj any, protocol Protocol, msgType string) (*Message, error) {
 	val := reflect.ValueOf(obj)
 
 	// Marshal argument is allowed to be a pointer
@@ -20,19 +27,23 @@ func Marshal(obj any, msgType string) (*Message, error) {
 	}
 
 	if val.Kind() == reflect.Slice && val.Type().Elem().Kind() == reflect.Uint8 {
-		return MarshalBytes(val.Bytes(), msgType)
+		return marshalBytes(val.Bytes(), msgType)
 	}
 
 	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
-		return MarshalXML(obj, msgType)
+		if protocol == C {
+			return marshalCStruct(obj, msgType)
+		}
+
+		return marshalXML(obj, msgType)
 	}
 
 	if val.Kind() == reflect.Struct {
-		return MarshalJSON(obj, msgType)
+		return marshalJSON(obj, protocol, msgType)
 	}
 
 	if val.Kind() == reflect.Int32 {
-		return MarshalInt32(int32(val.Int()), msgType)
+		return marshalInt32(int32(val.Int()), msgType)
 	}
 
 	return nil, fmt.Errorf("%w: %T", ErrUnrecognizedType, obj)
@@ -40,7 +51,7 @@ func Marshal(obj any, msgType string) (*Message, error) {
 
 // Unmarshal unmarshals the Message into the argument.
 // This will ignore the Bin field.
-func Unmarshal(msg Message, obj any) error {
+func Unmarshal(msg Message, protocol Protocol, obj any) error {
 	ptr := reflect.ValueOf(obj)
 
 	// Unmarshal argument is required to be a pointer
@@ -53,7 +64,7 @@ func Unmarshal(msg Message, obj any) error {
 	if val.Kind() == reflect.Slice && val.Type().Elem().Kind() == reflect.Uint8 {
 		var result []byte
 
-		if err := UnmarshalBytes(msg, &result); err != nil {
+		if err := unmarshalBytes(msg, &result); err != nil {
 			return err
 		}
 
@@ -63,17 +74,21 @@ func Unmarshal(msg Message, obj any) error {
 	}
 
 	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
-		return UnmarshalXML(msg, obj)
+		if protocol == C {
+			return unmarshalCStruct(msg, obj)
+		}
+
+		return unmarshalXML(msg, obj)
 	}
 
 	if val.Kind() == reflect.Struct {
-		return UnmarshalJSON(msg, obj)
+		return unmarshalJSON(msg, protocol, obj)
 	}
 
 	if val.Kind() == reflect.Int32 {
 		var result int32
 
-		if err := UnmarshalInt32(msg, &result); err != nil {
+		if err := unmarshalInt32(msg, &result); err != nil {
 			return err
 		}
 
@@ -87,7 +102,7 @@ func Unmarshal(msg Message, obj any) error {
 
 var ErrUnexpectedMessage = fmt.Errorf("unexpected message type")
 
-func Read(r io.Reader, obj any, buf []byte, expectedMsgType string) (int32, error) {
+func Read(r io.Reader, obj any, buf []byte, protocol Protocol, expectedMsgType string) (int32, error) {
 	msg := Message{
 		Bin: buf,
 	}
@@ -100,11 +115,11 @@ func Read(r io.Reader, obj any, buf []byte, expectedMsgType string) (int32, erro
 		return 0, fmt.Errorf("%w: expected %s, got %s", ErrUnexpectedMessage, expectedMsgType, msg.Header.Type)
 	}
 
-	return msg.Header.IntInfo, Unmarshal(msg, obj)
+	return msg.Header.IntInfo, Unmarshal(msg, protocol, obj)
 }
 
-func Write(w io.Writer, obj any, buf []byte, msgType string, intInfo int32) error {
-	msg, err := Marshal(obj, msgType)
+func Write(w io.Writer, obj any, buf []byte, protocol Protocol, msgType string, intInfo int32) error {
+	msg, err := Marshal(obj, protocol, msgType)
 	if err != nil {
 		return err
 	}

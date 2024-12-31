@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func MarshalJSON(obj any, msgType string) (*Message, error) {
+func marshalJSON(obj any, protocol Protocol, msgType string) (*Message, error) {
 	jsonBody, err := json.Marshal(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal irods message to json: %w", err)
@@ -17,13 +17,13 @@ func MarshalJSON(obj any, msgType string) (*Message, error) {
 		Data:   base64.StdEncoding.EncodeToString(jsonBody),
 	}
 
-	return MarshalXML(xmlObject, msgType)
+	return Marshal(xmlObject, protocol, msgType)
 }
 
-func UnmarshalJSON(msg Message, obj any) error {
+func unmarshalJSON(msg Message, protocol Protocol, obj any) error {
 	var xmlObject BinBytesBuf
 
-	if err := UnmarshalXML(msg, &xmlObject); err != nil {
+	if err := Unmarshal(msg, protocol, &xmlObject); err != nil {
 		return err
 	}
 

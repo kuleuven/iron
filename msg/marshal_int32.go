@@ -2,7 +2,7 @@ package msg
 
 import "github.com/sirupsen/logrus"
 
-func MarshalInt32(body int32, msgType string) (*Message, error) {
+func marshalInt32(body int32, msgType string) (*Message, error) {
 	logrus.Infof("marshalling: %d", body)
 
 	return &Message{
@@ -14,7 +14,7 @@ func MarshalInt32(body int32, msgType string) (*Message, error) {
 	}, nil
 }
 
-func UnmarshalInt32(msg Message, body *int32) error {
+func unmarshalInt32(msg Message, body *int32) error {
 	if msg.Header.ErrorLen > 0 {
 		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
 	}

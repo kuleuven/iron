@@ -51,7 +51,7 @@ func TestXMLUnmarshalError(t *testing.T) {
 
 	var obj AuthChallengeResponse
 
-	if err := UnmarshalXML(msg, &obj); err == nil {
+	if err := unmarshalXML(msg, &obj); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }

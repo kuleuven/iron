@@ -4,7 +4,7 @@ import "encoding/xml"
 
 type StartupPack struct {
 	XMLName         xml.Name `xml:"StartupPack_PI"`
-	Protocol        int      `xml:"irodsProt"`
+	Protocol        Protocol `xml:"irodsProt"`
 	ReconnectFlag   int      `xml:"reconnFlag"`
 	ConnectionCount int      `xml:"connectCnt"`
 	ProxyUser       string   `xml:"proxyUser"`
@@ -75,8 +75,8 @@ type QueryRequest struct {
 type SSKeyVal struct {
 	XMLName xml.Name `xml:"KeyValPair_PI"`
 	Length  int      `xml:"ssLen"`
-	Keys    []string `xml:"keyWord,omitempty"`
-	Values  []string `xml:"svalue,omitempty"`
+	Keys    []string `xml:"keyWord,omitempty" sizeField:"ssLen"`
+	Values  []string `xml:"svalue,omitempty" sizeField:"ssLen"`
 }
 
 func (kv *SSKeyVal) Add(key string, val string) {
@@ -88,8 +88,8 @@ func (kv *SSKeyVal) Add(key string, val string) {
 type IIKeyVal struct {
 	XMLName xml.Name `xml:"InxIvalPair_PI"`
 	Length  int      `xml:"iiLen"`
-	Keys    []int    `xml:"inx,omitempty"`
-	Values  []int    `xml:"ivalue,omitempty"`
+	Keys    []int    `xml:"inx,omitempty" sizeField:"iiLen"`
+	Values  []int    `xml:"ivalue,omitempty" sizeField:"iiLen"`
 }
 
 func (kv *IIKeyVal) Add(key int, val int) {
@@ -101,8 +101,8 @@ func (kv *IIKeyVal) Add(key int, val int) {
 type ISKeyVal struct {
 	XMLName xml.Name `xml:"InxValPair_PI"`
 	Length  int      `xml:"isLen"`
-	Keys    []int    `xml:"inx,omitempty"`
-	Values  []string `xml:"svalue,omitempty"`
+	Keys    []int    `xml:"inx,omitempty" sizeField:"isLen"`
+	Values  []string `xml:"svalue,omitempty" sizeField:"isLen"`
 }
 
 func (kv *ISKeyVal) Add(key int, val string) {
@@ -117,14 +117,14 @@ type QueryResponse struct {
 	AttributeCount int         `xml:"attriCnt"`
 	ContinueIndex  int         `xml:"continueInx"`
 	TotalRowCount  int         `xml:"totalRowCount"`
-	SQLResult      []SQLResult `xml:"SqlResult_PI"`
+	SQLResult      []SQLResult `xml:"SqlResult_PI" sizeField:"attriCnt"`
 }
 
 type SQLResult struct {
 	XMLName        xml.Name `xml:"SqlResult_PI"`
 	AttributeIndex int      `xml:"attriInx"`
 	ResultLen      int      `xml:"reslen"`
-	Values         []string `xml:"value,omitempty"`
+	Values         []string `xml:"value,omitempty" sizeField:"reslen"`
 }
 
 type CreateCollectionRequest struct {
@@ -146,8 +146,8 @@ type CollectionOperationStat struct {
 }
 
 type DataObjectCopyRequest struct {
-	XMLName xml.Name `xml:"DataObjCopyInp_PI"`
-	Paths   []DataObjectRequest
+	XMLName xml.Name            `xml:"DataObjCopyInp_PI"`
+	Paths   []DataObjectRequest `xml:"DataObjInp_PI" size:"2"`
 }
 
 type DataObjectRequest struct {

@@ -8,7 +8,7 @@ import (
 
 var ErrTypeAssertion = errors.New("type assertion failed")
 
-func MarshalBytes(body []byte, msgType string) (*Message, error) {
+func marshalBytes(body []byte, msgType string) (*Message, error) {
 	return &Message{
 		Header: Header{
 			Type:       msgType,
@@ -20,7 +20,7 @@ func MarshalBytes(body []byte, msgType string) (*Message, error) {
 	}, nil
 }
 
-func UnmarshalBytes(msg Message, body *[]byte) error {
+func unmarshalBytes(msg Message, body *[]byte) error {
 	if msg.Header.ErrorLen > 0 {
 		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
 	}

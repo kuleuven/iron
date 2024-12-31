@@ -51,6 +51,7 @@ type conn struct {
 	option          string
 	UseTLS          bool
 	Version         *msg.Version
+	Protocol        msg.Protocol
 	ClientSignature string
 	NativePassword  string // Only used for non-native authentication
 	closeOnce       sync.Once
@@ -104,6 +105,7 @@ func newConn(ctx context.Context, transport net.Conn, env Env, clientName string
 		transport: transport,
 		env:       &env,
 		option:    clientName,
+		Protocol:  msg.XML,
 	}
 
 	// Make sure TLS is required when not using native authentication
@@ -168,7 +170,7 @@ func (c *conn) startup(ctx context.Context) error {
 	defer cancel()
 
 	pack := msg.StartupPack{
-		Protocol:       1,
+		Protocol:       c.Protocol,
 		ReleaseVersion: "rods4.3.0",
 		APIVersion:     "d",
 		ClientUser:     c.env.Username,
@@ -178,7 +180,7 @@ func (c *conn) startup(ctx context.Context) error {
 		Option:         fmt.Sprintf("%s;%s", c.option, c.env.ClientServerNegotiation),
 	}
 
-	if err := msg.Write(c.transport, pack, nil, "RODS_CONNECT", 0); err != nil {
+	if err := msg.Write(c.transport, pack, nil, msg.XML, "RODS_CONNECT", 0); err != nil {
 		return err
 	}
 
@@ -190,7 +192,7 @@ func (c *conn) startup(ctx context.Context) error {
 
 	version := msg.Version{}
 
-	if _, err := msg.Read(c.transport, &version, nil, "RODS_VERSION"); err != nil {
+	if _, err := msg.Read(c.transport, &version, nil, msg.XML, "RODS_VERSION"); err != nil {
 		return err
 	}
 
@@ -238,7 +240,7 @@ var ErrSSLNegotiationFailed = fmt.Errorf("SSL negotiation failed")
 func (c *conn) handshakeNegotiation() error {
 	neg := msg.ClientServerNegotiation{}
 
-	if _, err := msg.Read(c.transport, &neg, nil, "RODS_CS_NEG_T"); err != nil {
+	if _, err := msg.Read(c.transport, &neg, nil, msg.XML, "RODS_CS_NEG_T"); err != nil {
 		return err
 	}
 
@@ -249,14 +251,14 @@ func (c *conn) handshakeNegotiation() error {
 
 	if neg.Result == ClientServerRefuseTLS && c.env.ClientServerNegotiationPolicy == ClientServerRequireTLS {
 		// Report failure
-		msg.Write(c.transport, failure, nil, "RODS_CS_NEG_T", 0) //nolint:errcheck
+		msg.Write(c.transport, failure, nil, msg.XML, "RODS_CS_NEG_T", 0) //nolint:errcheck
 
 		return fmt.Errorf("%w: server refuses SSL, client requires SSL", ErrSSLNegotiationFailed)
 	}
 
 	if neg.Result == ClientServerRequireTLS && c.env.ClientServerNegotiationPolicy == ClientServerRefuseTLS {
 		// Report failure
-		msg.Write(c.transport, failure, nil, "RODS_CS_NEG_T", 0) //nolint:errcheck
+		msg.Write(c.transport, failure, nil, msg.XML, "RODS_CS_NEG_T", 0) //nolint:errcheck
 
 		return fmt.Errorf("%w: client refuses SSL, server requires SSL", ErrSSLNegotiationFailed)
 	}
@@ -271,7 +273,7 @@ func (c *conn) handshakeNegotiation() error {
 
 	neg.Status = 1
 
-	return msg.Write(c.transport, neg, nil, "RODS_CS_NEG_T", 0)
+	return msg.Write(c.transport, neg, nil, msg.XML, "RODS_CS_NEG_T", 0)
 }
 
 var ErrUnknownSSLVerifyPolicy = fmt.Errorf("unknown SSL verification policy")
@@ -368,7 +370,7 @@ func (c *conn) handshakeTLS() error {
 		return err
 	}
 
-	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), nil, "SHARED_SECRET", 0)
+	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), nil, c.Protocol, "SHARED_SECRET", 0)
 }
 
 var ErrNotImplemented = fmt.Errorf("not implemented")
@@ -473,7 +475,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 
 	defer cancel()
 
-	if err := msg.Write(c.transport, request, requestBuf, "RODS_API_REQ", int32(apiNumber)); err != nil {
+	if err := msg.Write(c.transport, request, requestBuf, c.Protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
 		return err
 	}
 
@@ -510,7 +512,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 		return err
 	}
 
-	return msg.Unmarshal(m, response)
+	return msg.Unmarshal(m, c.Protocol, response)
 }
 
 func (c *conn) handleCollStat(response any, responseBuf []byte) error {
@@ -547,7 +549,7 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 		return err
 	}
 
-	return msg.Unmarshal(m, response)
+	return msg.Unmarshal(m, c.Protocol, response)
 }
 
 func (c *conn) Close() error {
@@ -558,7 +560,7 @@ func (c *conn) Close() error {
 
 		defer c.doRequest.Unlock()
 
-		err = msg.Write(c.transport, msg.EmptyResponse{}, nil, "RODS_DISCONNECT", 0)
+		err = msg.Write(c.transport, msg.EmptyResponse{}, nil, c.Protocol, "RODS_DISCONNECT", 0)
 	})
 
 	err = multierr.Append(err, c.Conn().Close())

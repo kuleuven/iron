@@ -22,17 +22,17 @@ func TestDeferredNative(t *testing.T) {
 			panic(err)
 		}
 
-		msg.Read(conn, &msg.StartupPack{}, nil, "RODS_CONNECT")
-		msg.Write(conn, msg.Version{ReleaseVersion: "rods4.3.2"}, nil, "RODS_VERSION", 0)
-		msg.Read(conn, &msg.AuthRequest{}, nil, "RODS_API_REQ")
+		msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
+		msg.Write(conn, msg.Version{ReleaseVersion: "rods4.3.2"}, nil, msg.XML, "RODS_VERSION", 0)
+		msg.Read(conn, &msg.AuthRequest{}, nil, msg.XML, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthChallenge{
 			Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-		}, nil, "RODS_API_REPLY", 0)
-		msg.Read(conn, &msg.AuthChallengeResponse{}, nil, "RODS_API_REQ")
-		msg.Write(conn, msg.AuthResponse{}, nil, "RODS_API_REPLY", 0)
-		msg.Read(conn, &msg.QueryRequest{}, nil, "RODS_API_REQ")
-		msg.Write(conn, msg.EmptyResponse{}, nil, "RODS_API_REPLY", 0)
-		msg.Read(conn, msg.EmptyResponse{}, nil, "RODS_DISCONNECT")
+		}, nil, msg.XML, "RODS_API_REPLY", 0)
+		msg.Read(conn, &msg.AuthChallengeResponse{}, nil, msg.XML, "RODS_API_REQ")
+		msg.Write(conn, msg.AuthResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+		msg.Read(conn, &msg.QueryRequest{}, nil, msg.XML, "RODS_API_REQ")
+		msg.Write(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+		msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
 		conn.Close()
 	}()
 
@@ -57,6 +57,10 @@ func TestDeferredNative(t *testing.T) {
 		t.Error(err)
 	}
 
+	if conn.Conn() != nil {
+		t.Error("expected nil connection")
+	}
+
 	err = conn.Request(context.Background(), 702, msg.QueryRequest{}, &msg.EmptyResponse{})
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +68,10 @@ func TestDeferredNative(t *testing.T) {
 
 	if !reflect.DeepEqual(conn.Env(), env) {
 		t.Error(err)
+	}
+
+	if conn.Conn() == nil {
+		t.Error("expected non-nil connection")
 	}
 
 	err = conn.Close()
