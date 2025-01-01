@@ -79,12 +79,19 @@ const anullstr = "%@#ANULLSTR$%"
 func encodeC(e reflect.Value, buf *bufio.Writer) error {
 	switch e.Type().Kind() { //nolint:exhaustive
 	case reflect.Ptr:
-		logrus.Debugf("encoding zero pointer")
+		if !e.IsNil() {
+			return encodeC(e.Elem(), buf)
+		}
 
-		// Pass empty pointer
-		var ptr int32
+		if _, err := buf.WriteString(anullstr); err != nil {
+			return err
+		}
 
-		return binary.Write(buf, binary.BigEndian, ptr)
+		if _, err := buf.Write([]byte{0}); err != nil {
+			return err
+		}
+
+		return nil
 
 	case reflect.Struct:
 		return encodeCStruct(e, buf)
@@ -147,20 +154,17 @@ func encodeCSlice(e reflect.Value, buf *bufio.Writer) error {
 }
 
 func decodeC(e reflect.Value, buf *bufio.Reader) error {
-	if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
-		_, err = buf.Discard(14)
-
-		return err
-	}
-
 	switch e.Type().Kind() { //nolint:exhaustive
 	case reflect.Ptr:
-		// Read and discard pointer
-		var ptr int32
+		if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
+			_, err = buf.Discard(14)
 
-		defer logrus.Debugf("discarding pointer %v", ptr)
+			return err
+		}
 
-		return binary.Read(buf, binary.BigEndian, &ptr)
+		e.Set(reflect.New(e.Type().Elem()))
+
+		return decodeC(e.Elem(), buf)
 	case reflect.Struct:
 		return decodeCStruct(e, buf)
 
