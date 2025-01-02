@@ -23,6 +23,12 @@ type Option struct {
 	// if the maximum number of connections has been reached and no connection is available.
 	// Connect() will cycle through the existing connections.
 	AllowConcurrentUse bool
+
+	// EnvCallback is an optional function that returns the environment settings for the connection
+	// when a new connection is established. If not provided, the default environment settings are used.
+	// This is useful in combination with the DeferConnectionToFirstUse option, to prepare the client
+	// before the connection parameters are known.
+	EnvCallback func() (Env, error)
 }
 
 type Client struct {
@@ -115,6 +121,19 @@ func (c *Client) newConn() (*conn, error) {
 	if c.dialErr != nil {
 		// Dial has already failed, return the same error without retrying
 		return nil, c.dialErr
+	}
+
+	// If an EnvCallback is provided, use it to retrieve the environment settings
+	if c.option.EnvCallback != nil {
+		env, err := c.option.EnvCallback()
+		if err != nil {
+			c.dialErr = err
+
+			return nil, err
+		}
+
+		c.env = &env
+		c.option.EnvCallback = nil
 	}
 
 	env := *c.env
