@@ -80,6 +80,24 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	return c, nil
 }
 
+// Env returns the client environment.
+func (c *Client) Env() Env {
+	// If an EnvCallback is provided, use it to retrieve the environment settings
+	if c.option.EnvCallback != nil {
+		env, err := c.option.EnvCallback()
+		if err != nil {
+			c.dialErr = err
+			c.env = &Env{}
+		} else {
+			c.env = &env
+		}
+
+		c.option.EnvCallback = nil
+	}
+
+	return *c.env
+}
+
 // Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
 // If all connections are busy, it will create a new one up to the maximum number of connections.
 // If the maximum number of connections has been reached, it will block until a connection becomes available.

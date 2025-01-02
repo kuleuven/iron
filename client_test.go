@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net"
+	"reflect"
 	"testing"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -46,6 +47,10 @@ func TestClient(t *testing.T) {
 	}
 
 	defer client.Close()
+
+	if !reflect.DeepEqual(client.Env(), env) {
+		t.Error("expected environment settings to match")
+	}
 
 	_, err = client.Connect()
 	if err != io.EOF {
