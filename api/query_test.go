@@ -33,7 +33,7 @@ func TestQuery(t *testing.T) {
 
 	testConn.NextResponses = append(testConn.NextResponses, resp)
 
-	results := testAPI.Admin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Limit(2).Execute(context.Background())
+	results := testAPI.WithAdmin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Limit(2).Execute(context.Background())
 
 	var items int
 

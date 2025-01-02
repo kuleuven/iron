@@ -13,7 +13,7 @@ import (
 )
 
 type handle struct {
-	api            *api
+	api            *API
 	ctx            context.Context //nolint:containedctx
 	conn           Conn
 	path           string
@@ -112,7 +112,7 @@ func (h *handle) doTruncate(replicaInfo *ReplicaAccessInfo) error {
 	request.KeyVals.Add(msg.RESC_HIER_STR_KW, replicaInfo.ResourceHierarchy)
 	request.KeyVals.Add(msg.REPLICA_TOKEN_KW, replicaInfo.ReplicaToken)
 
-	h.api.SetFlags(&request.KeyVals)
+	h.api.setFlags(&request.KeyVals)
 
 	return h.conn.Request(h.ctx, msg.REPLICA_TRUNCATE_AN, request, &msg.EmptyResponse{})
 }
@@ -152,7 +152,7 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 		Offset:         offset,
 	}
 
-	h.api.SetFlags(&request.KeyVals)
+	h.api.setFlags(&request.KeyVals)
 
 	var response msg.SeekResponse
 
@@ -186,7 +186,7 @@ func (h *handle) Read(b []byte) (int, error) {
 		Size:           int64(len(b)),
 	}
 
-	h.api.SetFlags(&request.KeyVals)
+	h.api.setFlags(&request.KeyVals)
 
 	var response msg.ReadResponse
 
@@ -217,7 +217,7 @@ func (h *handle) Write(b []byte) (int, error) {
 		Size:           int64(len(b)),
 	}
 
-	h.api.SetFlags(&request.KeyVals)
+	h.api.setFlags(&request.KeyVals)
 
 	if err := h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_WRITE_AN, request, &msg.EmptyResponse{}, b, nil); err != nil {
 		return 0, err
@@ -326,7 +326,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	request.KeyVals.Add(msg.RESC_HIER_STR_KW, replicaInfo.ResourceHierarchy)
 	request.KeyVals.Add(msg.REPLICA_TOKEN_KW, replicaInfo.ReplicaToken)
 
-	h.api.SetFlags(&request.KeyVals)
+	h.api.setFlags(&request.KeyVals)
 
 	h2 := handle{
 		api:          h.api,

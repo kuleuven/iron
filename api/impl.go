@@ -10,29 +10,36 @@ import (
 	"go.uber.org/multierr"
 )
 
-func (api *api) CreateCollection(ctx context.Context, name string) error {
+// CreateCollection creates a collection.
+// If the collection already exists, an error is returned.
+func (api *API) CreateCollection(ctx context.Context, name string) error {
 	request := msg.CreateCollectionRequest{
 		Name: name,
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.COLL_CREATE_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) CreateCollectionAll(ctx context.Context, name string) error {
+// CreateCollectionAll creates a collection and its parents recursively.
+// If the collection already exists, nothing happens.
+func (api *API) CreateCollectionAll(ctx context.Context, name string) error {
 	request := msg.CreateCollectionRequest{
 		Name: name,
 	}
 
 	request.KeyVals.Add(msg.RECURSIVE_OPR_KW, "")
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.COLL_CREATE_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) DeleteCollection(ctx context.Context, name string, force bool) error {
+// DeleteCollection deletes a collection.
+// If the collection is not empty, an error is returned.
+// If force is true, the collection is not moved to the trash.
+func (api *API) DeleteCollection(ctx context.Context, name string, force bool) error {
 	request := msg.CreateCollectionRequest{
 		Name: name,
 	}
@@ -41,12 +48,14 @@ func (api *api) DeleteCollection(ctx context.Context, name string, force bool) e
 		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.RM_COLL_AN, request, &msg.CollectionOperationStat{})
 }
 
-func (api *api) DeleteCollectionAll(ctx context.Context, name string, force bool) error {
+// DeleteCollectionAll deletes a collection and its children recursively.
+// If force is true, the collection is not moved to the trash.
+func (api *API) DeleteCollectionAll(ctx context.Context, name string, force bool) error {
 	request := msg.CreateCollectionRequest{
 		Name: name,
 	}
@@ -57,12 +66,13 @@ func (api *api) DeleteCollectionAll(ctx context.Context, name string, force bool
 		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.RM_COLL_AN, request, &msg.CollectionOperationStat{})
 }
 
-func (api *api) RenameCollection(ctx context.Context, oldName, newName string) error {
+// RenameCollection renames a collection.
+func (api *API) RenameCollection(ctx context.Context, oldName, newName string) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
 			{
@@ -76,13 +86,15 @@ func (api *api) RenameCollection(ctx context.Context, oldName, newName string) e
 		},
 	}
 
-	api.SetFlags(&request.Paths[0].KeyVals)
-	api.SetFlags(&request.Paths[1].KeyVals)
+	api.setFlags(&request.Paths[0].KeyVals)
+	api.setFlags(&request.Paths[1].KeyVals)
 
 	return api.Request(ctx, msg.DATA_OBJ_RENAME_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) DeleteDataObject(ctx context.Context, path string, force bool) error {
+// DeleteDataObject deletes a data object.
+// If force is true, the data object is not moved to the trash.
+func (api *API) DeleteDataObject(ctx context.Context, path string, force bool) error {
 	request := msg.DataObjectRequest{
 		Path: path,
 	}
@@ -91,12 +103,13 @@ func (api *api) DeleteDataObject(ctx context.Context, path string, force bool) e
 		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.DATA_OBJ_UNLINK_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) RenameDataObject(ctx context.Context, oldPath, newPath string) error {
+// RenameDataObject renames a data object.
+func (api *API) RenameDataObject(ctx context.Context, oldPath, newPath string) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
 			{
@@ -110,13 +123,15 @@ func (api *api) RenameDataObject(ctx context.Context, oldPath, newPath string) e
 		},
 	}
 
-	api.SetFlags(&request.Paths[0].KeyVals)
-	api.SetFlags(&request.Paths[1].KeyVals)
+	api.setFlags(&request.Paths[0].KeyVals)
+	api.setFlags(&request.Paths[1].KeyVals)
 
 	return api.Request(ctx, msg.DATA_OBJ_RENAME_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) CopyDataObject(ctx context.Context, oldPath, newPath string) error {
+// CopyDataObject copies a data object.
+// A target resource can be specified with WithDefaultResource() first if needed.
+func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
 			{
@@ -130,8 +145,13 @@ func (api *api) CopyDataObject(ctx context.Context, oldPath, newPath string) err
 		},
 	}
 
-	api.SetFlags(&request.Paths[0].KeyVals)
-	api.SetFlags(&request.Paths[1].KeyVals)
+	api.setFlags(&request.Paths[0].KeyVals)
+	api.setFlags(&request.Paths[1].KeyVals)
+
+	// Add the default resource if needed
+	if api.DefaultResource != "" {
+		request.Paths[1].KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
+	}
 
 	return api.Request(ctx, msg.DATA_OBJ_COPY_AN, request, &msg.EmptyResponse{})
 }
@@ -146,7 +166,11 @@ const (
 	O_APPEND = os.O_APPEND // Irods does not support O_APPEND, we need to seek to the end //nolint:stylecheck
 )
 
-func (api *api) CreateDataObject(ctx context.Context, path string, mode int) (File, error) {
+// CreateDataObject creates a data object.
+// A target resource can be specified with WithDefaultResource() first if needed.
+// When called using iron.Client, this method blocks an irods connection
+// until the file has been closed.
+func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (File, error) {
 	request := msg.DataObjectRequest{
 		Path:       path,
 		CreateMode: 0o644,
@@ -155,11 +179,11 @@ func (api *api) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 
 	request.KeyVals.Add(msg.DATA_TYPE_KW, "generic")
 
-	if api.resource != "" {
-		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.resource)
+	if api.DefaultResource != "" {
+		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	conn, err := api.Connect(ctx)
 	if err != nil {
@@ -184,7 +208,11 @@ func (api *api) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 	return &h, err
 }
 
-func (api *api) OpenDataObject(ctx context.Context, path string, mode int) (File, error) {
+// OpenDataObject opens a data object.
+// A target resource can be specified with WithDefaultResource() first if needed.
+// When called using iron.Client, this method blocks an irods connection
+// until the file has been closed.
+func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File, error) {
 	request := msg.DataObjectRequest{
 		Path:       path,
 		CreateMode: 0o644,
@@ -193,11 +221,11 @@ func (api *api) OpenDataObject(ctx context.Context, path string, mode int) (File
 
 	request.KeyVals.Add(msg.DATA_TYPE_KW, "generic")
 
-	if api.resource != "" {
-		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.resource)
+	if api.DefaultResource != "" {
+		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	conn, err := api.Connect(ctx)
 	if err != nil {
@@ -227,8 +255,10 @@ func (api *api) OpenDataObject(ctx context.Context, path string, mode int) (File
 	return &h, err
 }
 
-func (api *api) ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error {
-	if api.admin {
+// ModifyAccess modifies the access level of a data object or collection.
+// For users of federated zones, specify <name>#<zone> as user.
+func (api *API) ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error {
+	if api.Admin {
 		accessLevel = fmt.Sprintf("admin:%s", accessLevel)
 	}
 
@@ -253,7 +283,8 @@ func (api *api) ModifyAccess(ctx context.Context, path string, user string, acce
 	return api.Request(ctx, msg.MOD_ACCESS_CONTROL_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) SetCollectionInheritance(ctx context.Context, path string, inherit bool, recursive bool) error {
+// SetCollectionInheritance sets the inheritance of a collection.
+func (api *API) SetCollectionInheritance(ctx context.Context, path string, inherit bool, recursive bool) error {
 	inheritStr := "inherit"
 
 	if !inherit {
@@ -263,7 +294,8 @@ func (api *api) SetCollectionInheritance(ctx context.Context, path string, inher
 	return api.ModifyAccess(ctx, path, "", inheritStr, recursive)
 }
 
-func (api *api) AddMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+// AddMetadata adds a single metadata value of a data object, collection, user or resource.
+func (api *API) AddMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "add",
 		ItemType:  fmt.Sprintf("-%s", string(itemType)),
@@ -273,12 +305,13 @@ func (api *api) AddMetadata(ctx context.Context, path string, itemType ObjectTyp
 		AttrUnits: value.Units,
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) RemoveMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+// RemoveMetadata removes a single metadata value of a data object, collection, user or resource.
+func (api *API) RemoveMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "rm",
 		ItemType:  fmt.Sprintf("-%s", string(itemType)),
@@ -288,12 +321,13 @@ func (api *api) RemoveMetadata(ctx context.Context, path string, itemType Object
 		AttrUnits: value.Units,
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) SetMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+// SetMetadata add a single metadata value for the given key and removes old metadata values with the same key.
+func (api *API) SetMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "set",
 		ItemType:  fmt.Sprintf("-%s", string(itemType)),
@@ -303,14 +337,15 @@ func (api *api) SetMetadata(ctx context.Context, path string, itemType ObjectTyp
 		AttrUnits: value.Units,
 	}
 
-	api.SetFlags(&request.KeyVals)
+	api.setFlags(&request.KeyVals)
 
 	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
 }
 
-func (api *api) ModifyMetadata(ctx context.Context, path string, itemType ObjectType, add, remove []Metadata) error {
+// ModifyMetadata does a bulk update of metadata, removing and adding the given values.
+func (api *API) ModifyMetadata(ctx context.Context, path string, itemType ObjectType, add, remove []Metadata) error {
 	request := &msg.AtomicMetadataRequest{
-		AdminMode: api.admin,
+		AdminMode: api.Admin,
 		ItemName:  path,
 		ItemType:  string(itemType),
 	}
@@ -331,6 +366,10 @@ func (api *api) ModifyMetadata(ctx context.Context, path string, itemType Object
 			Value:     value.Value,
 			Units:     value.Units,
 		})
+	}
+
+	if len(request.Operations) == 0 {
+		return nil
 	}
 
 	return api.Request(ctx, msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, request, &msg.EmptyResponse{})

@@ -7,114 +7,32 @@ import (
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
 
-type Conn interface {
-	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
-	RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error
-	Close() error
-}
-
-func New(connect func(context.Context) (Conn, error), resource string) API {
-	return &api{
-		Connect:  connect,
-		resource: resource,
+func New(connect func(context.Context) (Conn, error), resource string) *API {
+	return &API{
+		Connect:         connect,
+		DefaultResource: resource,
 	}
 }
 
-type API interface {
-	Admin() API
-	WithDefaultResource(resource string) API
+type API struct {
+	Connect         func(context.Context) (Conn, error)
+	Admin           bool
+	DefaultResource string
+}
 
-	// Query prepares a query to read from the irods catalog.
-	Query(columns ...msg.ColumnNumber) PreparedQuery
+type Conn interface {
+	// Request sends an API request for the given API number and expects a response.
+	// Both request and response should represent a type such as in `msg/types.go`.
+	// The request and response will be marshaled and unmarshaled automatically.
+	// If a negative IntInfo is returned, an appropriate error will be returned.
+	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
 
-	// QueryRow prepares a query to read a single row from the irods catalog.
-	QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery
+	// RequestWithBuffers behaves as Request, with provided buffers for the request
+	// and response binary data. Both requestBuf and responseBuf could be nil.
+	RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error
 
-	// GetCollection returns a collection for the path
-	// Use Query for more complex queries
-	GetCollection(ctx context.Context, path string) (*Collection, error)
-
-	// ListSubCollections returns a list of collections for the path
-	// Use Query for more complex queries
-	ListSubCollections(ctx context.Context, path string) ([]Collection, error)
-
-	// ListDataObjects returns a list of data objects for the path
-	// Use Query for more complex queries
-	ListDataObjects(ctx context.Context, path string) ([]DataObject, error)
-
-	// CreateCollection creates a collection.
-	// If the collection already exists, an error is returned.
-	CreateCollection(ctx context.Context, name string) error
-
-	// CreateCollectionAll creates a collection and its parents recursively.
-	// If the collection already exists, nothing happens.
-	CreateCollectionAll(ctx context.Context, name string) error
-
-	// DeleteCollection deletes a collection.
-	// If the collection is not empty, an error is returned.
-	// If force is true, the collection is not moved to the trash.
-	DeleteCollection(ctx context.Context, name string, force bool) error
-
-	// DeleteCollectionAll deletes a collection and its children recursively.
-	// If force is true, the collection is not moved to the trash.
-	DeleteCollectionAll(ctx context.Context, name string, force bool) error
-
-	// RenameCollection renames a collection.
-	RenameCollection(ctx context.Context, oldName, newName string) error
-
-	// GetDataObject returns a data object for the path
-	// Use Query for more complex queries
-	GetDataObject(ctx context.Context, path string) (*DataObject, error)
-
-	// DeleteDataObject deletes a data object.
-	// If force is true, the data object is not moved to the trash.
-	DeleteDataObject(ctx context.Context, path string, force bool) error
-
-	// RenameDataObject renames a data object.
-	RenameDataObject(ctx context.Context, oldPath, newPath string) error
-
-	// CopyDataObject copies a data object.
-	// A target resource can be specified with WithDefaultResource() first if needed.
-	CopyDataObject(ctx context.Context, oldPath, newPath string) error
-
-	// CreateDataObject creates a data object.
-	// A target resource can be specified with WithDefaultResource() first if needed.
-	// When called using iron.Client, this method blocks an irods connection
-	// until the file has been closed.
-	CreateDataObject(ctx context.Context, path string, mode int) (File, error)
-
-	// OpenDataObject opens a data object.
-	// A target resource can be specified with WithDefaultResource() first if needed.
-	// When called using iron.Client, this method blocks an irods connection
-	// until the file has been closed.
-	OpenDataObject(ctx context.Context, path string, mode int) (File, error)
-
-	// GetResource returns information about a resource, identified by its name
-	// Use Query for more complex queries
-	GetResource(ctx context.Context, name string) (*Resource, error)
-
-	// GetUser returns information about a user, identified by its name
-	// Use Query for more complex queries
-	GetUser(ctx context.Context, name string) (*User, error)
-
-	// ModifyAccess modifies the access level of a data object or collection.
-	// For users of federated zones, specify <name>#<zone> as user.
-	ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error
-
-	// SetCollectionInheritance sets the inheritance of a collection.
-	SetCollectionInheritance(ctx context.Context, path string, inherit bool, recursive bool) error
-
-	// AddMetadata adds a single metadata value of a data object, collection, user or resource.
-	AddMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
-
-	// RemoveMetadata removes a single metadata value of a data object, collection, user or resource.
-	RemoveMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
-
-	// SetMetadata add a single metadata value for the given key and removes old metadata values with the same key.
-	SetMetadata(ctx context.Context, path string, objectType ObjectType, metadata Metadata) error
-
-	// ModifyMetadata does a bulk update of metadata, removing and adding the given values.
-	ModifyMetadata(ctx context.Context, path string, objectType ObjectType, add, remove []Metadata) error
+	// Close closes the connection or releases it back to the pool.
+	Close() error
 }
 
 type ObjectType string
@@ -173,35 +91,31 @@ type File interface {
 	Reopen(conn Conn, mode int) (File, error)
 }
 
-type api struct {
-	Connect  func(context.Context) (Conn, error)
-	admin    bool
-	resource string
-}
-
-func (api api) Admin() API {
-	api.admin = true
+// WithAdmin returns a new API with the admin keyword set
+func (api API) WithAdmin() *API {
+	api.Admin = true
 
 	return &api
 }
 
-func (api api) WithDefaultResource(resource string) API {
-	api.resource = resource
+// WithDefaultResource returns a new API with the default resource set
+func (api API) WithDefaultResource(resource string) *API {
+	api.DefaultResource = resource
 
 	return &api
 }
 
-func (api *api) SetFlags(ptr *msg.SSKeyVal) {
-	if api.admin {
+func (api *API) setFlags(ptr *msg.SSKeyVal) {
+	if api.Admin {
 		ptr.Add(msg.ADMIN_KW, "true")
 	}
 }
 
-func (api *api) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
+func (api *API) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
 	return api.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
 }
 
-func (api *api) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
+func (api *API) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
 	conn, err := api.Connect(ctx)
 	if err != nil {
 		return err

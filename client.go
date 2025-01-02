@@ -17,7 +17,7 @@ type Client struct {
 	maxConns  int
 	dialErr   error
 	lock      sync.Mutex
-	api.API
+	*api.API
 }
 
 // New creates a new Client instance with the provided environment settings, maximum connections, and options.

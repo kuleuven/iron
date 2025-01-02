@@ -12,7 +12,7 @@ var ErrUnrecognizedType = fmt.Errorf("unrecognized type")
 type Protocol int
 
 const (
-	C Protocol = iota
+	Native Protocol = iota
 	XML
 )
 
@@ -31,7 +31,7 @@ func Marshal(obj any, protocol Protocol, msgType string) (*Message, error) {
 	}
 
 	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
-		if protocol == C {
+		if protocol == Native {
 			return marshalCStruct(obj, msgType)
 		}
 
@@ -74,7 +74,7 @@ func Unmarshal(msg Message, protocol Protocol, obj any) error {
 	}
 
 	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
-		if protocol == C {
+		if protocol == Native {
 			return unmarshalCStruct(msg, obj)
 		}
 

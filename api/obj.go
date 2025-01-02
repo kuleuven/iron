@@ -61,7 +61,9 @@ type User struct {
 
 const equalTo = "= '%s'"
 
-func (api *api) GetCollection(ctx context.Context, path string) (*Collection, error) {
+// GetCollection returns a collection for the path
+// Use Query for more complex queries
+func (api *API) GetCollection(ctx context.Context, path string) (*Collection, error) {
 	var c Collection
 
 	err := api.QueryRow(
@@ -87,7 +89,9 @@ func (api *api) GetCollection(ctx context.Context, path string) (*Collection, er
 	return &c, nil
 }
 
-func (api *api) GetDataObject(ctx context.Context, path string) (*DataObject, error) {
+// GetDataObject returns a data object for the path
+// Use Query for more complex queries
+func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, error) {
 	d := DataObject{
 		Path: path,
 	}
@@ -150,6 +154,7 @@ func (api *api) GetDataObject(ctx context.Context, path string) (*DataObject, er
 	return &d, nil
 }
 
+// Split splits the path into dir and file
 func Split(path string) (string, string) {
 	for i := len(path) - 1; i >= 0; i-- {
 		if path[i] == '/' {
@@ -160,7 +165,9 @@ func Split(path string) (string, string) {
 	return "", path
 }
 
-func (api *api) GetResource(ctx context.Context, name string) (*Resource, error) {
+// GetResource returns information about a resource, identified by its name
+// Use Query for more complex queries
+func (api *API) GetResource(ctx context.Context, name string) (*Resource, error) {
 	var r Resource
 
 	err := api.QueryRow(
@@ -196,7 +203,9 @@ func (api *api) GetResource(ctx context.Context, name string) (*Resource, error)
 	return &r, nil
 }
 
-func (api *api) GetUser(ctx context.Context, name string) (*User, error) {
+// GetUser returns information about a user, identified by its name
+// Use Query for more complex queries
+func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 	var u User
 
 	err := api.QueryRow(
@@ -224,7 +233,9 @@ func (api *api) GetUser(ctx context.Context, name string) (*User, error) {
 	return &u, nil
 }
 
-func (api *api) ListDataObjects(ctx context.Context, collectionPath string) ([]DataObject, error) {
+// ListDataObjects returns a list of data objects for the path
+// Use Query for more complex queries
+func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]DataObject, error) {
 	result := []DataObject{}
 	mapping := map[int64]*DataObject{}
 	results := api.Query(
@@ -287,7 +298,9 @@ func (api *api) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 	return result, results.Err()
 }
 
-func (api *api) ListSubCollections(ctx context.Context, collectionPath string) ([]Collection, error) {
+// ListSubCollections returns a list of collections for the path
+// Use Query for more complex queries
+func (api *API) ListSubCollections(ctx context.Context, collectionPath string) ([]Collection, error) {
 	var out []Collection
 
 	results := api.Query(

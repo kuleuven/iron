@@ -12,14 +12,15 @@ import (
 
 // Query defines a query
 type PreparedQuery struct {
-	api         *api
+	api         *API
 	resultLimit int
 	maxRows     int
 	columns     []msg.ColumnNumber
 	conditions  map[msg.ColumnNumber]string
 }
 
-func (api *api) Query(columns ...msg.ColumnNumber) PreparedQuery {
+// Query prepares a query to read from the irods catalog.
+func (api *API) Query(columns ...msg.ColumnNumber) PreparedQuery {
 	return PreparedQuery{
 		api:        api,
 		columns:    columns,
@@ -186,7 +187,7 @@ func (r *Result) buildQuery() {
 		r.query.Conditions.Add(int(col), condition)
 	}
 
-	r.Query.api.SetFlags(&r.query.KeyVals)
+	r.Query.api.setFlags(&r.query.KeyVals)
 }
 
 func (r *Result) executeQuery() {
@@ -290,7 +291,8 @@ func parseTime(timestring string) (time.Time, error) {
 
 type PreparedSingleRowQuery PreparedQuery
 
-func (api *api) QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery {
+// QueryRow prepares a query to read a single row from the irods catalog.
+func (api *API) QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery {
 	return PreparedSingleRowQuery{
 		api:         api,
 		columns:     columns,

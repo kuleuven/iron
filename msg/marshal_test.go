@@ -8,7 +8,7 @@ import (
 )
 
 func TestMarshal(t *testing.T) {
-	for _, proto := range []Protocol{C, XML} {
+	for _, proto := range []Protocol{Native, XML} {
 		objects := []any{
 			AuthRequest{},
 			&AuthRequest{},
@@ -77,7 +77,7 @@ func testMarshal(t *testing.T, obj, ptr any, proto Protocol) {
 func TestReadWrite(t *testing.T) {
 	var fd FileDescriptor
 
-	for _, proto := range []Protocol{C, XML} {
+	for _, proto := range []Protocol{Native, XML} {
 		objects := []any{
 			AuthRequest{},
 			&AuthRequest{},

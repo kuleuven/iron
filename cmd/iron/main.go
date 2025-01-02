@@ -30,16 +30,9 @@ func main() {
 
 	defer client.Close()
 
-	conn, err := client.Connect()
-	if err != nil {
-		panic(err)
-	}
-
-	defer conn.Close()
-
 	testFile := "/" + env.Zone + "/home/coz/testFile2"
 
-	handle, err := conn.CreateDataObject(context.Background(), testFile, os.O_RDWR)
+	handle, err := client.CreateDataObject(context.Background(), testFile, os.O_RDWR)
 	if err != nil {
 		panic(err)
 	}

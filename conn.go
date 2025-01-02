@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/api"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/hashicorp/go-rootcerts"
 	"go.uber.org/multierr"
@@ -41,8 +40,6 @@ type Conn interface {
 
 	// Close closes the connection.
 	Close() error
-
-	api.API
 }
 
 type conn struct {
@@ -56,7 +53,6 @@ type conn struct {
 	NativePassword  string // Only used for non-native authentication
 	closeOnce       sync.Once
 	doRequest       sync.Mutex
-	api.API
 }
 
 var Dialer = net.Dialer{
@@ -122,9 +118,9 @@ func newConn(ctx context.Context, transport net.Conn, env Env, clientName string
 	}
 
 	// Register API
-	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
-		return &dummyCloser{c}, nil
-	}, env.DefaultResource)
+	//c.API = api.New(func(ctx context.Context) (api.Conn, error) {
+	//	return &dummyCloser{c}, nil
+	//}, env.DefaultResource)
 
 	ctx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
 
