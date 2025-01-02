@@ -168,8 +168,7 @@ const (
 
 // CreateDataObject creates a data object.
 // A target resource can be specified with WithDefaultResource() first if needed.
-// When called using iron.Client, this method blocks an irods connection
-// until the file has been closed.
+// This method blocks an irods connection until the file has been closed.
 func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (File, error) {
 	request := msg.DataObjectRequest{
 		Path:       path,
@@ -210,8 +209,7 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 
 // OpenDataObject opens a data object.
 // A target resource can be specified with WithDefaultResource() first if needed.
-// When called using iron.Client, this method blocks an irods connection
-// until the file has been closed.
+// This method blocks an irods connection until the file has been closed.
 func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File, error) {
 	request := msg.DataObjectRequest{
 		Path:       path,

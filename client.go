@@ -8,13 +8,29 @@ import (
 	"go.uber.org/multierr"
 )
 
+type Option struct {
+	// ClientName is passed to the server as the client type
+	ClientName string
+
+	// DeferConnectionToFirstUse will defer the creation of the initial connection to
+	// the first use of the Connect() method.
+	DeferConnectionToFirstUse bool
+
+	// Maximum number of connections that can be established at any given time.
+	MaxConns int
+
+	// AllowConcurrentUse will allow multiple goroutines to use the same connection concurrently,
+	// if the maximum number of connections has been reached and no connection is available.
+	// Connect() will cycle through the existing connections.
+	AllowConcurrentUse bool
+}
+
 type Client struct {
 	ctx       context.Context //nolint:containedctx
 	env       *Env
 	option    Option
 	available chan *conn
 	all       []*conn
-	maxConns  int
 	dialErr   error
 	lock      sync.Mutex
 	*api.API
@@ -24,19 +40,18 @@ type Client struct {
 // The context and environment settings are used for dialing new connections.
 // The maximum number of connections is the maximum number of connections that can be established at any given time.
 // The options are used to customize the behavior of the client.
-func New(ctx context.Context, env Env, maxConns int, option Option) (*Client, error) {
+func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	env.ApplyDefaults()
 
-	if maxConns <= 0 {
-		maxConns = 1
+	if option.MaxConns <= 0 {
+		option.MaxConns = 1
 	}
 
 	c := &Client{
 		ctx:       ctx,
 		env:       &env,
 		option:    option,
-		available: make(chan *conn, maxConns),
-		maxConns:  maxConns,
+		available: make(chan *conn, option.MaxConns),
 	}
 
 	// Register api
@@ -45,8 +60,8 @@ func New(ctx context.Context, env Env, maxConns int, option Option) (*Client, er
 	}, env.DefaultResource)
 
 	// Test first connection unless deferred
-	if !option.ConnectAtFirstUse {
-		conn, err := dial(ctx, env, c.option)
+	if !option.DeferConnectionToFirstUse {
+		conn, err := dial(ctx, env, c.option.ClientName)
 		if err != nil {
 			return nil, err
 		}
@@ -69,10 +84,26 @@ func (c *Client) Connect() (Conn, error) {
 
 	c.lock.Lock()
 
-	if len(c.all) < c.maxConns {
+	if len(c.all) < c.option.MaxConns {
 		defer c.lock.Unlock()
 
-		return c.newConn()
+		conn, err := c.newConn()
+		if err != nil {
+			return nil, err
+		}
+
+		return &returnOnClose{conn, c}, nil
+	}
+
+	if c.option.AllowConcurrentUse {
+		defer c.lock.Unlock()
+
+		first := c.all[0]
+
+		// Rotate the connection list
+		c.all = append(c.all[1:], first)
+
+		return &dummyCloser{first}, nil
 	}
 
 	c.lock.Unlock()
@@ -80,7 +111,7 @@ func (c *Client) Connect() (Conn, error) {
 	return &returnOnClose{<-c.available, c}, nil
 }
 
-func (c *Client) newConn() (Conn, error) {
+func (c *Client) newConn() (*conn, error) {
 	if c.dialErr != nil {
 		// Dial has already failed, return the same error without retrying
 		return nil, c.dialErr
@@ -94,7 +125,7 @@ func (c *Client) newConn() (Conn, error) {
 		env.Password = c.all[0].NativePassword
 	}
 
-	conn, err := dial(c.ctx, env, c.option)
+	conn, err := dial(c.ctx, env, c.option.ClientName)
 	if err != nil {
 		c.dialErr = err
 
@@ -103,7 +134,15 @@ func (c *Client) newConn() (Conn, error) {
 
 	c.all = append(c.all, conn)
 
-	return &returnOnClose{conn, c}, nil
+	return conn, nil
+}
+
+type dummyCloser struct {
+	*conn
+}
+
+func (*dummyCloser) Close() error {
+	return nil
 }
 
 type returnOnClose struct {

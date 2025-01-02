@@ -37,9 +37,9 @@ func TestClient(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	client, err := New(context.Background(), env, 1, Option{
-		ClientName:        "test",
-		ConnectAtFirstUse: true,
+	client, err := New(context.Background(), env, Option{
+		ClientName:                "test",
+		DeferConnectionToFirstUse: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 
 	env.ApplyDefaults()
 
-	client, err := New(context.Background(), env, 1, Option{ClientName: "test"})
+	client, err := New(context.Background(), env, Option{ClientName: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}

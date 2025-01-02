@@ -59,32 +59,19 @@ var Dialer = net.Dialer{
 	Timeout: time.Minute,
 }
 
-type Option struct {
-	ClientName        string // Passed to the server as the client type
-	ConnectAtFirstUse bool   // If true, connect to the server only on first use
-}
-
 // Dial connects to an IRODS server and creates a new connection.
 // The caller is responsible for closing the connection when it is no longer needed.
-func Dial(ctx context.Context, env Env, option Option) (Conn, error) {
-	if option.ConnectAtFirstUse {
-		return &Deferred{
-			Context:     ctx,
-			EnvCallback: func() (Env, error) { return env, nil },
-			Option:      option,
-		}, nil
-	}
-
-	return dial(ctx, env, option)
+func Dial(ctx context.Context, env Env, clientName string) (Conn, error) {
+	return dial(ctx, env, clientName)
 }
 
-func dial(ctx context.Context, env Env, option Option) (*conn, error) {
+func dial(ctx context.Context, env Env, clientName string) (*conn, error) {
 	conn, err := Dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
 	if err != nil {
 		return nil, err
 	}
 
-	return newConn(ctx, conn, env, option.ClientName)
+	return newConn(ctx, conn, env, clientName)
 }
 
 var HandshakeTimeout = time.Minute
@@ -117,24 +104,11 @@ func newConn(ctx context.Context, transport net.Conn, env Env, clientName string
 		c.env.ClientServerNegotiationPolicy = ClientServerRequireTLS
 	}
 
-	// Register API
-	//c.API = api.New(func(ctx context.Context) (api.Conn, error) {
-	//	return &dummyCloser{c}, nil
-	//}, env.DefaultResource)
-
 	ctx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
 
 	defer cancel()
 
 	return c, c.Handshake(ctx)
-}
-
-type dummyCloser struct {
-	*conn
-}
-
-func (*dummyCloser) Close() error {
-	return nil
 }
 
 var ErrTLSRequired = fmt.Errorf("TLS is required for authentication but not enabled")

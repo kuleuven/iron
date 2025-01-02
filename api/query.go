@@ -50,10 +50,7 @@ func (q PreparedQuery) Limit(limit int) PreparedQuery {
 }
 
 // Execute executes the query.
-// When called using iron.Client, this method blocks an irods connection
-// until the result has been closed.
-// When called using iron.Conn directly, the caller is responsible for not
-// running a second query on the same connection.
+// This method blocks an irods connection until the result has been closed.
 func (q PreparedQuery) Execute(ctx context.Context) *Result {
 	conn, err := q.api.Connect(ctx)
 	if err != nil {
