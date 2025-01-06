@@ -190,7 +190,7 @@ func (r *Result) buildQuery() {
 func (r *Result) executeQuery() {
 	r.result = &msg.QueryResponse{}
 
-	r.err = r.Conn.Request(r.Context, 702, r.query, r.result)
+	r.err = r.Conn.Request(r.Context, msg.GEN_QUERY_AN, r.query, r.result)
 	r.row = -1
 
 	if rodsErr, ok := r.err.(*msg.IRODSError); ok && rodsErr.Code == -808000 { // CAT_NO_ROWS_FOUND

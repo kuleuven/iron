@@ -46,9 +46,9 @@ type conn struct {
 	transport       net.Conn
 	env             *Env
 	option          string
+	protocol        msg.Protocol
 	UseTLS          bool
 	Version         *msg.Version
-	Protocol        msg.Protocol
 	ClientSignature string
 	NativePassword  string // Only used for non-native authentication
 	closeOnce       sync.Once
@@ -62,16 +62,16 @@ var Dialer = net.Dialer{
 // Dial connects to an IRODS server and creates a new connection.
 // The caller is responsible for closing the connection when it is no longer needed.
 func Dial(ctx context.Context, env Env, clientName string) (Conn, error) {
-	return dial(ctx, env, clientName)
+	return dial(ctx, env, clientName, msg.XML)
 }
 
-func dial(ctx context.Context, env Env, clientName string) (*conn, error) {
+func dial(ctx context.Context, env Env, clientName string, protocol msg.Protocol) (*conn, error) {
 	conn, err := Dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
 	if err != nil {
 		return nil, err
 	}
 
-	return newConn(ctx, conn, env, clientName)
+	return newConn(ctx, conn, env, clientName, protocol)
 }
 
 var HandshakeTimeout = time.Minute
@@ -80,15 +80,15 @@ var HandshakeTimeout = time.Minute
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // Returns an error if the handshake fails.
 func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string) (Conn, error) {
-	return newConn(ctx, transport, env, clientName)
+	return newConn(ctx, transport, env, clientName, msg.XML)
 }
 
-func newConn(ctx context.Context, transport net.Conn, env Env, clientName string) (*conn, error) {
+func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, protocol msg.Protocol) (*conn, error) {
 	c := &conn{
 		transport: transport,
 		env:       &env,
 		option:    clientName,
-		Protocol:  msg.XML,
+		protocol:  protocol,
 	}
 
 	// Make sure TLS is required when not using native authentication
@@ -140,7 +140,7 @@ func (c *conn) startup(ctx context.Context) error {
 	defer cancel()
 
 	pack := msg.StartupPack{
-		Protocol:       c.Protocol,
+		Protocol:       c.protocol,
 		ReleaseVersion: "rods4.3.0",
 		APIVersion:     "d",
 		ClientUser:     c.env.Username,
@@ -340,7 +340,7 @@ func (c *conn) handshakeTLS() error {
 		return err
 	}
 
-	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), nil, c.Protocol, "SHARED_SECRET", 0)
+	return msg.Write(c.transport, msg.SSLSharedSecret(encryptionKey), nil, c.protocol, "SHARED_SECRET", 0)
 }
 
 var ErrNotImplemented = fmt.Errorf("not implemented")
@@ -445,7 +445,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 
 	defer cancel()
 
-	if err := msg.Write(c.transport, request, requestBuf, c.Protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
+	if err := msg.Write(c.transport, request, requestBuf, c.protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
 		return err
 	}
 
@@ -482,7 +482,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 		return err
 	}
 
-	return msg.Unmarshal(m, c.Protocol, response)
+	return msg.Unmarshal(m, c.protocol, response)
 }
 
 func (c *conn) handleCollStat(response any, responseBuf []byte) error {
@@ -519,7 +519,7 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 		return err
 	}
 
-	return msg.Unmarshal(m, c.Protocol, response)
+	return msg.Unmarshal(m, c.protocol, response)
 }
 
 func (c *conn) Close() error {
@@ -530,7 +530,7 @@ func (c *conn) Close() error {
 
 		defer c.doRequest.Unlock()
 
-		err = msg.Write(c.transport, msg.EmptyResponse{}, nil, c.Protocol, "RODS_DISCONNECT", 0)
+		err = msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0)
 	})
 
 	err = multierr.Append(err, c.Conn().Close())

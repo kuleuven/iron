@@ -23,7 +23,7 @@ func main() {
 		panic(err)
 	}
 
-	client, err := iron.New(context.Background(), env, iron.Option{ClientName: "iron"})
+	client, err := iron.New(context.Background(), env, iron.Option{ClientName: "iron", UseNativeProtocol: true})
 	if err != nil {
 		panic(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"gitea.icts.kuleuven.be/coz/iron/api"
+	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"go.uber.org/multierr"
 )
 
@@ -29,12 +30,20 @@ type Option struct {
 	// This is useful in combination with the DeferConnectionToFirstUse option, to prepare the client
 	// before the connection parameters are known.
 	EnvCallback func() (Env, error)
+
+	// Admin is a flag that indicates whether the client should act in admin mode.
+	Admin bool
+
+	// Experimental: UseNativeProtocol will force the use of the native protocol.
+	// This is an experimental feature and may be removed in a future version.
+	UseNativeProtocol bool
 }
 
 type Client struct {
 	ctx       context.Context //nolint:containedctx
 	env       *Env
 	option    Option
+	protocol  msg.Protocol
 	available chan *conn
 	all       []*conn
 	dialErr   error
@@ -57,7 +66,12 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 		ctx:       ctx,
 		env:       &env,
 		option:    option,
+		protocol:  msg.XML,
 		available: make(chan *conn, option.MaxConns),
+	}
+
+	if option.UseNativeProtocol {
+		c.protocol = msg.Native
 	}
 
 	// Register api
@@ -65,9 +79,13 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 		return c.Connect()
 	}, env.DefaultResource)
 
+	if option.Admin {
+		c.API.Admin = true
+	}
+
 	// Test first connection unless deferred
 	if !option.DeferConnectionToFirstUse {
-		conn, err := dial(ctx, env, c.option.ClientName)
+		conn, err := dial(ctx, env, c.option.ClientName, c.protocol)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +180,7 @@ func (c *Client) newConn() (*conn, error) {
 		env.Password = c.all[0].NativePassword
 	}
 
-	conn, err := dial(c.ctx, env, c.option.ClientName)
+	conn, err := dial(c.ctx, env, c.option.ClientName, c.protocol)
 	if err != nil {
 		c.dialErr = err
 
