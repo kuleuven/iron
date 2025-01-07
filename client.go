@@ -98,16 +98,25 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 
 // Env returns the client environment.
 func (c *Client) Env() Env {
+	c.lock.Lock()
+
+	defer c.lock.Unlock()
+
 	// If an EnvCallback is provided, use it to retrieve the environment settings
 	if c.option.EnvCallback != nil {
+		if c.dialErr != nil {
+			return Env{}
+		}
+
 		env, err := c.option.EnvCallback()
 		if err != nil {
 			c.dialErr = err
-			c.env = &Env{}
-		} else {
-			c.env = &env
+
+			return Env{}
 		}
 
+		c.env = &env
+		c.API.DefaultResource = env.DefaultResource
 		c.option.EnvCallback = nil
 	}
 
@@ -167,6 +176,7 @@ func (c *Client) newConn() (*conn, error) {
 		}
 
 		c.env = &env
+		c.API.DefaultResource = env.DefaultResource
 		c.option.EnvCallback = nil
 	}
 
