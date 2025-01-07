@@ -240,6 +240,7 @@ func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 	mapping := map[int64]*DataObject{}
 	results := api.Query(
 		msg.ICAT_COLUMN_D_DATA_ID,
+		msg.ICAT_COLUMN_DATA_NAME,
 		msg.ICAT_COLUMN_COLL_ID,
 		msg.ICAT_COLUMN_DATA_SIZE,
 		msg.ICAT_COLUMN_DATA_TYPE_NAME,
@@ -263,10 +264,12 @@ func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 		var (
 			object  DataObject
 			replica Replica
+			name    string
 		)
 
 		err := results.Scan(
 			&object.ID,
+			&name,
 			&object.CollectionID,
 			&object.Size,
 			&object.DataType,
@@ -283,6 +286,8 @@ func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 		if err != nil {
 			return nil, err
 		}
+
+		object.Path = collectionPath + "/" + name
 
 		if prev, ok := mapping[object.ID]; ok {
 			prev.Replicas = append(prev.Replicas, replica)

@@ -129,11 +129,12 @@ func TestListSubCollections(t *testing.T) {
 func TestListDataObjects(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 13,
+		AttributeCount: 14,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1", "1"}},
+			{AttributeIndex: 403, ResultLen: 2, Values: []string{"obj_name", "obj_name"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
 			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic", "generic"}},
