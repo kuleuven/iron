@@ -235,7 +235,7 @@ func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 
 // ListDataObjects returns a list of data objects for the path
 // Use Query for more complex queries
-func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]DataObject, error) {
+func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]DataObject, error) { //nolint:funlen
 	result := []DataObject{}
 	mapping := map[int64]*DataObject{}
 	results := api.Query(
