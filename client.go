@@ -85,12 +85,10 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 
 	// Test first connection unless deferred
 	if !option.DeferConnectionToFirstUse {
-		conn, err := dial(ctx, env, c.option.ClientName, c.protocol)
+		conn, err := c.newConn()
 		if err != nil {
 			return nil, err
 		}
-
-		c.all = append(c.all, conn)
 
 		c.available <- conn
 	}

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"gitea.icts.kuleuven.be/coz/iron/api"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/hashicorp/go-rootcerts"
 	"go.uber.org/multierr"
@@ -37,6 +38,9 @@ type Conn interface {
 	// RequestWithBuffers behaves as Request, with provided buffers for the request
 	// and response binary data. Both requestBuf and responseBuf could be nil.
 	RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error
+
+	// API returns an API for the given resource.
+	API() *api.API
 
 	// Close closes the connection.
 	Close() error
@@ -483,6 +487,15 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 	}
 
 	return msg.Unmarshal(m, c.protocol, response)
+}
+
+func (c *conn) API() *api.API {
+	return &api.API{
+		Connect: func(ctx context.Context) (api.Conn, error) {
+			return &dummyCloser{c}, nil
+		},
+		DefaultResource: c.env.DefaultResource,
+	}
 }
 
 func (c *conn) handleCollStat(response any, responseBuf []byte) error {
