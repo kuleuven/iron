@@ -118,9 +118,9 @@ func (msg *Message) Read(r io.Reader) error {
 		msg.Bin = make([]byte, msg.Header.BsLen)
 	}
 
-	logrus.Tracef("<- bin: %d bytes", len(msg.Bin))
+	logrus.Tracef("<- bin: %d bytes", msg.Header.BsLen)
 
-	_, err := io.ReadFull(r, msg.Bin)
+	_, err := io.ReadFull(r, msg.Bin[:msg.Header.BsLen])
 	if err != nil {
 		return err
 	}
