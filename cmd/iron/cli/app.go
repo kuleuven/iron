@@ -10,16 +10,24 @@ import (
 )
 
 func New(ctx context.Context) *App {
+	home := os.Getenv("HOME")
+
+	if home == "" {
+		home = "."
+	}
+
 	return &App{
-		ctx: ctx,
+		ctx:     ctx,
+		envfile: home + "/.irods/irods_environment.json",
 	}
 }
 
 type App struct {
 	*iron.Client
-	ctx   context.Context
-	admin bool
-	debug int
+	ctx     context.Context
+	envfile string
+	admin   bool
+	debug   int
 }
 
 func (a *App) Command() *cobra.Command {
@@ -33,16 +41,12 @@ func (a *App) Command() *cobra.Command {
 
 			var env iron.Env
 
-			home := os.Getenv("HOME")
-
-			if home == "" {
-				home = "."
-			}
-
-			err := env.LoadFromFile(home + "/.irods/irods_environment.json")
+			err := env.LoadFromFile(a.envfile)
 			if err != nil {
 				return err
 			}
+
+			env.ApplyDefaults()
 
 			a.Client, err = iron.New(a.ctx, env, iron.Option{
 				ClientName: "iron",
