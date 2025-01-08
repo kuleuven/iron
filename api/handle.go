@@ -88,7 +88,7 @@ func (h *handle) closeReopenedHandle() error {
 		FileDescriptor: h.FileDescriptor,
 	}
 
-	return h.conn.Request(h.ctx, msg.REPLICA_CLOSE_APN, request, &msg.EmptyResponse{})
+	return h.conn.Request(context.Background(), msg.REPLICA_CLOSE_APN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) closeOriginalHandle() error {
@@ -96,7 +96,7 @@ func (h *handle) closeOriginalHandle() error {
 		FileDescriptor: h.FileDescriptor,
 	}
 
-	return h.conn.Request(h.ctx, msg.DATA_OBJ_CLOSE_AN, request, &msg.EmptyResponse{})
+	return h.conn.Request(context.Background(), msg.DATA_OBJ_CLOSE_AN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) doTruncate(replicaInfo *ReplicaAccessInfo) error {

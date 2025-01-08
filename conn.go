@@ -449,9 +449,9 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 
 	defer c.doRequest.Unlock()
 
-	cancel := c.CloseOnCancel(ctx)
-
-	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if err := msg.Write(c.transport, request, requestBuf, c.protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
 		return err
