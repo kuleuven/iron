@@ -19,7 +19,9 @@ func (api *API) CreateCollection(ctx context.Context, name string) error {
 
 	api.setFlags(&request.KeyVals)
 
-	return api.Request(ctx, msg.COLL_CREATE_AN, request, &msg.EmptyResponse{})
+	parent, _ := Split(name)
+
+	return api.ElevateRequest(ctx, msg.COLL_CREATE_AN, request, &msg.EmptyResponse{}, parent)
 }
 
 // CreateCollectionAll creates a collection and its parents recursively.
@@ -33,7 +35,7 @@ func (api *API) CreateCollectionAll(ctx context.Context, name string) error {
 
 	api.setFlags(&request.KeyVals)
 
-	return api.Request(ctx, msg.COLL_CREATE_AN, request, &msg.EmptyResponse{})
+	return api.ElevateRequest(ctx, msg.COLL_CREATE_AN, request, &msg.EmptyResponse{}, name)
 }
 
 // DeleteCollection deletes a collection.

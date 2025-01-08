@@ -75,9 +75,14 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	}
 
 	// Register api
-	c.API = api.New(func(ctx context.Context) (api.Conn, error) {
-		return c.Connect()
-	}, env.DefaultResource)
+	c.API = &api.API{
+		Username: env.Username,
+		Zone:     env.Zone,
+		Connect: func(ctx context.Context) (api.Conn, error) {
+			return c.Connect()
+		},
+		DefaultResource: env.DefaultResource,
+	}
 
 	if option.Admin {
 		c.API.Admin = true
@@ -116,6 +121,8 @@ func (c *Client) Env() Env {
 		}
 
 		c.env = &env
+		c.API.Username = env.Username
+		c.API.Zone = env.Zone
 		c.API.DefaultResource = env.DefaultResource
 		c.option.EnvCallback = nil
 	}
@@ -176,6 +183,8 @@ func (c *Client) newConn() (*conn, error) {
 		}
 
 		c.env = &env
+		c.API.Username = env.Username
+		c.API.Zone = env.Zone
 		c.API.DefaultResource = env.DefaultResource
 		c.option.EnvCallback = nil
 	}

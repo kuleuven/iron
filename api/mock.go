@@ -10,9 +10,14 @@ import (
 )
 
 // mock an API for testing purposes
-var testAPI = New(func(context.Context) (Conn, error) {
-	return testConn, nil
-}, "demoResc")
+var testAPI = &API{
+	Username: "test",
+	Zone:     "test",
+	Connect: func(context.Context) (Conn, error) {
+		return testConn, nil
+	},
+	DefaultResource: "demoResc",
+}
 
 var testConn = &mockConn{}
 

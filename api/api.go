@@ -5,19 +5,15 @@ import (
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
+
+	"github.com/sirupsen/logrus"
 )
 
-func New(connect func(context.Context) (Conn, error), resource string) *API {
-	return &API{
-		Connect:         connect,
-		DefaultResource: resource,
-	}
-}
-
 type API struct {
-	Connect         func(context.Context) (Conn, error)
-	Admin           bool
-	DefaultResource string
+	Username, Zone  string
+	Connect         func(context.Context) (Conn, error) // Handler to obtain a connection to perform requests on
+	Admin           bool                                // Whether to act as admin by sending the admin keyword
+	DefaultResource string                              // Default resource to use when creating data objects
 }
 
 type Conn interface {
@@ -124,4 +120,38 @@ func (api *API) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber,
 	defer conn.Close()
 
 	return conn.RequestWithBuffers(ctx, apiNumber, request, response, requestBuf, responseBuf)
+}
+
+// ElevateRequest is a wrapper around Request, that elevates permissions on the given path if the request
+// fails with CAT_NO_ACCESS_PERMISSION, if the admin flag is set; for operations that ignore the admin
+// keyword. If giving permissions fails with CAT_NO_ROWS_FOUND, it will try to elevate permissions
+// on the parent directory.
+func (api *API) ElevateRequest(ctx context.Context, apiNumber msg.APINumber, request, response any, path string) error {
+	err := api.Request(ctx, apiNumber, request, response)
+	if err == nil || !api.Admin {
+		return err
+	}
+
+	rodsErr, ok := err.(*msg.IRODSError)
+	if !ok || rodsErr.Code != -818000 { // CAT_NO_ACCESS_PERMISSION
+		return err
+	}
+
+	for path != "/" {
+		err1 := api.ModifyAccess(ctx, path, api.Username, "own", false)
+		if err1 == nil {
+			logrus.Infof("Admin keyword not supported. Elevated permissions on directory: %s", path)
+
+			return api.Request(ctx, apiNumber, request, response)
+		}
+
+		rodsErr, ok = err1.(*msg.IRODSError)
+		if !ok || rodsErr.Code != -808000 { // CAT_NO_ROWS_FOUND
+			return err
+		}
+
+		path, _ = Split(path)
+	}
+
+	return err
 }

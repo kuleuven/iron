@@ -491,6 +491,8 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 
 func (c *conn) API() *api.API {
 	return &api.API{
+		Username: c.env.Username,
+		Zone:     c.env.Zone,
 		Connect: func(ctx context.Context) (api.Conn, error) {
 			return &dummyCloser{c}, nil
 		},

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -156,10 +157,14 @@ func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, er
 
 // Split splits the path into dir and file
 func Split(path string) (string, string) {
-	for i := len(path) - 1; i >= 0; i-- {
+	for i := len(path) - 1; i > 0; i-- {
 		if path[i] == '/' {
 			return path[:i], path[i+1:]
 		}
+	}
+
+	if path[0] == '/' {
+		return "/", path[1:]
 	}
 
 	return "", path
@@ -208,6 +213,13 @@ func (api *API) GetResource(ctx context.Context, name string) (*Resource, error)
 func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 	var u User
 
+	zone := api.Zone
+
+	if parts := strings.Split(name, "#"); len(parts) == 2 {
+		name = parts[0]
+		zone = parts[1]
+	}
+
 	err := api.QueryRow(
 		msg.ICAT_COLUMN_USER_ID,
 		msg.ICAT_COLUMN_USER_NAME,
@@ -218,6 +230,9 @@ func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 	).Where(
 		msg.ICAT_COLUMN_USER_NAME,
 		fmt.Sprintf(equalTo, name),
+	).Where(
+		msg.ICAT_COLUMN_USER_ZONE,
+		fmt.Sprintf(equalTo, zone),
 	).Execute(ctx).Scan(
 		&u.ID,
 		&u.Name,
