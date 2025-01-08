@@ -61,6 +61,7 @@ type conn struct {
 	doRequest       sync.Mutex
 }
 
+// Dialer is used to connect to an IRODS server.
 var Dialer = net.Dialer{
 	Timeout: time.Minute,
 }
@@ -416,6 +417,11 @@ const (
 	authResponseLen   int = 16
 )
 
+// GenerateAuthResponse generates an authentication response using the given
+// challenge and password. The response is the MD5 hash of the first 64 bytes
+// of the challenge and the padded password (padded to maxPasswordLength).
+// The first 16 bytes of the hash are then base64 encoded to produce the
+// final response string.
 func GenerateAuthResponse(challenge []byte, password string) string {
 	paddedPassword := make([]byte, maxPasswordLength)
 	copy(paddedPassword, password)

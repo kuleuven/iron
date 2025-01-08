@@ -39,6 +39,8 @@ const (
 	ClientServerDontCare   = "CS_NEG_DONT_CARE"
 )
 
+// DefaultEnv contains the default IRODS connection parameters.
+// Use ApplyDefaults() to apply the default values to an environment.
 var DefaultEnv = Env{
 	Port:                          1247,
 	AuthScheme:                    native,
@@ -53,6 +55,8 @@ var DefaultEnv = Env{
 	DefaultResource:               "demoResc",
 }
 
+// LoadFromFile reads an environment configuration from a JSON file at the given path,
+// overwriting the fields of the receiver.
 func (env *Env) LoadFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -64,6 +68,10 @@ func (env *Env) LoadFromFile(path string) error {
 	return json.NewDecoder(f).Decode(env)
 }
 
+// ApplyDefaults sets default values for the environment fields if they are not already set.
+// It uses the values from DefaultEnv for most fields. If the ProxyUsername and ProxyZone
+// are not specified, it uses the Username and Zone respectively. Additionally, if PamTTL
+// is not set or is less than or equal to zero, it defaults to 60
 func (env *Env) ApplyDefaults() {
 	if env.Port == 0 {
 		env.Port = DefaultEnv.Port

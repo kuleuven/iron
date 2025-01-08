@@ -10,6 +10,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// API provides the interface to IRODS using the provided connection function.
+// Each time an API method is called, the Connect function is called to obtain
+// a connection, and it is closed afterwards. If used together with an instance
+// of iron.Client, the Connect will take a connection from the pool, and when
+// closed it will be returned to the pool.
+// The Username and Zone must match the username and zone of the connection.
+// If Admin is true, the API will send the admin keyword with each request.
+// The DefaultResource is the resource to use when creating data objects.
 type API struct {
 	Username, Zone  string
 	Connect         func(context.Context) (Conn, error) // Handler to obtain a connection to perform requests on

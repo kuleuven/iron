@@ -1,3 +1,4 @@
+// Package iron provides an interface to IRODS.
 package iron
 
 import (
