@@ -51,6 +51,7 @@ func (q PreparedQuery) Limit(limit int) PreparedQuery {
 
 // Execute executes the query.
 // This method blocks an irods connection until the result has been closed.
+// If the context is closed, no more results will be returned.
 func (q PreparedQuery) Execute(ctx context.Context) *Result {
 	conn, err := q.api.Connect(ctx)
 	if err != nil {
@@ -64,7 +65,7 @@ func (q PreparedQuery) Execute(ctx context.Context) *Result {
 	}
 
 	result.buildQuery()
-	result.executeQuery()
+	result.executeQuery(ctx)
 
 	return result
 }
@@ -118,7 +119,7 @@ func (r *Result) Next() bool {
 	r.query.ContinueIndex = r.result.ContinueIndex
 	r.Query.resultLimit -= r.result.RowCount
 
-	r.executeQuery()
+	r.executeQuery(r.Context)
 
 	return r.Next()
 }
@@ -187,10 +188,10 @@ func (r *Result) buildQuery() {
 	r.Query.api.setFlags(&r.query.KeyVals)
 }
 
-func (r *Result) executeQuery() {
+func (r *Result) executeQuery(ctx context.Context) {
 	r.result = &msg.QueryResponse{}
 
-	r.err = r.Conn.Request(r.Context, msg.GEN_QUERY_AN, r.query, r.result)
+	r.err = r.Conn.Request(ctx, msg.GEN_QUERY_AN, r.query, r.result)
 	r.row = -1
 
 	if rodsErr, ok := r.err.(*msg.IRODSError); ok && rodsErr.Code == -808000 { // CAT_NO_ROWS_FOUND
@@ -207,7 +208,7 @@ func (r *Result) cleanup() {
 		r.query.ContinueIndex = r.result.ContinueIndex
 		r.query.MaxRows = 0
 
-		r.executeQuery()
+		r.executeQuery(context.Background())
 	}
 
 	if r.Conn != nil {
