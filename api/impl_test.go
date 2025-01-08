@@ -43,6 +43,21 @@ func TestCreateCollectionAllAdmin(t *testing.T) {
 	}
 }
 
+func TestCreateCollectionAllAdminFailure(t *testing.T) {
+	testConn.NextResponses = []any{
+		&msg.IRODSError{
+			Code: -818000,
+		},
+		&msg.IRODSError{
+			Code: -1,
+		},
+	}
+
+	if err, ok := testAPI.WithAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder").(*msg.IRODSError); !ok || err.Code != -818000 {
+		t.Fatal(err)
+	}
+}
+
 func TestDeleteCollection(t *testing.T) {
 	testConn.NextResponse = msg.CollectionOperationStat{}
 
