@@ -170,15 +170,6 @@ func Split(path string) (string, string) {
 	return "", path
 }
 
-// Clean makes sure that the path is clean
-func Clean(path string) string {
-	if path == "/" {
-		return path
-	}
-
-	return strings.TrimSuffix(path, "/")
-}
-
 // GetResource returns information about a resource, identified by its name
 // Use Query for more complex queries
 func (api *API) GetResource(ctx context.Context, name string) (*Resource, error) {

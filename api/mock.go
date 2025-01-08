@@ -40,13 +40,28 @@ func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumb
 		return fmt.Errorf("%w: expected ptr, got %T", msg.ErrUnrecognizedType, response)
 	}
 
+	// Save the last request
+	c.LastRequest = request
+
 	// Respond the value of NextResponse
 	switch {
 	case c.NextResponse != nil:
+		if err, ok := c.NextResponse.(error); ok {
+			c.NextResponse = nil
+
+			return err
+		}
+
 		val.Elem().Set(reflect.ValueOf(c.NextResponse))
 
 		c.NextResponse = nil
 	case len(c.NextResponses) > 0:
+		if err, ok := c.NextResponses[0].(error); ok {
+			c.NextResponses = c.NextResponses[1:]
+
+			return err
+		}
+
 		val.Elem().Set(reflect.ValueOf(c.NextResponses[0]))
 
 		c.NextResponses = c.NextResponses[1:]
@@ -56,9 +71,6 @@ func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumb
 
 	n := copy(responseBuf, c.NextBin)
 	c.NextBin = c.NextBin[n:]
-
-	// Save the last request
-	c.LastRequest = request
 
 	return nil
 }
