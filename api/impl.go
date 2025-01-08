@@ -361,7 +361,7 @@ func (api *API) ModifyMetadata(ctx context.Context, path string, itemType Object
 	request := &msg.AtomicMetadataRequest{
 		AdminMode: api.Admin,
 		ItemName:  path,
-		ItemType:  string(itemType),
+		ItemType:  itemType.String(),
 	}
 
 	for _, value := range remove {

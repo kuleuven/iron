@@ -41,6 +41,21 @@ const (
 	ResourceType   ObjectType = "R"
 )
 
+func (o ObjectType) String() string {
+	switch o {
+	case UserType:
+		return "user"
+	case CollectionType:
+		return "collection"
+	case ResourceType:
+		return "resource"
+	case DataObjectType:
+		return "data_object"
+	default:
+		return string(o)
+	}
+}
+
 type Metadata struct {
 	Name  string
 	Value string
