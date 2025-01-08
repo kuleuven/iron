@@ -50,12 +50,12 @@ type AuthRequest []byte // Empty
 
 type AuthChallenge struct {
 	XMLName   xml.Name `xml:"authRequestOut_PI"`
-	Challenge string   `xml:"challenge"`
+	Challenge string   `xml:"challenge" native:"base64,64"`
 }
 
 type AuthChallengeResponse struct {
 	XMLName  xml.Name `xml:"authResponseInp_PI"`
-	Response string   `xml:"response"`
+	Response string   `xml:"response" native:"base64,16"`
 	Username string   `xml:"username"`
 }
 
@@ -182,7 +182,7 @@ type FileDescriptor int32
 type OpenedDataObjectRequest struct {
 	XMLName        xml.Name       `xml:"OpenedDataObjInp_PI"`
 	FileDescriptor FileDescriptor `xml:"l1descInx"`
-	Size           int64          `xml:"len"`
+	Size           int            `xml:"len"`
 	Whence         int            `xml:"whence"`
 	OperationType  int            `xml:"oprType"`
 	Offset         int64          `xml:"offset"`

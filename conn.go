@@ -20,6 +20,8 @@ import (
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"github.com/hashicorp/go-rootcerts"
 	"go.uber.org/multierr"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Conn interface {
@@ -384,6 +386,8 @@ func (c *conn) authenticate(ctx context.Context) error {
 		Response: GenerateAuthResponse(challengeBytes, myPassword),
 		Username: c.env.ProxyUsername,
 	}
+
+	logrus.Debugf("Responding %s %s ", response.Response, response.Username)
 
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }

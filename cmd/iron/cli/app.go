@@ -30,6 +30,7 @@ type App struct {
 	envfile string
 	admin   bool
 	debug   int
+	native  bool
 }
 
 func (a *App) Command() *cobra.Command {
@@ -51,8 +52,9 @@ func (a *App) Command() *cobra.Command {
 			env.ApplyDefaults()
 
 			a.Client, err = iron.New(a.ctx, env, iron.Option{
-				ClientName: "iron",
-				Admin:      a.admin,
+				ClientName:        "iron",
+				Admin:             a.admin,
+				UseNativeProtocol: a.native,
 			})
 
 			return err
@@ -61,6 +63,7 @@ func (a *App) Command() *cobra.Command {
 
 	rootCmd.PersistentFlags().CountVarP(&a.debug, "debug", "v", "Enable debug output")
 	rootCmd.PersistentFlags().BoolVarP(&a.admin, "admin", "a", false, "Enable admin access")
+	rootCmd.PersistentFlags().BoolVar(&a.native, "native", false, "Use native protocol")
 
 	rootCmd.AddCommand(a.mkdir(), a.rmdir(), a.mvdir(), a.rm(), a.mv(), a.cp(), a.create(), a.put(), a.get(), a.chmod(), a.inherit())
 
@@ -240,7 +243,7 @@ func (a *App) get() *cobra.Command {
 
 			defer w.Close()
 
-			r, err := a.OpenDataObject(a.ctx, args[1], api.O_RDONLY)
+			r, err := a.OpenDataObject(a.ctx, args[0], api.O_RDONLY)
 			if err != nil {
 				return err
 			}

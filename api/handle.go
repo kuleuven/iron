@@ -183,7 +183,7 @@ func (h *handle) Read(b []byte) (int, error) {
 
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
-		Size:           int64(len(b)),
+		Size:           len(b),
 	}
 
 	h.api.setFlags(&request.KeyVals)
@@ -214,7 +214,7 @@ func (h *handle) Write(b []byte) (int, error) {
 
 	request := msg.OpenedDataObjectRequest{
 		FileDescriptor: h.FileDescriptor,
-		Size:           int64(len(b)),
+		Size:           len(b),
 	}
 
 	h.api.setFlags(&request.KeyVals)

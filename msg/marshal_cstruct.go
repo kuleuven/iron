@@ -3,11 +3,13 @@ package msg
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -32,11 +34,6 @@ func marshalCStruct(obj any, msgType string) (*Message, error) {
 	}
 
 	body := buf.Bytes()
-
-	// Strip the last 0 byte
-	if len(body) > 1 && body[len(body)-1] == 0 {
-		body = body[:len(body)-1]
-	}
 
 	return &Message{
 		Header: Header{
@@ -123,9 +120,39 @@ func encodeC(e reflect.Value, buf *bufio.Writer) error {
 
 func encodeCStruct(e reflect.Value, buf *bufio.Writer) error {
 	for i := 1; i < e.NumField(); i++ {
-		if err := encodeC(e.Field(i), buf); err != nil {
+		if err := encodeCStructField(e, buf, i); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+const base64tag = "base64,"
+
+func encodeCStructField(e reflect.Value, buf *bufio.Writer, i int) error {
+	switch e.Field(i).Type().Kind() {
+	case reflect.String:
+		tag := e.Type().Field(i).Tag.Get("native")
+		if !strings.HasPrefix(tag, base64tag) {
+			break
+		}
+
+		return encodeCBase64String(e.Field(i), buf)
+	default:
+	}
+
+	return encodeC(e.Field(i), buf)
+}
+
+func encodeCBase64String(e reflect.Value, buf *bufio.Writer) error {
+	payload, err := base64.StdEncoding.DecodeString(e.String())
+	if err != nil {
+		return err
+	}
+
+	if _, err := buf.Write(payload); err != nil {
+		return err
 	}
 
 	return nil
@@ -218,30 +245,61 @@ func decodeCStruct(e reflect.Value, buf *bufio.Reader) error {
 }
 
 func decodeCStructField(e reflect.Value, buf *bufio.Reader, i int) error {
-	if e.Field(i).Type().Kind() != reflect.Slice {
-		return decodeC(e.Field(i), buf)
+	switch e.Field(i).Type().Kind() {
+	case reflect.Slice:
+		if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
+			_, err = buf.Discard(14)
+
+			return err
+		}
+
+		size, err := findCStructSliceSize(e, i)
+		if err != nil {
+			return err
+		}
+
+		return decodeCSlice(e.Field(i), size, buf)
+	case reflect.String:
+		tag := e.Type().Field(i).Tag.Get("native")
+		if !strings.HasPrefix(tag, base64tag) {
+			break
+		}
+
+		size, err := strconv.Atoi(strings.TrimPrefix(tag, base64tag))
+		if err != nil {
+			return err
+		}
+
+		return decodeCBase64String(e.Field(i), buf, size)
+	default:
 	}
 
-	if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
-		_, err = buf.Discard(14)
+	return decodeC(e.Field(i), buf)
+}
 
-		return err
-	}
+func decodeCSlice(e reflect.Value, size int, buf *bufio.Reader) error {
+	slice := reflect.MakeSlice(e.Type(), size, size)
 
-	size, err := findCStructSliceSize(e, i)
-	if err != nil {
-		return err
-	}
-
-	slice := reflect.MakeSlice(e.Field(i).Type(), size, size)
-
-	e.Field(i).Set(slice)
+	e.Set(slice)
 
 	for j := range size {
-		if err := decodeC(e.Field(i).Index(j), buf); err != nil {
+		if err := decodeC(e.Index(j), buf); err != nil {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func decodeCBase64String(e reflect.Value, buf *bufio.Reader, size int) error {
+	value := make([]byte, size)
+
+	_, err := buf.Read(value)
+	if err != nil {
+		return fmt.Errorf("could not read next %d bytes: %w", size, err)
+	}
+
+	e.Set(reflect.ValueOf(base64.StdEncoding.EncodeToString(value)))
 
 	return nil
 }
