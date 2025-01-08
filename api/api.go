@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -103,14 +104,18 @@ func (api API) WithDefaultResource(resource string) *API {
 
 func (api *API) setFlags(ptr *msg.SSKeyVal) {
 	if api.Admin {
-		ptr.Add(msg.ADMIN_KW, "true")
+		ptr.Add(msg.ADMIN_KW, "")
 	}
 }
 
+// Request is a wrapper function for using api.Connect to obtain a connection,
+// use conn.Request on the connection, and Close the connection.
 func (api *API) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
 	return api.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
 }
 
+// RequestWithBuffers is a wrapper function for using api.Connect to obtain a connection,
+// use conn.RequestWithBuffers on the connection, and Close the connection.
 func (api *API) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
 	conn, err := api.Connect(ctx)
 	if err != nil {
@@ -122,12 +127,27 @@ func (api *API) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber,
 	return conn.RequestWithBuffers(ctx, apiNumber, request, response, requestBuf, responseBuf)
 }
 
-// ElevateRequest is a wrapper around Request, that elevates permissions on the given path if the request
+// ElevateRequest is a wrapper around api.Request, that elevates permissions on the given path if the request
 // fails with CAT_NO_ACCESS_PERMISSION, if the admin flag is set; for operations that ignore the admin
 // keyword. If giving permissions fails with CAT_NO_ROWS_FOUND, it will try to elevate permissions
 // on the parent directory.
-func (api *API) ElevateRequest(ctx context.Context, apiNumber msg.APINumber, request, response any, path string) error {
-	err := api.Request(ctx, apiNumber, request, response)
+func (api *API) ElevateRequest(ctx context.Context, apiNumber msg.APINumber, request, response any, paths ...string) error {
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return api.connElevateRequest(ctx, conn, apiNumber, request, response, paths...)
+}
+
+// connElevateRequest is a wrapper around conn.Request, that elevates permissions on the given path if the request
+// fails with CAT_NO_ACCESS_PERMISSION, if the admin flag is set; for operations that ignore the admin
+// keyword. If giving permissions fails with CAT_NO_ROWS_FOUND, it will try to elevate permissions
+// on the parent directory.
+func (api *API) connElevateRequest(ctx context.Context, conn Conn, apiNumber msg.APINumber, request, response any, paths ...string) error {
+	err := conn.Request(ctx, apiNumber, request, response)
 	if err == nil || !api.Admin {
 		return err
 	}
@@ -137,21 +157,46 @@ func (api *API) ElevateRequest(ctx context.Context, apiNumber msg.APINumber, req
 		return err
 	}
 
-	for path != "/" {
-		err1 := api.ModifyAccess(ctx, path, api.Username, "own", false)
-		if err1 == nil {
-			logrus.Infof("Admin keyword not supported. Elevated permissions on directory: %s", path)
-
-			return api.Request(ctx, apiNumber, request, response)
-		}
-
-		rodsErr, ok = err1.(*msg.IRODSError)
-		if !ok || rodsErr.Code != -808000 { // CAT_NO_ROWS_FOUND
+	for _, path := range paths {
+		if err1 := api.gainAccess(ctx, conn, path); err1 != nil {
 			return err
 		}
-
-		path, _ = Split(path)
 	}
 
-	return err
+	return conn.Request(ctx, apiNumber, request, response)
+}
+
+func (api *API) gainAccess(ctx context.Context, conn Conn, path string) error {
+	request := msg.ModifyAccessRequest{
+		Path:        strings.TrimSuffix(path, "/"),
+		UserName:    api.Username,
+		Zone:        api.Zone,
+		AccessLevel: "admin:own",
+	}
+
+	if strings.HasSuffix(path, "/") {
+		request.RecursiveFlag = 1
+	}
+
+	err := conn.Request(ctx, msg.MOD_ACCESS_CONTROL_AN, request, &msg.EmptyResponse{})
+	if err == nil {
+		logrus.Infof("Admin keyword not supported. Elevated permissions on directory %s", path)
+
+		return nil
+	}
+
+	rodsErr, ok := err.(*msg.IRODSError)
+	if !ok || rodsErr.Code != -808000 && rodsErr.Code != -1105000 { // CAT_NO_ROWS_FOUND, INVALID_OBJECT_TYPE
+		logrus.Warnf("Admin keyword not supported. Failed to elevate permissions on directory %s: %s", path, err)
+
+		return err
+	}
+
+	path, _ = Split(strings.TrimSuffix(path, "/"))
+
+	if path == "/" {
+		return err
+	}
+
+	return api.gainAccess(ctx, conn, path)
 }

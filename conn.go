@@ -469,7 +469,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 	// only if we request it using a special code. However it is still optional, so it is possible that
 	// the server returns a zero IntInfo and an empty response, but this is fine as UnmarshalXML will
 	// not complain in this case if the message length is zero.
-	if apiNumber == msg.RM_COLL_AN || m.Header.IntInfo == msg.SYS_SVR_TO_CLI_COLL_STAT {
+	if apiNumber == msg.RM_COLL_AN && m.Header.IntInfo == msg.SYS_SVR_TO_CLI_COLL_STAT {
 		return c.handleCollStat(response, responseBuf)
 	}
 

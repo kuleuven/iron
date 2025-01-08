@@ -41,12 +41,12 @@ func (api *API) CreateCollectionAll(ctx context.Context, name string) error {
 // DeleteCollection deletes a collection.
 // If the collection is not empty, an error is returned.
 // If force is true, the collection is not moved to the trash.
-func (api *API) DeleteCollection(ctx context.Context, name string, force bool) error {
+func (api *API) DeleteCollection(ctx context.Context, name string, skipTrash bool) error {
 	request := msg.CreateCollectionRequest{
 		Name: name,
 	}
 
-	if force {
+	if skipTrash {
 		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
 	}
 
@@ -57,23 +57,24 @@ func (api *API) DeleteCollection(ctx context.Context, name string, force bool) e
 
 // DeleteCollectionAll deletes a collection and its children recursively.
 // If force is true, the collection is not moved to the trash.
-func (api *API) DeleteCollectionAll(ctx context.Context, name string, force bool) error {
+func (api *API) DeleteCollectionAll(ctx context.Context, name string, skipTrash bool) error {
 	request := msg.CreateCollectionRequest{
 		Name: name,
 	}
 
 	request.KeyVals.Add(msg.RECURSIVE_OPR_KW, "")
 
-	if force {
+	if skipTrash {
 		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
 	}
 
 	api.setFlags(&request.KeyVals)
 
-	return api.Request(ctx, msg.RM_COLL_AN, request, &msg.CollectionOperationStat{})
+	return api.ElevateRequest(ctx, msg.RM_COLL_AN, request, &msg.CollectionOperationStat{}, name+"/")
 }
 
 // RenameCollection renames a collection.
+// It will fail if the target already exists.
 func (api *API) RenameCollection(ctx context.Context, oldName, newName string) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
@@ -91,26 +92,30 @@ func (api *API) RenameCollection(ctx context.Context, oldName, newName string) e
 	api.setFlags(&request.Paths[0].KeyVals)
 	api.setFlags(&request.Paths[1].KeyVals)
 
-	return api.Request(ctx, msg.DATA_OBJ_RENAME_AN, request, &msg.EmptyResponse{})
+	parentOld, _ := Split(oldName)
+	parentNew, _ := Split(newName)
+
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_RENAME_AN, request, &msg.EmptyResponse{}, parentNew, parentOld, oldName)
 }
 
 // DeleteDataObject deletes a data object.
 // If force is true, the data object is not moved to the trash.
-func (api *API) DeleteDataObject(ctx context.Context, path string, force bool) error {
+func (api *API) DeleteDataObject(ctx context.Context, path string, skipTrash bool) error {
 	request := msg.DataObjectRequest{
 		Path: path,
 	}
 
-	if force {
+	if skipTrash {
 		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
 	}
 
 	api.setFlags(&request.KeyVals)
 
-	return api.Request(ctx, msg.DATA_OBJ_UNLINK_AN, request, &msg.EmptyResponse{})
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_UNLINK_AN, request, &msg.EmptyResponse{}, path)
 }
 
 // RenameDataObject renames a data object.
+// It will fail if the target already exists.
 func (api *API) RenameDataObject(ctx context.Context, oldPath, newPath string) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
@@ -128,11 +133,14 @@ func (api *API) RenameDataObject(ctx context.Context, oldPath, newPath string) e
 	api.setFlags(&request.Paths[0].KeyVals)
 	api.setFlags(&request.Paths[1].KeyVals)
 
-	return api.Request(ctx, msg.DATA_OBJ_RENAME_AN, request, &msg.EmptyResponse{})
+	parentNew, _ := Split(newPath)
+
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_RENAME_AN, request, &msg.EmptyResponse{}, oldPath, parentNew)
 }
 
 // CopyDataObject copies a data object.
 // A target resource can be specified with WithDefaultResource() first if needed.
+// It will fail if the target already exists.
 func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
@@ -155,7 +163,9 @@ func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) err
 		request.Paths[1].KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
 	}
 
-	return api.Request(ctx, msg.DATA_OBJ_COPY_AN, request, &msg.EmptyResponse{})
+	parentNew, _ := Split(newPath)
+
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_COPY_AN, request, &msg.EmptyResponse{}, oldPath, parentNew)
 }
 
 const (
@@ -180,6 +190,10 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 
 	request.KeyVals.Add(msg.DATA_TYPE_KW, "generic")
 
+	if mode&O_EXCL == 0 {
+		request.KeyVals.Add(msg.FORCE_FLAG_KW, "")
+	}
+
 	if api.DefaultResource != "" {
 		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
 	}
@@ -199,7 +213,7 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 		truncateSize: -1,
 	}
 
-	err = api.Request(ctx, msg.DATA_OBJ_CREATE_AN, request, &h.FileDescriptor)
+	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CREATE_AN, request, &h.FileDescriptor, path)
 	if err != nil {
 		err = multierr.Append(err, conn.Close())
 
@@ -240,7 +254,7 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 		truncateSize: -1,
 	}
 
-	err = conn.Request(ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
+	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
 	if err == nil && mode&O_APPEND != 0 {
 		// Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)

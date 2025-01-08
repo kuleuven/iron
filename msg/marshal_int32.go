@@ -3,8 +3,6 @@ package msg
 import "github.com/sirupsen/logrus"
 
 func marshalInt32(body int32, msgType string) (*Message, error) {
-	logrus.Infof("marshalling: %d", body)
-
 	return &Message{
 		Header: Header{
 			Type:    msgType,
@@ -18,8 +16,6 @@ func unmarshalInt32(msg Message, body *int32) error {
 	if msg.Header.ErrorLen > 0 {
 		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
 	}
-
-	logrus.Infof("intInfo: %d", msg.Header.IntInfo)
 
 	*body = msg.Header.IntInfo
 

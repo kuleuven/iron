@@ -75,8 +75,8 @@ type QueryRequest struct {
 type SSKeyVal struct {
 	XMLName xml.Name `xml:"KeyValPair_PI"`
 	Length  int      `xml:"ssLen"`
-	Keys    []string `xml:"keyWord,omitempty" sizeField:"ssLen"`
-	Values  []string `xml:"svalue,omitempty" sizeField:"ssLen"`
+	Keys    []string `xml:"keyWord" sizeField:"ssLen"`
+	Values  []string `xml:"svalue" sizeField:"ssLen"`
 }
 
 func (kv *SSKeyVal) Add(key string, val string) {
@@ -88,8 +88,8 @@ func (kv *SSKeyVal) Add(key string, val string) {
 type IIKeyVal struct {
 	XMLName xml.Name `xml:"InxIvalPair_PI"`
 	Length  int      `xml:"iiLen"`
-	Keys    []int    `xml:"inx,omitempty" sizeField:"iiLen"`
-	Values  []int    `xml:"ivalue,omitempty" sizeField:"iiLen"`
+	Keys    []int    `xml:"inx" sizeField:"iiLen"`
+	Values  []int    `xml:"ivalue" sizeField:"iiLen"`
 }
 
 func (kv *IIKeyVal) Add(key int, val int) {
@@ -101,8 +101,8 @@ func (kv *IIKeyVal) Add(key int, val int) {
 type ISKeyVal struct {
 	XMLName xml.Name `xml:"InxValPair_PI"`
 	Length  int      `xml:"isLen"`
-	Keys    []int    `xml:"inx,omitempty" sizeField:"isLen"`
-	Values  []string `xml:"svalue,omitempty" sizeField:"isLen"`
+	Keys    []int    `xml:"inx" sizeField:"isLen"`
+	Values  []string `xml:"svalue" sizeField:"isLen"`
 }
 
 func (kv *ISKeyVal) Add(key int, val string) {
@@ -138,7 +138,7 @@ type CreateCollectionRequest struct {
 type EmptyResponse []byte // Empty
 
 type CollectionOperationStat struct {
-	XMLName        xml.Name `xml:"collOprStat_t"`
+	XMLName        xml.Name `xml:"CollOprStat_PI"`
 	FileCount      int      `xml:"filesCnt"`
 	TotalFileCount int      `xml:"totalFileCnt"`
 	BytesWritten   int64    `xml:"bytesWritten"`
