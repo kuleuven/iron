@@ -2,6 +2,7 @@ package msg
 
 import (
 	"bytes"
+	"encoding/base64"
 	"io"
 	"reflect"
 	"testing"
@@ -13,11 +14,11 @@ func TestMarshal(t *testing.T) {
 			AuthRequest{},
 			&AuthRequest{},
 			AuthChallenge{
-				Challenge: "abc",
+				Challenge: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("abcdef01"), 8)),
 			},
 			&AuthChallenge{},
 			AuthChallengeResponse{
-				Response: "test",
+				Response: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("abcdef01"), 2)),
 				Username: "test",
 			},
 			&AuthChallengeResponse{},
@@ -82,12 +83,12 @@ func TestReadWrite(t *testing.T) {
 			AuthRequest{},
 			&AuthRequest{},
 			AuthChallenge{
-				Challenge: "test",
+				Challenge: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("abcdef01"), 8)),
 			},
 			&AuthChallenge{},
 			AuthChallengeResponse{
-				Response: "test",
-				Username: "tes\tt",
+				Response: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("abcdef01"), 2)),
+				Username: "test\ttab",
 			},
 			&AuthChallengeResponse{},
 			AuthResponse{},

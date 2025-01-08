@@ -131,15 +131,8 @@ func encodeCStruct(e reflect.Value, buf *bufio.Writer) error {
 const base64tag = "base64,"
 
 func encodeCStructField(e reflect.Value, buf *bufio.Writer, i int) error {
-	switch e.Field(i).Type().Kind() {
-	case reflect.String:
-		tag := e.Type().Field(i).Tag.Get("native")
-		if !strings.HasPrefix(tag, base64tag) {
-			break
-		}
-
+	if e.Field(i).Type().Kind() == reflect.String && strings.HasPrefix(e.Type().Field(i).Tag.Get("native"), base64tag) {
 		return encodeCBase64String(e.Field(i), buf)
-	default:
 	}
 
 	return encodeC(e.Field(i), buf)
@@ -245,7 +238,7 @@ func decodeCStruct(e reflect.Value, buf *bufio.Reader) error {
 }
 
 func decodeCStructField(e reflect.Value, buf *bufio.Reader, i int) error {
-	switch e.Field(i).Type().Kind() {
+	switch e.Field(i).Type().Kind() { //nolint:exhaustive
 	case reflect.Slice:
 		if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
 			_, err = buf.Discard(14)
