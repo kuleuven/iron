@@ -41,6 +41,7 @@ func TestClient(t *testing.T) {
 	client, err := New(context.Background(), env, Option{
 		ClientName:                "test",
 		DeferConnectionToFirstUse: true,
+		EnvCallback:               func() (Env, error) { return env, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
