@@ -11,6 +11,11 @@ import (
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
 
+type Object interface {
+	Identifier() int64
+	ObjectType() ObjectType
+}
+
 var _ os.FileInfo = &Collection{}
 
 type Collection struct {

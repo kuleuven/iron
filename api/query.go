@@ -59,6 +59,8 @@ func In[V string | int | int64](column msg.ColumnNumber, values []V) Condition {
 		strValues[i] = fmt.Sprintf("'%v'", v)
 	}
 
+	// Use small caps IN condition to avoid issues if a name contains "in"
+	// See https://github.com/irods/irods/blob/main/plugins/database/src/general_query.cpp#L1482-L1485
 	return Condition{
 		Column: column,
 		Op:     "in",
