@@ -86,28 +86,6 @@ func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys []int64, o
 	return b.prefetchMetadataForCollections(ctx, api, keys...)
 }
 
-func (b bulk) PrefetchDataObjects(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
-	if len(keys) == 0 {
-		return nil
-	}
-
-	if slices.Contains(opts, FetchAccess) {
-		if err := b.prefetchACLForDataObjects(ctx, api, keys...); err != nil {
-			return err
-		}
-
-		if err := b.resolveUsers(ctx, api); err != nil {
-			return err
-		}
-	}
-
-	if !slices.Contains(opts, FetchMetadata) {
-		return nil
-	}
-
-	return b.prefetchMetadataForDataObjects(ctx, api, keys...)
-}
-
 // PrefetchDataObjectsInCollections fetches attributes for data objects that are in one of the given collections
 func (b bulk) PrefetchDataObjectsInCollections(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
 	if len(keys) == 0 {
@@ -129,26 +107,6 @@ func (b bulk) PrefetchDataObjectsInCollections(ctx context.Context, api *API, ke
 	}
 
 	return b.prefetchMetadataForDataObjectsInCollections(ctx, api, keys...)
-}
-
-func (b bulk) prefetchACLForDataObjects(ctx context.Context, api *API, keys ...int64) error {
-	for _, batch := range makeBatches(keys) {
-		result := api.Query(
-			msg.ICAT_COLUMN_DATA_ACCESS_NAME,
-			msg.ICAT_COLUMN_DATA_ACCESS_USER_ID,
-			msg.ICAT_COLUMN_D_DATA_ID,
-		).Where(
-			msg.ICAT_COLUMN_DATA_TOKEN_NAMESPACE, equalAccessType,
-		).With(In(
-			msg.ICAT_COLUMN_D_DATA_ID, batch,
-		)).Execute(ctx)
-
-		if err := b.collectACLs(result); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (b bulk) prefetchACLForCollections(ctx context.Context, api *API, keys ...int64) error {
