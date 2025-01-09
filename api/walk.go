@@ -39,6 +39,13 @@ var (
 	SkipSubDirs = errors.New("skip subdirectories") //nolint:stylecheck
 )
 
+type WalkOption int
+
+const (
+	FetchAccess WalkOption = 1 << iota
+	FetchMetadata
+)
+
 // Walk traverses the iRODS hierarchy rooted at the given path, calling the
 // given function for each encountered file or directory. The function is
 // called with the path relative to the root of the traversal, the
@@ -48,13 +55,13 @@ var (
 // are not visited. If the function returns SkipSubDirs for a collection, the
 // children of subcollections are not visited, but the subcollections themselves
 // are visited.
-func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc) error {
+func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...WalkOption) error {
 	collection, err := api.GetCollection(ctx, path)
 	if err != nil {
 		return walkFn(path, nil, err)
 	}
 
-	return api.walkLevel(ctx, walkFn, *collection)
+	return api.walkLevel(ctx, walkFn, []Collection{*collection}, opts...)
 }
 
 const maxBatchLength = 14000
@@ -62,7 +69,7 @@ const maxBatchLength = 14000
 // walkLevel traverses a single level of the iRODS hierarchy, by expanding the children
 // of the given list of parent collections. It splits the traversal into batches to avoid
 // exceeding the maximum IN condition length.
-func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents ...Collection) error {
+func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
 	if len(parents) == 0 {
 		return nil
 	}
@@ -76,7 +83,7 @@ func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents ...Collectio
 		if strings.Contains(item.Path, "'") {
 			// The irods IN condition used in walkLevelBatch cannot cope with single quotes
 			// Do a batch with a single item instead, so the = condition can be used
-			if err := api.walkLevelBatch(ctx, fn, item); err != nil {
+			if err := api.walkLevelBatch(ctx, fn, []Collection{item}); err != nil {
 				return err
 			}
 
@@ -84,7 +91,7 @@ func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents ...Collectio
 		}
 
 		if n+len(item.Path)+4 > maxBatchLength {
-			if err := api.walkLevelBatch(ctx, fn, batch...); err != nil {
+			if err := api.walkLevelBatch(ctx, fn, batch, opts...); err != nil {
 				return err
 			}
 
@@ -97,14 +104,14 @@ func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents ...Collectio
 	}
 
 	if len(batch) > 0 {
-		return api.walkLevelBatch(ctx, fn, batch...)
+		return api.walkLevelBatch(ctx, fn, batch, opts...)
 	}
 
 	return nil
 }
 
 // walkLevelBatch traverses a single batch level of the iRODS hierarchy in batches.
-func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents ...Collection) error { //nolint:funlen
+func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error { //nolint:funlen
 	ids := collectionIDs(parents)
 	names := collectionPaths(parents)
 	pmap := collectionIDPathMap(parents)
@@ -124,7 +131,7 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents ...Coll
 	bulk := bulk{}
 
 	// Find attributes of the parents
-	if err := bulk.PrefetchCollections(ctx, api, ids...); err != nil {
+	if err := bulk.PrefetchCollections(ctx, api, ids, opts...); err != nil {
 		return api.handleWalkError(fn, names, err)
 	}
 
@@ -164,7 +171,7 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents ...Coll
 	}
 
 	// Find attributes of the objects
-	attrErr := bulk.PrefetchDataObjectsInCollections(ctx, api, ids...)
+	attrErr := bulk.PrefetchDataObjectsInCollections(ctx, api, ids, opts...)
 
 	// Iterate over objects
 	for _, o := range objects {
@@ -177,7 +184,7 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents ...Coll
 	}
 
 	// Find attributes of the skipped subcollections
-	attrErr = bulk.PrefetchCollections(ctx, api, collectionIDs(skipcolls)...)
+	attrErr = bulk.PrefetchCollections(ctx, api, collectionIDs(skipcolls), opts...)
 
 	// Iterate over skipped subcollections
 	for _, c := range skipcolls {
@@ -190,7 +197,7 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents ...Coll
 	}
 
 	// Iterate over subcollections
-	return api.walkLevel(ctx, fn, subcollections...)
+	return api.walkLevel(ctx, fn, subcollections, opts...)
 }
 
 // walkListDataObjects is an optimized version of ListDataObjects that avoids the extra join with R_COLL_MAIN

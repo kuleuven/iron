@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"os"
+	"slices"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
@@ -63,38 +64,56 @@ func (b bulk) Metadata(key int64) []Metadata {
 	return cached.Metadata
 }
 
-func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys ...int64) error {
-	if err := b.prefetchACLForCollections(ctx, api, keys...); err != nil {
-		return err
+func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
+	if slices.Contains(opts, FetchAccess) {
+		if err := b.prefetchACLForCollections(ctx, api, keys...); err != nil {
+			return err
+		}
+
+		if err := b.resolveUsers(ctx, api); err != nil {
+			return err
+		}
 	}
 
-	if err := b.resolveUsers(ctx, api); err != nil {
-		return err
+	if !slices.Contains(opts, FetchMetadata) {
+		return nil
 	}
 
 	return b.prefetchMetadataForCollections(ctx, api, keys...)
 }
 
-func (b bulk) PrefetchDataObjects(ctx context.Context, api *API, keys ...int64) error {
-	if err := b.prefetchACLForDataObjects(ctx, api, keys...); err != nil {
-		return err
+func (b bulk) PrefetchDataObjects(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
+	if slices.Contains(opts, FetchAccess) {
+		if err := b.prefetchACLForDataObjects(ctx, api, keys...); err != nil {
+			return err
+		}
+
+		if err := b.resolveUsers(ctx, api); err != nil {
+			return err
+		}
 	}
 
-	if err := b.resolveUsers(ctx, api); err != nil {
-		return err
+	if !slices.Contains(opts, FetchMetadata) {
+		return nil
 	}
 
 	return b.prefetchMetadataForDataObjects(ctx, api, keys...)
 }
 
 // PrefetchDataObjectsInCollections fetches attributes for data objects that are in one of the given collections
-func (b bulk) PrefetchDataObjectsInCollections(ctx context.Context, api *API, keys ...int64) error {
-	if err := b.prefetchACLForDataObjectsInCollections(ctx, api, keys...); err != nil {
-		return err
+func (b bulk) PrefetchDataObjectsInCollections(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
+	if slices.Contains(opts, FetchAccess) {
+		if err := b.prefetchACLForDataObjectsInCollections(ctx, api, keys...); err != nil {
+			return err
+		}
+
+		if err := b.resolveUsers(ctx, api); err != nil {
+			return err
+		}
 	}
 
-	if err := b.resolveUsers(ctx, api); err != nil {
-		return err
+	if !slices.Contains(opts, FetchMetadata) {
+		return nil
 	}
 
 	return b.prefetchMetadataForDataObjectsInCollections(ctx, api, keys...)
