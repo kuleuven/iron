@@ -171,7 +171,6 @@ const equalTo = "= '%s'"
 const equalToInt = "= '%d'"
 
 // GetCollection returns a collection for the path
-// Use Query for more complex queries
 func (api *API) GetCollection(ctx context.Context, path string) (*Collection, error) {
 	c := Collection{
 		Path: path,
@@ -198,36 +197,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 	return &c, nil
 }
 
-// GetCollectionID returns a collection for the given id
-// Use Query for more complex queries
-func (api *API) GetCollectionID(ctx context.Context, id int64) (*Collection, error) {
-	c := Collection{
-		ID: id,
-	}
-
-	err := api.QueryRow(
-		msg.ICAT_COLUMN_COLL_NAME,
-		msg.ICAT_COLUMN_COLL_OWNER_NAME,
-		msg.ICAT_COLUMN_COLL_CREATE_TIME,
-		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
-	).Where(
-		msg.ICAT_COLUMN_COLL_ID,
-		fmt.Sprintf(equalToInt, id),
-	).Execute(ctx).Scan(
-		&c.Path,
-		&c.Owner,
-		&c.CreatedAt,
-		&c.ModifiedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &c, nil
-}
-
 // GetDataObject returns a data object for the path
-// Use Query for more complex queries
 func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, error) {
 	d := DataObject{
 		Path: path,
@@ -291,70 +261,6 @@ func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, er
 	return &d, nil
 }
 
-// GetDataObjectID returns a data object for the given id
-// Use Query for more complex queries
-func (api *API) GetDataObjectID(ctx context.Context, id int64) (*DataObject, error) {
-	d := DataObject{ID: id}
-
-	var coll, name string
-
-	results := api.Query(
-		msg.ICAT_COLUMN_COLL_NAME,
-		msg.ICAT_COLUMN_DATA_NAME,
-		msg.ICAT_COLUMN_COLL_ID,
-		msg.ICAT_COLUMN_DATA_TYPE_NAME,
-		msg.ICAT_COLUMN_DATA_REPL_NUM,
-		msg.ICAT_COLUMN_DATA_SIZE,
-		msg.ICAT_COLUMN_D_OWNER_NAME,
-		msg.ICAT_COLUMN_D_DATA_CHECKSUM,
-		msg.ICAT_COLUMN_D_REPL_STATUS,
-		msg.ICAT_COLUMN_D_RESC_NAME,
-		msg.ICAT_COLUMN_D_DATA_PATH,
-		msg.ICAT_COLUMN_D_RESC_HIER,
-		msg.ICAT_COLUMN_D_CREATE_TIME,
-		msg.ICAT_COLUMN_D_MODIFY_TIME,
-	).Where(
-		msg.ICAT_COLUMN_D_DATA_ID,
-		fmt.Sprintf(equalToInt, id),
-	).Execute(ctx)
-
-	defer results.Close()
-
-	for results.Next() {
-		replica := Replica{}
-
-		err := results.Scan(
-			&coll,
-			&name,
-			&d.CollectionID,
-			&d.DataType,
-			&replica.Number,
-			&replica.Size,
-			&replica.Owner,
-			&replica.Checksum,
-			&replica.Status,
-			&replica.ResourceName,
-			&replica.PhysicalPath,
-			&replica.ResourceHierarchy,
-			&replica.CreatedAt,
-			&replica.ModifiedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		d.Replicas = append(d.Replicas, replica)
-	}
-
-	if err := results.Err(); err != nil {
-		return nil, err
-	}
-
-	d.Path = coll + "/" + name
-
-	return &d, nil
-}
-
 // Split splits the path into dir and file
 func Split(path string) (string, string) {
 	for i := len(path) - 1; i > 0; i-- {
@@ -371,18 +277,7 @@ func Split(path string) (string, string) {
 }
 
 // GetResource returns information about a resource, identified by its name
-// Use Query for more complex queries
 func (api *API) GetResource(ctx context.Context, name string) (*Resource, error) {
-	return api.getRescource(ctx, msg.ICAT_COLUMN_R_RESC_NAME, fmt.Sprintf(equalTo, name))
-}
-
-// GetResourceID returns information about a resource, identified by its id
-// Use Query for more complex queries
-func (api *API) GetResourceID(ctx context.Context, id int64) (*Resource, error) {
-	return api.getRescource(ctx, msg.ICAT_COLUMN_R_RESC_ID, fmt.Sprintf(equalToInt, id))
-}
-
-func (api *API) getRescource(ctx context.Context, column msg.ColumnNumber, value string) (*Resource, error) {
 	var r Resource
 
 	err := api.QueryRow(
@@ -397,8 +292,8 @@ func (api *API) getRescource(ctx context.Context, column msg.ColumnNumber, value
 		msg.ICAT_COLUMN_R_CREATE_TIME,
 		msg.ICAT_COLUMN_R_MODIFY_TIME,
 	).Where(
-		column,
-		value,
+		msg.ICAT_COLUMN_R_RESC_NAME,
+		fmt.Sprintf(equalTo, name),
 	).Execute(ctx).Scan(
 		&r.ID,
 		&r.Name,
@@ -419,7 +314,6 @@ func (api *API) getRescource(ctx context.Context, column msg.ColumnNumber, value
 }
 
 // GetUser returns information about a user, identified by its name
-// Use Query for more complex queries
 func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 	var u User
 
@@ -458,43 +352,59 @@ func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 	return &u, nil
 }
 
-// GetUserID returns information about a user, identified by its id
-// Use Query for more complex queries
-func (api *API) GetUserID(ctx context.Context, id int64) (*User, error) {
-	var u User
+// ListUsers returns a list of users satisfying the given conditions
+func (api *API) ListUsers(ctx context.Context, conditions ...Condition) ([]User, error) {
+	result := []User{}
 
-	err := api.QueryRow(
+	results := api.Query(
 		msg.ICAT_COLUMN_USER_ID,
 		msg.ICAT_COLUMN_USER_NAME,
 		msg.ICAT_COLUMN_USER_ZONE,
 		msg.ICAT_COLUMN_USER_TYPE,
 		msg.ICAT_COLUMN_USER_CREATE_TIME,
 		msg.ICAT_COLUMN_USER_MODIFY_TIME,
-	).Where(
-		msg.ICAT_COLUMN_USER_ID,
-		fmt.Sprintf(equalToInt, id),
-	).Execute(ctx).Scan(
-		&u.ID,
-		&u.Name,
-		&u.Zone,
-		&u.Type,
-		&u.CreatedAt,
-		&u.ModifiedAt,
-	)
-	if err != nil {
-		return nil, err
+	).With(conditions...).Execute(ctx)
+
+	defer results.Close()
+
+	for results.Next() {
+		u := User{}
+
+		err := results.Scan(
+			&u.ID,
+			&u.Name,
+			&u.Zone,
+			&u.Type,
+			&u.CreatedAt,
+			&u.ModifiedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, u)
 	}
 
-	return &u, nil
+	return result, results.Err()
 }
 
-// ListDataObjects returns a list of data objects for the path
-// Use Query for more complex queries
-func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]DataObject, error) { //nolint:funlen
+// ListDataObjectsInCollection returns a list of data objects contained in a collection
+func (api *API) ListDataObjectsInCollection(ctx context.Context, collectionPath string) ([]DataObject, error) {
+	return api.ListDataObjects(ctx, Equal(msg.ICAT_COLUMN_COLL_NAME, collectionPath))
+}
+
+// ListSubCollections returns a list of subcollections of the given collection
+func (api *API) ListSubCollections(ctx context.Context, collectionPath string) ([]Collection, error) {
+	return api.ListCollections(ctx, Equal(msg.ICAT_COLUMN_COLL_PARENT_NAME, collectionPath))
+}
+
+// ListDataObjects returns a list of data objects satisfying the given conditions
+func (api *API) ListDataObjects(ctx context.Context, conditions ...Condition) ([]DataObject, error) { //nolint:funlen
 	result := []DataObject{}
 	mapping := map[int64]*DataObject{}
 	results := api.Query(
 		msg.ICAT_COLUMN_D_DATA_ID,
+		msg.ICAT_COLUMN_COLL_NAME,
 		msg.ICAT_COLUMN_DATA_NAME,
 		msg.ICAT_COLUMN_COLL_ID,
 		msg.ICAT_COLUMN_DATA_TYPE_NAME,
@@ -508,22 +418,20 @@ func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 		msg.ICAT_COLUMN_D_RESC_HIER,
 		msg.ICAT_COLUMN_D_CREATE_TIME,
 		msg.ICAT_COLUMN_D_MODIFY_TIME,
-	).Where(
-		msg.ICAT_COLUMN_COLL_NAME,
-		fmt.Sprintf(equalTo, collectionPath),
-	).Execute(ctx)
+	).With(conditions...).Execute(ctx)
 
 	defer results.Close()
 
 	for results.Next() {
 		var (
-			object  DataObject
-			replica Replica
-			name    string
+			object     DataObject
+			replica    Replica
+			coll, name string
 		)
 
 		err := results.Scan(
 			&object.ID,
+			&coll,
 			&name,
 			&object.CollectionID,
 			&object.DataType,
@@ -542,7 +450,7 @@ func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 			return nil, err
 		}
 
-		object.Path = collectionPath + "/" + name
+		object.Path = coll + "/" + name
 
 		if prev, ok := mapping[object.ID]; ok {
 			prev.Replicas = append(prev.Replicas, replica)
@@ -558,9 +466,8 @@ func (api *API) ListDataObjects(ctx context.Context, collectionPath string) ([]D
 	return result, results.Err()
 }
 
-// ListSubCollections returns a list of collections for the path
-// Use Query for more complex queries
-func (api *API) ListSubCollections(ctx context.Context, collectionPath string) ([]Collection, error) {
+// ListCollections returns a list of collections satisfying the given conditions
+func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([]Collection, error) {
 	var out []Collection
 
 	results := api.Query(
@@ -569,10 +476,7 @@ func (api *API) ListSubCollections(ctx context.Context, collectionPath string) (
 		msg.ICAT_COLUMN_COLL_OWNER_NAME,
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
-	).Where(
-		msg.ICAT_COLUMN_COLL_PARENT_NAME,
-		fmt.Sprintf(equalTo, collectionPath),
-	).Execute(ctx)
+	).With(conditions...).Execute(ctx)
 
 	defer results.Close()
 
@@ -595,9 +499,9 @@ func (api *API) ListSubCollections(ctx context.Context, collectionPath string) (
 	return out, results.Err()
 }
 
-// ListMetadata returns a list of metadata for the path
-// Use Query for more complex queries
-func (api *API) ListMetadata(ctx context.Context, name string, itemType ObjectType) ([]Metadata, error) {
+// ListMetadata returns a list of metadata records attached to the given object.
+// The function takes optional conditions to refine the query.
+func (api *API) ListMetadata(ctx context.Context, name string, itemType ObjectType, conditions ...Condition) ([]Metadata, error) {
 	var query PreparedQuery
 
 	switch itemType {
@@ -656,56 +560,7 @@ func (api *API) ListMetadata(ctx context.Context, name string, itemType ObjectTy
 		return nil, ErrInvalidItemType
 	}
 
-	return api.executeMetadataQuery(ctx, query)
-}
-
-// ListMetadataID returns a list of metadata for the object id
-// Use Query for more complex queries
-func (api *API) ListMetadataID(ctx context.Context, id int64, itemType ObjectType) ([]Metadata, error) {
-	var query PreparedQuery
-
-	switch itemType {
-	case DataObjectType:
-		query = api.Query(
-			msg.ICAT_COLUMN_META_DATA_ATTR_NAME,
-			msg.ICAT_COLUMN_META_DATA_ATTR_VALUE,
-			msg.ICAT_COLUMN_META_DATA_ATTR_UNITS,
-		).Where(
-			msg.ICAT_COLUMN_D_DATA_ID,
-			fmt.Sprintf(equalToInt, id),
-		)
-	case CollectionType:
-		query = api.Query(
-			msg.ICAT_COLUMN_META_COLL_ATTR_NAME,
-			msg.ICAT_COLUMN_META_COLL_ATTR_VALUE,
-			msg.ICAT_COLUMN_META_COLL_ATTR_UNITS,
-		).Where(
-			msg.ICAT_COLUMN_COLL_ID,
-			fmt.Sprintf(equalToInt, id),
-		)
-	case ResourceType:
-		query = api.Query(
-			msg.ICAT_COLUMN_META_RESC_ATTR_NAME,
-			msg.ICAT_COLUMN_META_RESC_ATTR_VALUE,
-			msg.ICAT_COLUMN_META_RESC_ATTR_UNITS,
-		).Where(
-			msg.ICAT_COLUMN_R_RESC_ID,
-			fmt.Sprintf(equalToInt, id),
-		)
-	case UserType:
-		query = api.Query(
-			msg.ICAT_COLUMN_META_USER_ATTR_NAME,
-			msg.ICAT_COLUMN_META_USER_ATTR_VALUE,
-			msg.ICAT_COLUMN_META_USER_ATTR_UNITS,
-		).Where(
-			msg.ICAT_COLUMN_USER_ID,
-			fmt.Sprintf(equalToInt, id),
-		)
-	default:
-		return nil, ErrInvalidItemType
-	}
-
-	return api.executeMetadataQuery(ctx, query)
+	return api.executeMetadataQuery(ctx, query.With(conditions...))
 }
 
 func (api *API) executeMetadataQuery(ctx context.Context, query PreparedQuery) ([]Metadata, error) {
@@ -733,7 +588,7 @@ func (api *API) executeMetadataQuery(ctx context.Context, query PreparedQuery) (
 }
 
 type Access struct {
-	UserID     int64
+	User       User
 	Permission string
 }
 
@@ -741,7 +596,9 @@ const equalAccessType = "= 'access_type'"
 
 var ErrInvalidItemType = errors.New("invalid item type")
 
-func (api *API) ListAccess(ctx context.Context, path string, itemType ObjectType) ([]Access, error) {
+// ListAccess retrieves a list of access permissions for a given data object or collection.
+// The function takes optional conditions to refine the query.
+func (api *API) ListAccess(ctx context.Context, path string, itemType ObjectType, conditions ...Condition) ([]Access, error) {
 	var query PreparedQuery
 
 	switch itemType { //nolint:exhaustive
@@ -771,40 +628,15 @@ func (api *API) ListAccess(ctx context.Context, path string, itemType ObjectType
 		return nil, ErrInvalidItemType
 	}
 
-	return api.executeAccessQuery(ctx, query)
-}
-
-func (api *API) ListAccessID(ctx context.Context, id int64, itemType ObjectType) ([]Access, error) {
-	var query PreparedQuery
-
-	switch itemType { //nolint:exhaustive
-	case DataObjectType:
-		query = api.Query(
-			msg.ICAT_COLUMN_DATA_ACCESS_NAME,
-			msg.ICAT_COLUMN_DATA_ACCESS_USER_ID,
-		).Where(
-			msg.ICAT_COLUMN_D_DATA_ID, fmt.Sprintf(equalToInt, id),
-		).Where(
-			msg.ICAT_COLUMN_DATA_TOKEN_NAMESPACE, equalAccessType,
-		)
-	case CollectionType:
-		query = api.Query(
-			msg.ICAT_COLUMN_COLL_ACCESS_NAME,
-			msg.ICAT_COLUMN_COLL_ACCESS_USER_ID,
-		).Where(
-			msg.ICAT_COLUMN_COLL_ID, fmt.Sprintf(equalToInt, id),
-		).Where(
-			msg.ICAT_COLUMN_COLL_TOKEN_NAMESPACE, equalAccessType,
-		)
-	default:
-		return nil, ErrInvalidItemType
-	}
-
-	return api.executeAccessQuery(ctx, query)
+	return api.executeAccessQuery(ctx, query.With(conditions...))
 }
 
 func (api *API) executeAccessQuery(ctx context.Context, query PreparedQuery) ([]Access, error) {
-	var out []Access
+	var (
+		out []Access
+		ids []int64
+		ptr = map[int64]*Access{}
+	)
 
 	results := query.Execute(ctx)
 
@@ -815,12 +647,32 @@ func (api *API) executeAccessQuery(ctx context.Context, query PreparedQuery) ([]
 
 		if err := results.Scan(
 			&a.Permission,
-			&a.UserID,
+			&a.User.ID,
 		); err != nil {
 			return nil, err
 		}
 
 		out = append(out, a)
+		ids = append(ids, a.User.ID)
+		ptr[a.User.ID] = &out[len(out)-1]
+	}
+
+	if err := results.Err(); err != nil {
+		return nil, err
+	}
+
+	// Fetch user details
+	users, err := api.ListUsers(ctx, In(msg.ICAT_COLUMN_USER_ID, ids))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, u := range users {
+		if ptr[u.ID] == nil {
+			continue
+		}
+
+		ptr[u.ID].User = u
 	}
 
 	return out, results.Err()

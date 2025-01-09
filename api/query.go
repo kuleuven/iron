@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -17,6 +18,52 @@ type PreparedQuery struct {
 	maxRows     int
 	columns     []msg.ColumnNumber
 	conditions  map[msg.ColumnNumber]string
+}
+
+// Condition defines a condition
+type Condition struct {
+	Column msg.ColumnNumber
+	Op     string
+	Value  string
+}
+
+// Equal creates a Condition that checks if the specified column is equal to the given value.
+func Equal[V string | int | int64](column msg.ColumnNumber, value V) Condition {
+	return Condition{
+		Column: column,
+		Op:     "=",
+		Value:  fmt.Sprintf("'%v'", value),
+	}
+}
+
+// Like creates a Condition that checks if the specified column matches the given SQL LIKE expression.
+func Like(column msg.ColumnNumber, value string) Condition {
+	return Condition{
+		Column: column,
+		Op:     "LIKE",
+		Value:  fmt.Sprintf("'%s'", value),
+	}
+}
+
+// In creates a Condition that checks if the specified column is in the given list of values.
+// Note that it is not safe to use this method if one of the values contains a ' character,
+// and at least two values are provided.
+func In[V string | int | int64](column msg.ColumnNumber, values []V) Condition {
+	if len(values) == 1 {
+		return Equal(column, values[0])
+	}
+
+	strValues := make([]string, len(values))
+
+	for i, v := range values {
+		strValues[i] = fmt.Sprintf("'%v'", v)
+	}
+
+	return Condition{
+		Column: column,
+		Op:     "in",
+		Value:  fmt.Sprintf("(%s)", strings.Join(strValues, ",")),
+	}
 }
 
 // Query prepares a query to read from the irods catalog.
@@ -34,6 +81,15 @@ func (api *API) Query(columns ...msg.ColumnNumber) PreparedQuery {
 // based on the specified column.
 func (q PreparedQuery) Where(column msg.ColumnNumber, condition string) PreparedQuery {
 	q.conditions[column] = condition
+
+	return q
+}
+
+// With adds a list of conditions to the query.
+func (q PreparedQuery) With(condition ...Condition) PreparedQuery {
+	for _, c := range condition {
+		q.conditions[c.Column] = fmt.Sprintf("%s %s", c.Op, c.Value)
+	}
 
 	return q
 }
@@ -313,6 +369,15 @@ func (api *API) QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery {
 // based on the specified column.
 func (r PreparedSingleRowQuery) Where(column msg.ColumnNumber, condition string) PreparedSingleRowQuery {
 	r.conditions[column] = condition
+
+	return r
+}
+
+// With adds a list of conditions to the query.
+func (r PreparedSingleRowQuery) With(condition ...Condition) PreparedSingleRowQuery {
+	for _, c := range condition {
+		r.conditions[c.Column] = fmt.Sprintf("%s %s", c.Op, c.Value)
+	}
 
 	return r
 }
