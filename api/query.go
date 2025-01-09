@@ -65,7 +65,7 @@ func (q PreparedQuery) Execute(ctx context.Context) *Result {
 	}
 
 	result.buildQuery()
-	result.executeQuery(ctx)
+	result.executeQuery()
 
 	return result
 }
@@ -119,7 +119,7 @@ func (r *Result) Next() bool {
 	r.query.ContinueIndex = r.result.ContinueIndex
 	r.Query.resultLimit -= r.result.RowCount
 
-	r.executeQuery(r.Context)
+	r.executeQuery()
 
 	return r.Next()
 }
@@ -129,6 +129,8 @@ var ErrRowOutOfBound = fmt.Errorf("row out of bound")
 var ErrAttributeOutOfBound = fmt.Errorf("attribute count out of bound")
 
 var ErrNoSQLResults = fmt.Errorf("no sql results")
+
+var ErrAttributeIndexMismatch = fmt.Errorf("attribute index mismatch")
 
 // Scan reads the values in the current row into the values pointed
 // to by dest, in order.  If an error occurs during scanning, the
@@ -151,6 +153,10 @@ func (r *Result) Scan(dest ...interface{}) error {
 		col := r.result.SQLResult[attr]
 		if len(col.Values) <= r.row {
 			return fmt.Errorf("%w: row %d is missing from column %d", ErrNoSQLResults, r.row, attr)
+		}
+
+		if col.AttributeIndex != r.Query.columns[attr] {
+			return fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, r.Query.columns[attr], col.AttributeIndex)
 		}
 
 		value := col.Values[r.row]
@@ -188,10 +194,10 @@ func (r *Result) buildQuery() {
 	r.Query.api.setFlags(&r.query.KeyVals)
 }
 
-func (r *Result) executeQuery(ctx context.Context) {
+func (r *Result) executeQuery() {
 	r.result = &msg.QueryResponse{}
 
-	r.err = r.Conn.Request(ctx, msg.GEN_QUERY_AN, r.query, r.result)
+	r.err = r.Conn.Request(r.Context, msg.GEN_QUERY_AN, r.query, r.result)
 	r.row = -1
 
 	if rodsErr, ok := r.err.(*msg.IRODSError); ok && rodsErr.Code == -808000 { // CAT_NO_ROWS_FOUND
@@ -204,11 +210,13 @@ func (r *Result) executeQuery(ctx context.Context) {
 }
 
 func (r *Result) cleanup() {
+	r.Context = context.Background() // Don't run with a canceled context
+
 	for r.result.ContinueIndex != 0 {
 		r.query.ContinueIndex = r.result.ContinueIndex
 		r.query.MaxRows = 0
 
-		r.executeQuery(context.Background())
+		r.executeQuery()
 	}
 
 	if r.Conn != nil {
@@ -316,18 +324,28 @@ func (r PreparedSingleRowQuery) Execute(ctx context.Context) *SingleRowResult {
 	defer result.Close()
 
 	if result.Next() {
-		return &SingleRowResult{result: result.result}
+		return &SingleRowResult{
+			result: result.result,
+			Query:  r,
+		}
 	}
 
 	if result.Err() != nil {
-		return &SingleRowResult{err: result.Err()}
+		return &SingleRowResult{
+			err:   result.Err(),
+			Query: r,
+		}
 	}
 
-	return &SingleRowResult{err: ErrNoRowFound}
+	return &SingleRowResult{
+		err:   ErrNoRowFound,
+		Query: r,
+	}
 }
 
 type SingleRowResult struct {
 	result *msg.QueryResponse
+	Query  PreparedSingleRowQuery
 	err    error
 }
 
@@ -346,6 +364,10 @@ func (r *SingleRowResult) Scan(dest ...interface{}) error {
 		col := r.result.SQLResult[attr]
 		if len(col.Values) == 0 {
 			return fmt.Errorf("%w: row 1 is missing from column %d", ErrNoSQLResults, attr)
+		}
+
+		if col.AttributeIndex != r.Query.columns[attr] {
+			return fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, r.Query.columns[attr], col.AttributeIndex)
 		}
 
 		value := col.Values[0]

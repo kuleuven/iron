@@ -121,10 +121,10 @@ type QueryResponse struct {
 }
 
 type SQLResult struct {
-	XMLName        xml.Name `xml:"SqlResult_PI"`
-	AttributeIndex int      `xml:"attriInx"`
-	ResultLen      int      `xml:"reslen"`
-	Values         []string `xml:"value,omitempty" sizeField:"reslen"`
+	XMLName        xml.Name     `xml:"SqlResult_PI"`
+	AttributeIndex ColumnNumber `xml:"attriInx"`
+	ResultLen      int          `xml:"reslen"`
+	Values         []string     `xml:"value,omitempty" sizeField:"reslen"`
 }
 
 type CreateCollectionRequest struct {

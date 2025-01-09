@@ -311,11 +311,11 @@ func (api *API) SetCollectionInheritance(ctx context.Context, path string, inher
 }
 
 // AddMetadata adds a single metadata value of a data object, collection, user or resource.
-func (api *API) AddMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+func (api *API) AddMetadata(ctx context.Context, name string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "add",
 		ItemType:  fmt.Sprintf("-%s", string(itemType)),
-		ItemName:  path,
+		ItemName:  name,
 		AttrName:  value.Name,
 		AttrValue: value.Value,
 		AttrUnits: value.Units,
@@ -327,11 +327,11 @@ func (api *API) AddMetadata(ctx context.Context, path string, itemType ObjectTyp
 }
 
 // RemoveMetadata removes a single metadata value of a data object, collection, user or resource.
-func (api *API) RemoveMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+func (api *API) RemoveMetadata(ctx context.Context, name string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "rm",
 		ItemType:  fmt.Sprintf("-%s", string(itemType)),
-		ItemName:  path,
+		ItemName:  name,
 		AttrName:  value.Name,
 		AttrValue: value.Value,
 		AttrUnits: value.Units,
@@ -343,11 +343,11 @@ func (api *API) RemoveMetadata(ctx context.Context, path string, itemType Object
 }
 
 // SetMetadata add a single metadata value for the given key and removes old metadata values with the same key.
-func (api *API) SetMetadata(ctx context.Context, path string, itemType ObjectType, value Metadata) error {
+func (api *API) SetMetadata(ctx context.Context, name string, itemType ObjectType, value Metadata) error {
 	request := &msg.ModifyMetadataRequest{
 		Operation: "set",
 		ItemType:  fmt.Sprintf("-%s", string(itemType)),
-		ItemName:  path,
+		ItemName:  name,
 		AttrName:  value.Name,
 		AttrValue: value.Value,
 		AttrUnits: value.Units,
@@ -359,10 +359,10 @@ func (api *API) SetMetadata(ctx context.Context, path string, itemType ObjectTyp
 }
 
 // ModifyMetadata does a bulk update of metadata, removing and adding the given values.
-func (api *API) ModifyMetadata(ctx context.Context, path string, itemType ObjectType, add, remove []Metadata) error {
+func (api *API) ModifyMetadata(ctx context.Context, name string, itemType ObjectType, add, remove []Metadata) error {
 	request := &msg.AtomicMetadataRequest{
 		AdminMode: api.Admin,
-		ItemName:  path,
+		ItemName:  name,
 		ItemType:  itemType.String(),
 	}
 
