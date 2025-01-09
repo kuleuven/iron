@@ -209,25 +209,6 @@ func (b bulk) resolveUsers(ctx context.Context, api *API) error {
 	return nil
 }
 
-func (b bulk) prefetchMetadataForDataObjects(ctx context.Context, conn *API, keys ...int64) error {
-	for _, batch := range makeBatches(keys) {
-		result := conn.Query(
-			msg.ICAT_COLUMN_META_DATA_ATTR_NAME,
-			msg.ICAT_COLUMN_META_DATA_ATTR_VALUE,
-			msg.ICAT_COLUMN_META_DATA_ATTR_UNITS,
-			msg.ICAT_COLUMN_D_DATA_ID,
-		).With(In(
-			msg.ICAT_COLUMN_D_DATA_ID, batch,
-		)).Execute(ctx)
-
-		if err := b.collectMetadata(result); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (b bulk) prefetchMetadataForCollections(ctx context.Context, conn *API, keys ...int64) error {
 	for _, batch := range makeBatches(keys) {
 		result := conn.Query(
