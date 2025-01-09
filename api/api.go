@@ -25,6 +25,8 @@ type API struct {
 	DefaultResource string                              // Default resource to use when creating data objects
 }
 
+// Conn is a limited interface to an iRODS connection to avoid dependency cycles.
+// Use iron.Conn instead.
 type Conn interface {
 	// Request sends an API request for the given API number and expects a response.
 	// Both request and response should represent a type such as in `msg/types.go`.
