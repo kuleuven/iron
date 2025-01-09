@@ -294,9 +294,7 @@ func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, er
 // GetDataObjectID returns a data object for the given id
 // Use Query for more complex queries
 func (api *API) GetDataObjectID(ctx context.Context, id int64) (*DataObject, error) {
-	d := DataObject{
-		ID: id,
-	}
+	d := DataObject{ID: id}
 
 	var coll, name string
 
@@ -375,44 +373,16 @@ func Split(path string) (string, string) {
 // GetResource returns information about a resource, identified by its name
 // Use Query for more complex queries
 func (api *API) GetResource(ctx context.Context, name string) (*Resource, error) {
-	var r Resource
-
-	err := api.QueryRow(
-		msg.ICAT_COLUMN_R_RESC_ID,
-		msg.ICAT_COLUMN_R_RESC_NAME,
-		msg.ICAT_COLUMN_R_ZONE_NAME,
-		msg.ICAT_COLUMN_R_TYPE_NAME,
-		msg.ICAT_COLUMN_R_CLASS_NAME,
-		msg.ICAT_COLUMN_R_LOC,
-		msg.ICAT_COLUMN_R_VAULT_PATH,
-		msg.ICAT_COLUMN_R_RESC_CONTEXT,
-		msg.ICAT_COLUMN_R_CREATE_TIME,
-		msg.ICAT_COLUMN_R_MODIFY_TIME,
-	).Where(
-		msg.ICAT_COLUMN_R_RESC_NAME,
-		fmt.Sprintf(equalTo, name),
-	).Execute(ctx).Scan(
-		&r.ID,
-		&r.Name,
-		&r.Zone,
-		&r.Type,
-		&r.Class,
-		&r.Location,
-		&r.Path,
-		&r.Context,
-		&r.CreatedAt,
-		&r.ModifiedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &r, nil
+	return api.getRescource(ctx, msg.ICAT_COLUMN_R_RESC_NAME, fmt.Sprintf(equalTo, name))
 }
 
 // GetResourceID returns information about a resource, identified by its id
 // Use Query for more complex queries
 func (api *API) GetResourceID(ctx context.Context, id int64) (*Resource, error) {
+	return api.getRescource(ctx, msg.ICAT_COLUMN_R_RESC_ID, fmt.Sprintf(equalToInt, id))
+}
+
+func (api *API) getRescource(ctx context.Context, column msg.ColumnNumber, value string) (*Resource, error) {
 	var r Resource
 
 	err := api.QueryRow(
@@ -427,8 +397,8 @@ func (api *API) GetResourceID(ctx context.Context, id int64) (*Resource, error) 
 		msg.ICAT_COLUMN_R_CREATE_TIME,
 		msg.ICAT_COLUMN_R_MODIFY_TIME,
 	).Where(
-		msg.ICAT_COLUMN_R_RESC_ID,
-		fmt.Sprintf(equalToInt, id),
+		column,
+		value,
 	).Execute(ctx).Scan(
 		&r.ID,
 		&r.Name,
@@ -774,7 +744,7 @@ var ErrInvalidItemType = errors.New("invalid item type")
 func (api *API) ListAccess(ctx context.Context, path string, itemType ObjectType) ([]Access, error) {
 	var query PreparedQuery
 
-	switch itemType {
+	switch itemType { //nolint:exhaustive
 	case DataObjectType:
 		coll, name := Split(path)
 
@@ -807,7 +777,7 @@ func (api *API) ListAccess(ctx context.Context, path string, itemType ObjectType
 func (api *API) ListAccessID(ctx context.Context, id int64, itemType ObjectType) ([]Access, error) {
 	var query PreparedQuery
 
-	switch itemType {
+	switch itemType { //nolint:exhaustive
 	case DataObjectType:
 		query = api.Query(
 			msg.ICAT_COLUMN_DATA_ACCESS_NAME,
