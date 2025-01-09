@@ -55,7 +55,31 @@ var responses = []any{
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
 	},
-	msg.QueryResponse{AttributeCount: 3},
+	msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 3,
+		TotalRowCount:  1,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 711, ResultLen: 2, Values: []string{"own"}},
+			{AttributeIndex: 713, ResultLen: 2, Values: []string{"500"}},
+			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
+		},
+	},
+	msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 6,
+		TotalRowCount:  1,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 201, ResultLen: 1, Values: []string{"500"}},
+			{AttributeIndex: 202, ResultLen: 1, Values: []string{"username"}},
+			{AttributeIndex: 204, ResultLen: 1, Values: []string{"testZone"}},
+			{AttributeIndex: 203, ResultLen: 1, Values: []string{"rodsuser"}},
+			{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
+			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
+		},
+	},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
@@ -100,7 +124,7 @@ func TestWalkSkip(t *testing.T) {
 }
 
 func TestWalkSkipAll(t *testing.T) {
-	testConn.NextResponses = responses[:5]
+	testConn.NextResponses = responses[:6]
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		return SkipAll
