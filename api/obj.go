@@ -173,8 +173,6 @@ func (u *User) ObjectType() ObjectType {
 
 const equalTo = "= '%s'"
 
-const equalToInt = "= '%d'"
-
 // GetCollection returns a collection for the path
 func (api *API) GetCollection(ctx context.Context, path string) (*Collection, error) {
 	c := Collection{

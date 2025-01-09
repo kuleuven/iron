@@ -12,7 +12,7 @@ import (
 func TestGetCollection(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 5,
+		AttributeCount: 4,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{

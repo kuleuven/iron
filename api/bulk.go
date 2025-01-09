@@ -65,6 +65,10 @@ func (b bulk) Metadata(key int64) []Metadata {
 }
 
 func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
 	if slices.Contains(opts, FetchAccess) {
 		if err := b.prefetchACLForCollections(ctx, api, keys...); err != nil {
 			return err
@@ -83,6 +87,10 @@ func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys []int64, o
 }
 
 func (b bulk) PrefetchDataObjects(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
 	if slices.Contains(opts, FetchAccess) {
 		if err := b.prefetchACLForDataObjects(ctx, api, keys...); err != nil {
 			return err
@@ -102,6 +110,10 @@ func (b bulk) PrefetchDataObjects(ctx context.Context, api *API, keys []int64, o
 
 // PrefetchDataObjectsInCollections fetches attributes for data objects that are in one of the given collections
 func (b bulk) PrefetchDataObjectsInCollections(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
 	if slices.Contains(opts, FetchAccess) {
 		if err := b.prefetchACLForDataObjectsInCollections(ctx, api, keys...); err != nil {
 			return err
