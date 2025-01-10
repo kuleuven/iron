@@ -36,7 +36,7 @@ type WalkFunc func(path string, record Record, err error) error
 var (
 	SkipAll     = filepath.SkipAll
 	SkipDir     = filepath.SkipDir
-	SkipSubDirs = errors.New("skip subdirectories") //nolint:stylecheck
+	SkipSubDirs = errors.New("skip children of subdirectories of this directory") //nolint:stylecheck
 )
 
 type WalkOption int
@@ -53,8 +53,14 @@ const (
 // function returns an error or SkipAll, the traversal is stopped. If the
 // function returns SkipDir for a collection, the children of the collection
 // are not visited. If the function returns SkipSubDirs for a collection, the
-// children of subcollections are not visited, but the subcollections themselves
-// are visited.
+// children of subcollections are not visited, but the subcollections are
+// visited as apparent being empty. This avoids querying all children of the
+// subcollections; otherwise the walk function on a collection is called after
+// retrieving all children in memory.
+// The order in which the collections are visited is not specified. The only
+// guarantees are that parent collections are visited before their children;
+// and that data objects within a collection are visited in lexographical
+// order.
 func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...WalkOption) error {
 	collection, err := api.GetCollection(ctx, path)
 	if err != nil {

@@ -173,12 +173,7 @@ func (api *API) ElevateRequest(ctx context.Context, apiNumber msg.APINumber, req
 // on the parent directory.
 func (api *API) connElevateRequest(ctx context.Context, conn Conn, apiNumber msg.APINumber, request, response any, paths ...string) error {
 	err := conn.Request(ctx, apiNumber, request, response)
-	if err == nil || !api.Admin {
-		return err
-	}
-
-	rodsErr, ok := err.(*msg.IRODSError)
-	if !ok || rodsErr.Code != -818000 { // CAT_NO_ACCESS_PERMISSION
+	if !Is(err, msg.CAT_NO_ACCESS_PERMISSION) || !api.Admin {
 		return err
 	}
 
@@ -210,8 +205,7 @@ func (api *API) gainAccess(ctx context.Context, conn Conn, path string) error {
 		return nil
 	}
 
-	rodsErr, ok := err.(*msg.IRODSError)
-	if !ok || rodsErr.Code != -808000 && rodsErr.Code != -1105000 { // CAT_NO_ROWS_FOUND, INVALID_OBJECT_TYPE
+	if !Is(err, msg.CAT_NO_ROWS_FOUND) && !Is(err, msg.INVALID_OBJECT_TYPE) {
 		logrus.Warnf("Admin keyword not supported. Failed to elevate permissions on directory %s: %s", path, err)
 
 		return err

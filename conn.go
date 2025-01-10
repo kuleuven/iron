@@ -485,7 +485,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 
 	if m.Header.IntInfo < 0 {
 		err := &msg.IRODSError{
-			Code:    m.Header.IntInfo,
+			Code:    msg.ErrorCode(m.Header.IntInfo),
 			Message: string(m.Body.Error),
 		}
 
@@ -533,7 +533,7 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 
 	if m.Header.IntInfo < 0 {
 		err := &msg.IRODSError{
-			Code:    m.Header.IntInfo,
+			Code:    msg.ErrorCode(m.Header.IntInfo),
 			Message: string(m.Body.Error),
 		}
 
