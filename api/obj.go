@@ -201,7 +201,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 }
 
 // GetDataObject returns a data object for the path
-func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, error) {
+func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, error) { //nolint:funlen
 	d := DataObject{
 		Path: path,
 	}
