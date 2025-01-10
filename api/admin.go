@@ -235,7 +235,7 @@ func (api *API) SetGroupQuota(ctx context.Context, groupname, resource, value st
 // The optional instance parameter specifies the iRODS instance to run the
 // rule on.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) ExecuteExternalRule(context context.Context, rule string, params map[string]string, instance string) (map[string]string, error) {
+func (api *API) ExecuteExternalRule(ctx context.Context, rule string, params map[string]string, instance string) (map[string]string, error) {
 	if !api.Admin {
 		return nil, ErrRequiresAdmin
 	}
@@ -262,7 +262,7 @@ func (api *API) ExecuteExternalRule(context context.Context, rule string, params
 
 	var response msg.MsParamArray
 
-	if err := api.Request(context, msg.EXEC_MY_RULE_AN, request, &response); err != nil {
+	if err := api.Request(ctx, msg.EXEC_MY_RULE_AN, request, &response); err != nil {
 		return nil, err
 	}
 
