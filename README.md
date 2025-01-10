@@ -2,6 +2,8 @@
 
 Replacement for <https://github.com/cyverse/go-irodsclient> that provides a clean, simple and stable interface to iRODS.
 
+[![Quality Gate Status](https://sonarqube.icts.kuleuven.be/api/project_badges/measure?project=coz%3Airon%3Amain&metric=alert_status&token=sqb_f14f2e85edf4f52db70a1b133fb98a805ebe8372)](https://sonarqube.icts.kuleuven.be/dashboard?id=coz%3Airon%3Amain)
+
 ## Implementation choices
 
 * The client requires 4.3.2 or later.
@@ -61,6 +63,6 @@ func example() error {
 
         return nil
     }
-    
+
     return client.Walk(ctx, "/path/to/more/data", fn, api.FetchAccess, api.FetchMetadata)
 }

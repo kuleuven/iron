@@ -51,7 +51,7 @@ func (h *handle) Close() error {
 	if h.truncateSize >= 0 || !h.touchTime.IsZero() {
 		var err error
 
-		replicaInfo, err = h.GetReplicaAccessInfo()
+		replicaInfo, err = h.getReplicaAccessInfo()
 		if err != nil {
 			err = multierr.Append(err, h.closeOriginalHandle())
 			err = multierr.Append(err, h.conn.Close())
@@ -237,7 +237,7 @@ func (h *handle) truncatedSize() int64 {
 		h.origin.Lock()
 		defer h.origin.Unlock()
 
-		return h.origin.truncatedSize()
+		return h.origin.truncateSize
 	}
 
 	return h.truncateSize
@@ -291,12 +291,12 @@ func (h *handle) Touch(mtime time.Time) error {
 var ErrSameConnection = errors.New("same connection")
 
 func (h *handle) Reopen(conn Conn, mode int) (File, error) {
+	h.Lock()
+	defer h.Unlock()
+
 	if h.origin != nil {
 		return h.origin.Reopen(conn, mode)
 	}
-
-	h.Lock()
-	defer h.Unlock()
 
 	if conn == nil {
 		var err error
@@ -311,7 +311,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 		return nil, ErrSameConnection
 	}
 
-	replicaInfo, err := h.GetReplicaAccessInfo()
+	replicaInfo, err := h.getReplicaAccessInfo()
 	if err != nil {
 		err = multierr.Append(err, conn.Close())
 
@@ -361,7 +361,7 @@ type ReplicaAccessInfo struct {
 
 var ErrIncompleteReplicaAccessInfo = errors.New("incomplete replica access info")
 
-func (h *handle) GetReplicaAccessInfo() (*ReplicaAccessInfo, error) {
+func (h *handle) getReplicaAccessInfo() (*ReplicaAccessInfo, error) {
 	response := msg.GetDescriptorInfoResponse{}
 
 	if err := h.conn.Request(h.ctx, msg.GET_FILE_DESCRIPTOR_INFO_APN, msg.GetDescriptorInfoRequest{FileDescriptor: h.FileDescriptor}, &response); err != nil {
