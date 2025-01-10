@@ -261,6 +261,10 @@ func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, er
 		return nil, err
 	}
 
+	if len(d.Replicas) == 0 {
+		return nil, ErrNoRowFound
+	}
+
 	return &d, nil
 }
 
@@ -317,6 +321,7 @@ func (api *API) GetResource(ctx context.Context, name string) (*Resource, error)
 }
 
 // GetUser returns information about a user, identified by its name
+// If a zone needs to be specified, use the username#zone format.
 func (api *API) GetUser(ctx context.Context, name string) (*User, error) {
 	var u User
 
