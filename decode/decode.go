@@ -46,6 +46,8 @@ func DecodeRequest(m msg.Message, protocol msg.Protocol) (msg.APINumber, interfa
 		obj = &msg.FileStatRequest{}
 	case msg.MOD_DATA_OBJ_META_AN:
 		obj = &msg.ModDataObjMetaRequest{}
+	case msg.EXEC_MY_RULE_AN:
+		obj = &msg.ExecRuleRequest{}
 	default:
 		return 0, nil, fmt.Errorf("%w: %d", ErrUnknownAPINumber, m.Header.IntInfo)
 	}
@@ -81,6 +83,8 @@ func DecodeResponse(apiNumber msg.APINumber, m msg.Message, protocol msg.Protoco
 		obj = &msg.GetDescriptorInfoResponse{}
 	case msg.FILE_STAT_AN:
 		obj = &msg.FileStatResponse{}
+	case msg.EXEC_MY_RULE_AN:
+		obj = &msg.MsParamArray{}
 	default:
 		return nil, fmt.Errorf("%w: %d", ErrUnknownAPINumber, apiNumber)
 	}

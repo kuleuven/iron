@@ -385,3 +385,27 @@ type AdminRequest struct {
 	Arg8    string   `xml:"arg8"` // unused
 	Arg9    string   `xml:"arg9"` // unused
 }
+
+type ExecRuleRequest struct {
+	XMLName  xml.Name     `xml:"ExecMyRuleInp_PI"`
+	Rule     string       `xml:"myRule"`
+	Host     HostAddr     `xml:"RHostAddr_PI"`
+	KeyVals  SSKeyVal     `xml:"KeyValPair_PI"`
+	OutParam string       `xml:"outParamDesc"`
+	Params   MsParamArray `xml:"MsParamArray_PI"`
+}
+
+type MsParamArray struct {
+	XMLName       xml.Name      `xml:"MsParamArray_PI"`
+	Length        int           `xml:"paramLen"`
+	OperationType OperationType `xml:"oprType"`
+	Values        []MsParam     `xml:"MsParam_PI,omitempty"`
+}
+
+type MsParam struct {
+	XMLName     xml.Name    `xml:"MsParam_PI"`
+	Label       string      `xml:"label"`
+	Type        string      `xml:"piStr"` // Must be STR_PI
+	InOut       string      `xml:"inOutStruct"`
+	BinBytesBuf BinBytesBuf `xml:"BinBytesBuf_PI"`
+}

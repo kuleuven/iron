@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"gitea.icts.kuleuven.be/coz/iron/scramble"
@@ -225,4 +226,55 @@ func (api *API) SetGroupQuota(ctx context.Context, groupname, resource, value st
 	}
 
 	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// ExecuteExternalRule executes an irods external rule.
+// The rule should be the string representation of the rule, without the
+// "@external rule {" and "}" wrappers. The parameters should be a map of
+// parameter names to values.
+// The optional instance parameter specifies the iRODS instance to run the
+// rule on.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) ExecuteExternalRule(context context.Context, rule string, params map[string]string, instance string) (map[string]string, error) {
+	if !api.Admin {
+		return nil, ErrRequiresAdmin
+	}
+
+	request := msg.ExecRuleRequest{
+		Rule:     fmt.Sprintf("@external rule { %s }", rule),
+		OutParam: "ruleExecOut",
+		Params: msg.MsParamArray{
+			Length: len(params),
+		},
+	}
+
+	for label, value := range params {
+		request.Params.Values = append(request.Params.Values, msg.MsParam{
+			Label: label,
+			Type:  "STR_PI",
+			InOut: value,
+		})
+	}
+
+	if instance != "" {
+		request.KeyVals.Add("instance_name", instance)
+	}
+
+	var response msg.MsParamArray
+
+	if err := api.Request(context, msg.EXEC_MY_RULE_AN, request, &response); err != nil {
+		return nil, err
+	}
+
+	result := map[string]string{}
+
+	for _, param := range response.Values {
+		if param.Type != "STR_PI" {
+			continue
+		}
+
+		result[param.Label] = param.InOut
+	}
+
+	return result, nil
 }

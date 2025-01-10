@@ -61,3 +61,15 @@ func TestAdminCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestExecuteRule(t *testing.T) {
+	testConn.NextResponse = msg.MsParamArray{}
+
+	if _, err := testAPI.ExecuteExternalRule(context.Background(), "test", nil, ""); err != ErrRequiresAdmin {
+		t.Error(err)
+	}
+
+	if _, err := testAPI.AsAdmin().ExecuteExternalRule(context.Background(), "test", nil, ""); err != nil {
+		t.Error(err)
+	}
+}
