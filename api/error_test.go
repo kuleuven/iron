@@ -12,7 +12,7 @@ import (
 
 func TestError(t *testing.T) {
 	testErr := &msg.IRODSError{
-		Code: -1,
+		Code: -2001,
 	}
 
 	assert := func(err error) {
@@ -29,7 +29,15 @@ func TestError(t *testing.T) {
 	assert(multierr.Append(fmt.Errorf("%w: wrap", testErr), os.ErrInvalid))
 	assert(multierr.Append(os.ErrInvalid, fmt.Errorf("%w: reverse wrap", testErr)))
 
-	if !Is(testErr, -1) {
-		t.Error("Is(err, -1) is false")
+	if !Is(testErr, -2001) {
+		t.Error("Is(err, -2001) is false")
+	}
+
+	if !Is(testErr, -2000) {
+		t.Error("Is(err, -2000) is false")
+	}
+
+	if Is(testErr, -3000) {
+		t.Error("Is(err, -3000) is true")
 	}
 }

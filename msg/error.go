@@ -11,6 +11,10 @@ type IRODSError struct {
 }
 
 func (e *IRODSError) Error() string {
+	if e.Message == "" {
+		return fmt.Sprintf("IRODS error %s", e.Name())
+	}
+
 	return fmt.Sprintf("IRODS error %s: %s", e.Name(), e.Message)
 }
 

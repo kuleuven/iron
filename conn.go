@@ -486,16 +486,10 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 	}
 
 	if m.Header.IntInfo < 0 {
-		err := &msg.IRODSError{
+		return &msg.IRODSError{
 			Code:    msg.ErrorCode(m.Header.IntInfo),
-			Message: string(m.Body.Error),
+			Message: c.buildError(m),
 		}
-
-		if m.Header.ErrorLen == 0 {
-			err.Message = string(m.Body.Message)
-		}
-
-		return err
 	}
 
 	return msg.Unmarshal(m, c.protocol, response)
