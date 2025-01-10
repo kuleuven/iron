@@ -25,6 +25,10 @@ func (c *mockConn) Close() error {
 	return nil
 }
 
+func (c *mockConn) ServerVersion() string {
+	return "4.3.2"
+}
+
 func (c *mockConn) LocalAddr() net.Addr {
 	return nil
 }
@@ -87,6 +91,10 @@ func TestConnNative(t *testing.T) {
 	conn, err := NewConn(ctx, transport, env, "test")
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if conn.ServerVersion() != "4.3.2" {
+		t.Errorf("bad server version: %s", conn.ServerVersion())
 	}
 
 	err = conn.Close()

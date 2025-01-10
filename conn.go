@@ -31,6 +31,10 @@ type Conn interface {
 	// Conn returns the underlying net.Conn
 	Conn() net.Conn
 
+	// ServerVersion returns the version that the iRODS server reports
+	// e.g. "4.3.2"
+	ServerVersion() string
+
 	// Request sends an API request for the given API number and expects a response.
 	// Both request and response should represent a type such as in `msg/types.go`.
 	// The request and response will be marshaled and unmarshaled automatically.
@@ -130,6 +134,11 @@ func (c *conn) Conn() net.Conn {
 	return c.transport
 }
 
+// ServerVersion returns the version that the iRODS server reports
+func (c *conn) ServerVersion() string {
+	return c.Version.ReleaseVersion[4:]
+}
+
 // Handshake performs a handshake with the IRODS server.
 func (c *conn) Handshake(ctx context.Context) error {
 	if err := c.startup(ctx); err != nil {
@@ -188,6 +197,10 @@ func (c *conn) startup(ctx context.Context) error {
 
 // checkVersion returns true if the server version is greater than or equal to 4.3.2
 func checkVersion(version msg.Version) bool {
+	if !strings.HasPrefix(version.ReleaseVersion, "rods") {
+		return false
+	}
+
 	parts := strings.Split(version.ReleaseVersion[4:], ".")
 
 	if len(parts) != 3 {
