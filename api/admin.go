@@ -1,0 +1,228 @@
+package api
+
+import (
+	"context"
+	"errors"
+
+	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"gitea.icts.kuleuven.be/coz/iron/scramble"
+)
+
+var ErrRequiresAdmin = errors.New("this API call requires api.Admin = true")
+
+// StatPhysicalReplica executes a system stat on the physical replica file.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) StatPhysicalReplica(ctx context.Context, path string, replica Replica) (*msg.FileStatResponse, error) {
+	if !api.Admin {
+		return nil, ErrRequiresAdmin
+	}
+
+	request := msg.FileStatRequest{
+		Path:              replica.PhysicalPath,
+		ResourceHierarchy: replica.ResourceHierarchy,
+		ObjectPath:        path,
+	}
+
+	var response msg.FileStatResponse
+
+	if err := api.Request(ctx, msg.FILE_STAT_AN, request, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+// ModifyReplicaAttribute repairs an attribute of a data object.
+// It is equivalent to iadmin modrepl. The keyword can be e.g. dataComments, replStatus, dataSize.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) ModifyReplicaAttribute(ctx context.Context, path string, replica Replica, key msg.KeyWord, value string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.ModDataObjMetaRequest{
+		DataObj: msg.DataObjectInfo{
+			ObjPath: path,
+			ReplNum: replica.Number,
+		},
+	}
+
+	request.KeyVals.Add(key, value)
+	request.KeyVals.Add(msg.ADMIN_KW, "")
+
+	return api.Request(ctx, msg.MOD_DATA_OBJ_META_AN, request, &msg.EmptyResponse{})
+}
+
+// CreateUser creates a user with the given type
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) CreateUser(ctx context.Context, username string, userType string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "add",
+		Arg1: "user",
+		Arg2: username,
+		Arg3: userType,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+const groupType = "rodsgroup"
+
+// CreateGroup creates a group.
+// If a zone needs to be specified, use the groupname#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) CreateGroup(ctx context.Context, groupname string) error {
+	return api.CreateUser(ctx, groupname, groupType)
+}
+
+// ChangeUserPassword changes the password of a user object
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) ChangeUserPassword(ctx context.Context, username string, password string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	scrambledPassword := scramble.ObfuscateNewPassword(password, conn.NativePassword(), conn.ClientSignature())
+
+	request := &msg.AdminRequest{
+		Arg0: "modify",
+		Arg1: "user",
+		Arg2: username,
+		Arg3: "password",
+		Arg4: scrambledPassword,
+	}
+
+	return conn.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// ChangeUserType changes the type of a user
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) ChangeUserType(ctx context.Context, username string, userType string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "modify",
+		Arg1: "user",
+		Arg2: username,
+		Arg3: "type",
+		Arg4: userType,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// RemoveUser removes a user or a group.
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) RemoveUser(ctx context.Context, username string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "rm",
+		Arg1: "user",
+		Arg2: username,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// RemoveGroup removes a group.
+// If a zone needs to be specified, use the groupname#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) RemoveGroup(ctx context.Context, groupname string) error {
+	return api.RemoveUser(ctx, groupname)
+}
+
+// AddGroupMember adds a user to a group.
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) AddGroupMember(ctx context.Context, groupname string, username string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "modify",
+		Arg1: "group",
+		Arg2: groupname,
+		Arg3: "add",
+		Arg4: username,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// RemoveGroupMember removes a user from a group.
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) RemoveGroupMember(ctx context.Context, groupname string, username string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "modify",
+		Arg1: "group",
+		Arg2: groupname,
+		Arg3: "remove",
+		Arg4: username,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// SetUserQuota sets quota for a given user and resource ('total' for global)
+// If a zone needs to be specified, use the username#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) SetUserQuota(ctx context.Context, username, resource, value string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "set-quota",
+		Arg1: "user",
+		Arg2: username,
+		Arg3: resource,
+		Arg4: value,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}
+
+// SetGroupQuota sets quota for a given group and resource ('total' for global)
+// If a zone needs to be specified, use the groupname#zone format.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) SetGroupQuota(ctx context.Context, groupname, resource, value string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "set-quota",
+		Arg1: "group",
+		Arg2: groupname,
+		Arg3: resource,
+		Arg4: value,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
+}

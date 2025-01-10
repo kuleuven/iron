@@ -2,7 +2,6 @@ package iron
 
 import (
 	"context"
-	"crypto/md5" //nolint:gosec
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -18,6 +17,7 @@ import (
 
 	"gitea.icts.kuleuven.be/coz/iron/api"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"gitea.icts.kuleuven.be/coz/iron/scramble"
 	"github.com/hashicorp/go-rootcerts"
 	"go.uber.org/multierr"
 
@@ -34,6 +34,13 @@ type Conn interface {
 	// ServerVersion returns the version that the iRODS server reports
 	// e.g. "4.3.2"
 	ServerVersion() string
+
+	// ClientSignature returns the client signature
+	ClientSignature() string
+
+	// NativePassword returns the native password
+	// In case of PAM authentication, this is the generated password
+	NativePassword() string
 
 	// Request sends an API request for the given API number and expects a response.
 	// Both request and response should represent a type such as in `msg/types.go`.
@@ -53,16 +60,20 @@ type Conn interface {
 }
 
 type conn struct {
-	transport       net.Conn
-	env             *Env
-	option          string
-	protocol        msg.Protocol
-	UseTLS          bool
-	Version         *msg.Version
-	ClientSignature string
-	NativePassword  string // Only used for non-native authentication
-	closeOnce       sync.Once
-	doRequest       sync.Mutex
+	transport net.Conn
+	env       *Env
+	option    string
+	protocol  msg.Protocol
+
+	// Set during handshake
+	useTLS          bool
+	version         *msg.Version
+	clientSignature string
+	nativePassword  string
+
+	// housekeeping
+	closeOnce sync.Once
+	doRequest sync.Mutex
 }
 
 // Dialer is used to connect to an IRODS server.
@@ -136,7 +147,17 @@ func (c *conn) Conn() net.Conn {
 
 // ServerVersion returns the version that the iRODS server reports
 func (c *conn) ServerVersion() string {
-	return c.Version.ReleaseVersion[4:]
+	return c.version.ReleaseVersion[4:]
+}
+
+// ClientSignature returns the client signature
+func (c *conn) ClientSignature() string {
+	return c.clientSignature
+}
+
+// NativePassword returns the native password
+func (c *conn) NativePassword() string {
+	return c.nativePassword
 }
 
 // Handshake performs a handshake with the IRODS server.
@@ -186,9 +207,9 @@ func (c *conn) startup(ctx context.Context) error {
 		return fmt.Errorf("%w: server version %v", ErrUnsupportedVersion, version.ReleaseVersion)
 	}
 
-	c.Version = &version
+	c.version = &version
 
-	if !c.UseTLS {
+	if !c.useTLS {
 		return nil
 	}
 
@@ -258,7 +279,7 @@ func (c *conn) handshakeNegotiation() error {
 		neg.Result = "cs_neg_result_kw=CS_NEG_USE_TCP;"
 	} else {
 		neg.Result = "cs_neg_result_kw=CS_NEG_USE_SSL;"
-		c.UseTLS = true
+		c.useTLS = true
 	}
 
 	neg.Status = 1
@@ -366,11 +387,14 @@ func (c *conn) handshakeTLS() error {
 var ErrNotImplemented = fmt.Errorf("not implemented")
 
 func (c *conn) authenticate(ctx context.Context) error {
-	if c.env.AuthScheme == pam {
+	switch c.env.AuthScheme {
+	case pam:
 		if err := c.authenticatePAM(ctx); err != nil {
 			return err
 		}
-	} else if c.env.AuthScheme != native {
+	case native:
+		c.nativePassword = c.env.Password
+	default:
 		return fmt.Errorf("%w: authentication scheme %s", ErrNotImplemented, c.env.AuthScheme)
 	}
 
@@ -387,17 +411,11 @@ func (c *conn) authenticate(ctx context.Context) error {
 	}
 
 	// Save client signature
-	c.ClientSignature = hex.EncodeToString(challengeBytes[:min(16, len(challengeBytes))])
+	c.clientSignature = hex.EncodeToString(challengeBytes[:min(16, len(challengeBytes))])
 
 	// Create challenge response
-	myPassword := c.env.Password
-
-	if c.env.AuthScheme != native {
-		myPassword = c.NativePassword
-	}
-
 	response := msg.AuthChallengeResponse{
-		Response: GenerateAuthResponse(challengeBytes, myPassword),
+		Response: scramble.GenerateAuthResponse(challengeBytes, c.nativePassword),
 		Username: c.env.ProxyUsername,
 	}
 
@@ -419,39 +437,9 @@ func (c *conn) authenticatePAM(ctx context.Context) error {
 		return err
 	}
 
-	c.NativePassword = response.GeneratedPassword
+	c.nativePassword = response.GeneratedPassword
 
 	return nil
-}
-
-const (
-	maxPasswordLength int = 50
-	challengeLen      int = 64
-	authResponseLen   int = 16
-)
-
-// GenerateAuthResponse generates an authentication response using the given
-// challenge and password. The response is the MD5 hash of the first 64 bytes
-// of the challenge and the padded password (padded to maxPasswordLength).
-// The first 16 bytes of the hash are then base64 encoded to produce the
-// final response string.
-func GenerateAuthResponse(challenge []byte, password string) string {
-	paddedPassword := make([]byte, maxPasswordLength)
-	copy(paddedPassword, password)
-
-	m := md5.New() //nolint:gosec
-	m.Write(challenge[:64])
-	m.Write(paddedPassword)
-	encodedPassword := m.Sum(nil)
-
-	// replace 0x00 to 0x01
-	for idx := 0; idx < len(encodedPassword); idx++ {
-		if encodedPassword[idx] == 0 {
-			encodedPassword[idx] = 1
-		}
-	}
-
-	return base64.StdEncoding.EncodeToString(encodedPassword[:authResponseLen])
 }
 
 // Request sends an API request to the server and expects a API reply.

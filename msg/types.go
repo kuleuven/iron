@@ -73,13 +73,13 @@ type QueryRequest struct {
 }
 
 type SSKeyVal struct {
-	XMLName xml.Name `xml:"KeyValPair_PI"`
-	Length  int      `xml:"ssLen"`
-	Keys    []string `xml:"keyWord" sizeField:"ssLen"`
-	Values  []string `xml:"svalue" sizeField:"ssLen"`
+	XMLName xml.Name  `xml:"KeyValPair_PI"`
+	Length  int       `xml:"ssLen"`
+	Keys    []KeyWord `xml:"keyWord" sizeField:"ssLen"`
+	Values  []string  `xml:"svalue" sizeField:"ssLen"`
 }
 
-func (kv *SSKeyVal) Add(key string, val string) {
+func (kv *SSKeyVal) Add(key KeyWord, val string) {
 	kv.Keys = append(kv.Keys, key)
 	kv.Values = append(kv.Values, val)
 	kv.Length++
@@ -291,4 +291,97 @@ type MetadataOperation struct {
 	Name      string `json:"attribute"`
 	Value     string `json:"value"`
 	Units     string `json:"units,omitempty"`
+}
+
+type FileStatRequest struct {
+	XMLName           xml.Name `xml:"fileStatInp_PI"`
+	Host              HostAddr `xml:"RHostAddr_PI"`
+	Path              string   `xml:"fileName"`
+	ResourceHierarchy string   `xml:"rescHier"`
+	ObjectPath        string   `xml:"objPath"`
+	ResourceID        int64    `xml:"rescId"`
+}
+
+type HostAddr struct {
+	XMLName  xml.Name `xml:"RHostAddr_PI"`
+	Addr     string   `xml:"hostAddr"`
+	Zone     string   `xml:"rodsZone"`
+	Port     int      `xml:"port"`
+	DummyInt int      `xml:"dummyInt"`
+}
+
+type FileStatResponse struct {
+	XMLName    xml.Name `xml:"RODS_STAT_T_PI"`
+	Size       int64    `xml:"st_size"`
+	Dev        int      `xml:"st_dev"`
+	Ino        int      `xml:"st_ino"`
+	Mode       int      `xml:"st_mode"`
+	Links      int      `xml:"st_nlink"`
+	UID        int      `xml:"st_uid"`
+	GID        int      `xml:"st_gid"`
+	Rdev       int      `xml:"st_rdev"`
+	AccessTime int      `xml:"st_atim"`
+	ModifyTime int      `xml:"st_mtim"`
+	ChangeTime int      `xml:"st_ctim"`
+	BlkSize    int      `xml:"st_blksize"`
+	Blocks     int      `xml:"st_blocks"`
+}
+
+type ModDataObjMetaRequest struct {
+	XMLName xml.Name       `xml:"ModDataObjMeta_PI"`
+	DataObj DataObjectInfo `xml:"DataObjInfo_PI"`
+	KeyVals SSKeyVal       `xml:"KeyValPair_PI"`
+}
+
+type DataObjectInfo struct {
+	XMLName                  xml.Name           `xml:"DataObjInfo_PI"`
+	ObjPath                  string             `xml:"objPath"`
+	RescName                 string             `xml:"rescName"`
+	RescHier                 string             `xml:"rescHier"`
+	DataType                 string             `xml:"dataType"`
+	DataSize                 int64              `xml:"dataSize"`
+	Chksum                   string             `xml:"chksum"`
+	Version                  string             `xml:"version"`
+	FilePath                 string             `xml:"filePath"`
+	DataOwnerName            string             `xml:"dataOwnerName"`
+	DataOwnerZone            string             `xml:"dataOwnerZone"`
+	ReplNum                  int                `xml:"replNum"`
+	ReplStatus               int                `xml:"replStatus"`
+	StatusString             string             `xml:"statusString"`
+	DataID                   int64              `xml:"dataId"`
+	CollID                   int64              `xml:"collId"`
+	DataMapID                int                `xml:"dataMapId"`
+	Flags                    int                `xml:"flags"`
+	DataComments             string             `xml:"dataComments"`
+	DataMode                 string             `xml:"dataMode"`
+	DataExpiry               string             `xml:"dataExpiry"`
+	DataCreate               string             `xml:"dataCreate"`
+	DataModify               string             `xml:"dataModify"`
+	DataAccess               string             `xml:"dataAccess"`
+	DataAccessInx            int                `xml:"dataAccessInx"`
+	WriteFlag                int                `xml:"writeFlag"`
+	DestRescName             string             `xml:"destRescName"`
+	BackupRescName           string             `xml:"backupRescName"`
+	SubPath                  string             `xml:"subPath"`
+	SpecialCollectionPointer *SpecialCollection `xml:"SpecColl_PI"`
+	RegUID                   int                `xml:"regUid"`
+	OtherFlags               int                `xml:"otherFlags"`
+	KeyVals                  SSKeyVal           `xml:"KeyValPair_PI"`
+	InPdmo                   string             `xml:"in_pdmo"`
+	Next                     *DataObjectInfo    `xml:"DataObjInfo_PI"`
+	RescID                   int64              `xml:"rescId"`
+}
+
+type AdminRequest struct {
+	XMLName xml.Name `xml:"generalAdminInp_PI"`
+	Arg0    string   `xml:"arg0"` // add, modify, rm, ...
+	Arg1    string   `xml:"arg1"` // user, group, zone, resource, ...
+	Arg2    string   `xml:"arg2"`
+	Arg3    string   `xml:"arg3"`
+	Arg4    string   `xml:"arg4"`
+	Arg5    string   `xml:"arg5"`
+	Arg6    string   `xml:"arg6"`
+	Arg7    string   `xml:"arg7"`
+	Arg8    string   `xml:"arg8"` // unused
+	Arg9    string   `xml:"arg9"` // unused
 }

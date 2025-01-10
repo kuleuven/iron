@@ -40,6 +40,12 @@ func DecodeRequest(m msg.Message, protocol msg.Protocol) (msg.APINumber, interfa
 		obj = &msg.OpenedDataObjectRequest{}
 	case msg.TOUCH_APN:
 		obj = &msg.TouchDataObjectReplicaRequest{}
+	case msg.GENERAL_ADMIN_AN:
+		obj = &msg.AdminRequest{}
+	case msg.FILE_STAT_AN:
+		obj = &msg.FileStatRequest{}
+	case msg.MOD_DATA_OBJ_META_AN:
+		obj = &msg.ModDataObjMetaRequest{}
 	default:
 		return 0, nil, fmt.Errorf("%w: %d", ErrUnknownAPINumber, m.Header.IntInfo)
 	}
@@ -61,7 +67,7 @@ func DecodeResponse(apiNumber msg.APINumber, m msg.Message, protocol msg.Protoco
 	switch apiNumber { //nolint:exhaustive
 	case msg.COLL_CREATE_AN, msg.RM_COLL_AN, msg.DATA_OBJ_RENAME_AN, msg.DATA_OBJ_COPY_AN, msg.DATA_OBJ_UNLINK_AN,
 		msg.REPLICA_TRUNCATE_AN, msg.MOD_ACCESS_CONTROL_AN, msg.MOD_AVU_METADATA_AN, msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN,
-		msg.REPLICA_CLOSE_APN, msg.DATA_OBJ_CLOSE_AN, msg.DATA_OBJ_READ_AN, msg.DATA_OBJ_WRITE_AN, msg.TOUCH_APN:
+		msg.REPLICA_CLOSE_APN, msg.DATA_OBJ_CLOSE_AN, msg.DATA_OBJ_READ_AN, msg.DATA_OBJ_WRITE_AN, msg.TOUCH_APN, msg.GENERAL_ADMIN_AN, msg.MOD_DATA_OBJ_META_AN:
 		obj = &msg.EmptyResponse{}
 	case msg.GEN_QUERY_AN:
 		obj = &msg.QueryResponse{}
@@ -73,6 +79,8 @@ func DecodeResponse(apiNumber msg.APINumber, m msg.Message, protocol msg.Protoco
 		obj = &msg.SeekResponse{}
 	case msg.GET_FILE_DESCRIPTOR_INFO_APN:
 		obj = &msg.GetDescriptorInfoResponse{}
+	case msg.FILE_STAT_AN:
+		obj = &msg.FileStatResponse{}
 	default:
 		return nil, fmt.Errorf("%w: %d", ErrUnknownAPINumber, apiNumber)
 	}

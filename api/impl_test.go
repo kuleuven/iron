@@ -38,7 +38,7 @@ func TestCreateCollectionAllAdmin(t *testing.T) {
 		msg.EmptyResponse{},
 	}
 
-	if err := testAPI.WithAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder"); err != nil {
+	if err := testAPI.AsAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -53,7 +53,7 @@ func TestCreateCollectionAllAdminFailure(t *testing.T) {
 		},
 	}
 
-	if err, ok := testAPI.WithAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder").(*msg.IRODSError); !ok || err.Code != -818000 {
+	if err, ok := testAPI.AsAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder").(*msg.IRODSError); !ok || err.Code != -818000 {
 		t.Fatal(err)
 	}
 }

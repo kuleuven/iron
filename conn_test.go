@@ -29,6 +29,14 @@ func (c *mockConn) ServerVersion() string {
 	return "4.3.2"
 }
 
+func (c *mockConn) ClientSignature() string {
+	return "signature"
+}
+
+func (c *mockConn) NativePassword() string {
+	return "password"
+}
+
 func (c *mockConn) LocalAddr() net.Addr {
 	return nil
 }

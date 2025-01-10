@@ -28,6 +28,13 @@ type API struct {
 // Conn is a limited interface to an iRODS connection to avoid dependency cycles.
 // Use iron.Conn instead.
 type Conn interface {
+	// ClientSignature returns the client signature
+	ClientSignature() string
+
+	// NativePassword returns the native password
+	// In case of PAM authentication, this is the generated password
+	NativePassword() string
+
 	// Request sends an API request for the given API number and expects a response.
 	// Both request and response should represent a type such as in `msg/types.go`.
 	// The request and response will be marshaled and unmarshaled automatically.
@@ -113,8 +120,8 @@ type File interface {
 	Reopen(conn Conn, mode int) (File, error)
 }
 
-// WithAdmin returns a new API with the admin keyword set
-func (api API) WithAdmin() *API {
+// AsAdmin returns a new API with the admin keyword set
+func (api API) AsAdmin() *API {
 	api.Admin = true
 
 	return &api

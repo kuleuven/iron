@@ -11,8 +11,8 @@ import (
 
 // mock an API for testing purposes
 var testAPI = &API{
-	Username: "test",
-	Zone:     "test",
+	Username: "testuser",
+	Zone:     "testzone",
 	Connect: func(context.Context) (Conn, error) {
 		return testConn, nil
 	},
@@ -26,6 +26,14 @@ type mockConn struct {
 	NextResponses []any
 	NextBin       []byte
 	LastRequest   any
+}
+
+func (c *mockConn) ClientSignature() string {
+	return "testsignature"
+}
+
+func (c *mockConn) NativePassword() string {
+	return "testpassword"
 }
 
 func (c *mockConn) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {

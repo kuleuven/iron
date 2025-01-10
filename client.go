@@ -195,7 +195,7 @@ func (c *Client) newConn() (*conn, error) {
 	// Only use pam_password for first connection
 	if len(c.all) > 0 && env.AuthScheme != native {
 		env.AuthScheme = native
-		env.Password = c.all[0].NativePassword
+		env.Password = c.all[0].NativePassword()
 	}
 
 	conn, err := dial(c.ctx, env, c.option.ClientName, c.protocol)

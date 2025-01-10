@@ -27,7 +27,7 @@ func TestAdd(t *testing.T) {
 		t.Errorf(msg, expected2, query.Selects)
 	}
 
-	expected3 := SSKeyVal{Length: 1, Keys: []string{"a"}, Values: []string{"value"}}
+	expected3 := SSKeyVal{Length: 1, Keys: []KeyWord{"a"}, Values: []string{"value"}}
 
 	if !reflect.DeepEqual(query.KeyVals, expected3) {
 		t.Errorf(msg, expected3, query.KeyVals)
