@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"net"
 	"strconv"
@@ -533,19 +534,33 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 	}
 
 	if m.Header.IntInfo < 0 {
-		err := &msg.IRODSError{
+		return &msg.IRODSError{
 			Code:    msg.ErrorCode(m.Header.IntInfo),
-			Message: string(m.Body.Error),
+			Message: c.buildError(m),
 		}
-
-		if m.Header.ErrorLen == 0 {
-			err.Message = string(m.Body.Message)
-		}
-
-		return err
 	}
 
 	return msg.Unmarshal(m, c.protocol, response)
+}
+
+func (c *conn) buildError(m msg.Message) string {
+	if m.Header.ErrorLen == 0 {
+		return string(m.Body.Message)
+	}
+
+	var rodsErr msg.ErrorResponse
+
+	if xml.Unmarshal(m.Body.Error, &rodsErr) != nil {
+		return string(m.Body.Error)
+	}
+
+	var msgs []string
+
+	for _, msg := range rodsErr.Errors {
+		msgs = append(msgs, msg.Message)
+	}
+
+	return strings.Join(msgs, "; ")
 }
 
 func (c *conn) Close() error {

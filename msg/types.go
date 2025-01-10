@@ -409,3 +409,15 @@ type MsParam struct {
 	InOut       string      `xml:"inOutStruct"`
 	BinBytesBuf BinBytesBuf `xml:"BinBytesBuf_PI"`
 }
+
+type ErrorResponse struct {
+	XMLName xml.Name `xml:"RError_PI"`
+	Count   int      `xml:"count"`
+	Errors  []RError `xml:"RErrMsg_PI"`
+}
+
+type RError struct {
+	XMLName xml.Name `xml:"RErrMsg_PI"`
+	Status  int      `xml:"status"`
+	Message string   `xml:"msg"`
+}

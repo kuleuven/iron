@@ -19,6 +19,13 @@ func (e *IRODSError) Name() string {
 		return name
 	}
 
+	// Try to round code up to a multiple of 1000
+	code := (e.Code / 1000) * 1000
+
+	if name, ok := ErrorCodes[code]; ok {
+		return name
+	}
+
 	return fmt.Sprintf("%d", e.Code)
 }
 
