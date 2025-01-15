@@ -405,7 +405,7 @@ type MsParamArray struct {
 type MsParam struct {
 	XMLName     xml.Name    `xml:"MsParam_PI"`
 	Label       string      `xml:"label"`
-	Type        string      `xml:"piStr"` // Must be STR_PI
+	Type        string      `xml:"piStr"` // Must be STR_PI, we don't support other types (and irods doesn't either)
 	InOut       string      `xml:"inOutStruct"`
 	BinBytesBuf BinBytesBuf `xml:"BinBytesBuf_PI"`
 }
