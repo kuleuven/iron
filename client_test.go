@@ -7,6 +7,7 @@ import (
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 )
@@ -42,6 +43,7 @@ func TestClient(t *testing.T) {
 		ClientName:                "test",
 		DeferConnectionToFirstUse: true,
 		EnvCallback:               func() (Env, error) { return env, nil },
+		DiscardConnectionAge:      time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)

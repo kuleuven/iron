@@ -71,10 +71,12 @@ type conn struct {
 	protocol  msg.Protocol
 
 	// Set during handshake
+	connectedAt     time.Time
 	useTLS          bool
 	version         *msg.Version
 	clientSignature string
 	nativePassword  string
+	transportErrors int
 
 	// housekeeping
 	closeOnce sync.Once
@@ -112,10 +114,11 @@ func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string
 
 func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, protocol msg.Protocol) (*conn, error) {
 	c := &conn{
-		transport: transport,
-		env:       &env,
-		option:    clientName,
-		protocol:  protocol,
+		transport:   transport,
+		env:         &env,
+		option:      clientName,
+		protocol:    protocol,
+		connectedAt: time.Now(),
 	}
 
 	// Make sure TLS is required when not using native authentication
@@ -466,6 +469,8 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 	}
 
 	if err := msg.Write(c.transport, request, requestBuf, c.protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
+		c.transportErrors++
+
 		return err
 	}
 
@@ -474,6 +479,8 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 	}
 
 	if err := m.Read(c.transport); err != nil {
+		c.transportErrors++
+
 		return err
 	}
 
@@ -516,6 +523,8 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 	binary.BigEndian.PutUint32(replyBuffer, uint32(msg.SYS_CLI_TO_SVR_COLL_STAT_REPLY))
 
 	if _, err := c.transport.Write(replyBuffer); err != nil {
+		c.transportErrors++
+
 		return err
 	}
 
@@ -524,6 +533,8 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 	}
 
 	if err := m.Read(c.transport); err != nil {
+		c.transportErrors++
+
 		return err
 	}
 

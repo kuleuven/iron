@@ -3,7 +3,9 @@ package iron
 
 import (
 	"context"
+	"slices"
 	"sync"
+	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/api"
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -38,17 +40,22 @@ type Option struct {
 	// Experimental: UseNativeProtocol will force the use of the native protocol.
 	// This is an experimental feature and may be removed in a future version.
 	UseNativeProtocol bool
+
+	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
+	// In case pam authentication is used, this should be put to a value lower than the PAM timeout.
+	DiscardConnectionAge time.Duration
 }
 
 type Client struct {
-	ctx       context.Context //nolint:containedctx
-	env       *Env
-	option    Option
-	protocol  msg.Protocol
-	available chan *conn
-	all       []*conn
-	dialErr   error
-	lock      sync.Mutex
+	ctx            context.Context //nolint:containedctx
+	env            *Env
+	option         Option
+	protocol       msg.Protocol
+	available, all []*conn
+	waiting        int
+	ready          chan *conn
+	dialErr        error
+	lock           sync.Mutex
 	*api.API
 }
 
@@ -64,11 +71,11 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	}
 
 	c := &Client{
-		ctx:       ctx,
-		env:       &env,
-		option:    option,
-		protocol:  msg.XML,
-		available: make(chan *conn, option.MaxConns),
+		ctx:      ctx,
+		env:      &env,
+		option:   option,
+		protocol: msg.XML,
+		ready:    make(chan *conn),
 	}
 
 	if option.UseNativeProtocol {
@@ -96,7 +103,11 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 			return nil, err
 		}
 
-		c.available <- conn
+		c.available = append(c.available, conn)
+	}
+
+	if option.DiscardConnectionAge > 0 {
+		go c.discardOldConnectionsLoop()
 	}
 
 	return c, nil
@@ -135,11 +146,18 @@ func (c *Client) Env() Env {
 // If all connections are busy, it will create a new one up to the maximum number of connections.
 // If the maximum number of connections has been reached, it will block until a connection becomes available.
 func (c *Client) Connect() (Conn, error) {
-	if len(c.available) > 0 {
-		return &returnOnClose{<-c.available, c}, nil
-	}
-
 	c.lock.Lock()
+
+	c.discardOldConnections()
+
+	if len(c.available) > 0 {
+		defer c.lock.Unlock()
+
+		conn := c.available[0]
+		c.available = c.available[1:]
+
+		return &returnOnClose{conn, c}, nil
+	}
 
 	if len(c.all) < c.option.MaxConns {
 		defer c.lock.Unlock()
@@ -163,9 +181,11 @@ func (c *Client) Connect() (Conn, error) {
 		return &dummyCloser{first}, nil
 	}
 
+	// None available, block until one becomes available
+	c.waiting++
 	c.lock.Unlock()
 
-	return &returnOnClose{<-c.available, c}, nil
+	return &returnOnClose{<-c.ready, c}, nil
 }
 
 func (c *Client) newConn() (*conn, error) {
@@ -210,6 +230,67 @@ func (c *Client) newConn() (*conn, error) {
 	return conn, nil
 }
 
+func (c *Client) returnConn(conn *conn) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if conn.transportErrors > 0 || c.option.DiscardConnectionAge > 0 && time.Since(conn.connectedAt) > c.option.DiscardConnectionAge {
+		for i := range c.all {
+			if c.all[i] == conn {
+				c.all = append(c.all[:i], c.all[i+1:]...)
+
+				return conn.Close()
+			}
+		}
+	}
+
+	if c.waiting > 0 {
+		c.waiting--
+		c.ready <- conn
+
+		return nil
+	}
+
+	c.available = append(c.available, conn)
+
+	return nil
+}
+
+func (c *Client) discardOldConnectionsLoop() {
+	ticker := time.NewTicker(c.option.DiscardConnectionAge / 2)
+
+	for range ticker.C {
+		c.lock.Lock()
+		c.discardOldConnections()
+		c.lock.Unlock()
+	}
+}
+
+func (c *Client) discardOldConnections() {
+	if c.option.DiscardConnectionAge <= 0 {
+		return
+	}
+
+	now := time.Now()
+
+	for i, conn := range c.available {
+		if now.Sub(conn.connectedAt) <= c.option.DiscardConnectionAge {
+			continue
+		}
+
+		j := slices.Index(c.all, conn)
+
+		if j == -1 {
+			continue
+		}
+
+		c.available = append(c.available[:i], c.available[i+1:]...)
+		c.all = append(c.all[:j], c.all[j+1:]...)
+
+		conn.Close()
+	}
+}
+
 type dummyCloser struct {
 	*conn
 }
@@ -224,9 +305,7 @@ type returnOnClose struct {
 }
 
 func (r *returnOnClose) Close() error {
-	r.client.available <- r.conn
-
-	return nil
+	return r.client.returnConn(r.conn)
 }
 
 // Close closes all connections managed by the client, ensuring that any errors
