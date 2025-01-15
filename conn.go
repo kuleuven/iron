@@ -562,10 +562,6 @@ func (c *conn) buildError(m msg.Message) string {
 }
 
 func (c *conn) Close() error {
-	c.doRequest.Lock()
-
-	defer c.doRequest.Unlock()
-
 	var err error
 
 	c.closeOnce.Do(func() {
