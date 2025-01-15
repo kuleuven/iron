@@ -3,6 +3,8 @@ package msg
 
 import (
 	"fmt"
+	"os"
+	"syscall"
 )
 
 type IRODSError struct {
@@ -31,6 +33,25 @@ func (e *IRODSError) Name() string {
 	}
 
 	return fmt.Sprintf("%d", e.Code)
+}
+
+// Unwrap tries to unwrap to an equivalent os/syscall error,
+// e.g. os.ErrNotExist or syscall.NOENT. This is useful
+// when using e.g. errors.Is(err, os.ErrNotExist).
+func (e *IRODSError) Unwrap() error {
+	if native, ok := NativeErrors[e.Code]; ok {
+		return native
+	}
+
+	// Try to round code up to a multiple of 1000
+	code := (e.Code / 1000) * 1000
+
+	if native, ok := NativeErrors[code]; ok {
+		return native
+	}
+
+	// Did not find a native error
+	return nil
 }
 
 type ErrorCode int32
@@ -1399,4 +1420,15 @@ var ErrorCodes = map[ErrorCode]string{
 	SYS_HANDLER_DONE_WITH_ERROR:              "SYS_HANDLER_DONE_WITH_ERROR",
 	SYS_HANDLER_DONE_NO_ERROR:                "SYS_HANDLER_DONE_NO_ERROR",
 	SYS_NO_HANDLER_REPLY_MSG:                 "SYS_NO_HANDLER_REPLY_MSG",
+}
+
+var NativeErrors = map[ErrorCode]error{
+	CAT_NO_ROWS_FOUND:                     os.ErrNotExist,
+	CAT_NO_ACCESS_PERMISSION:              os.ErrPermission,
+	CAT_COLLECTION_NOT_EMPTY:              syscall.ENOTEMPTY,
+	CATALOG_ALREADY_HAS_ITEM_BY_THAT_NAME: os.ErrExist,
+	CAT_UNKNOWN_COLLECTION:                os.ErrNotExist,
+	CAT_UNKNOWN_FILE:                      os.ErrNotExist,
+	CAT_NAME_EXISTS_AS_COLLECTION:         os.ErrExist,
+	CAT_NAME_EXISTS_AS_DATAOBJ:            os.ErrExist,
 }

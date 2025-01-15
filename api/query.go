@@ -416,12 +416,17 @@ type SingleRowResult struct {
 	err    error
 }
 
-var ErrNoRowFound = fmt.Errorf("no row found")
+// ErrNoRowFound is returned when no rows are found in a QueryRow result.
+var ErrNoRowFound = &msg.IRODSError{
+	Code:    msg.CAT_NO_ROWS_FOUND,
+	Message: "query returned zero rows",
+}
 
 // Scan reads the values in the current row into the values pointed
 // to by dest, in order.  If an error occurs during scanning, the
 // error is returned. The values pointed to by dest before the error
 // occurred might be modified.
+// If no rows are found, ErrNoRowFound is returned.
 func (r *SingleRowResult) Scan(dest ...interface{}) error {
 	if r.err != nil {
 		return r.err
