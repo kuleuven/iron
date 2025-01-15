@@ -47,16 +47,20 @@ type Conn interface {
 	// Both request and response should represent a type such as in `msg/types.go`.
 	// The request and response will be marshaled and unmarshaled automatically.
 	// If a negative IntInfo is returned, an appropriate error will be returned.
+	// This method is thread-safe.
 	Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error
 
 	// RequestWithBuffers behaves as Request, with provided buffers for the request
 	// and response binary data. Both requestBuf and responseBuf could be nil.
+	// This method is thread-safe.
 	RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error
 
-	// API returns an API for the given resource.
+	// API returns an API using the current connection.
 	API() *api.API
 
 	// Close closes the connection.
+	// It is safe to call Close multiple times.
+	// This method is thread-safe but will obviously make future requests fail.
 	Close() error
 }
 
@@ -558,6 +562,10 @@ func (c *conn) buildError(m msg.Message) string {
 }
 
 func (c *conn) Close() error {
+	c.doRequest.Lock()
+
+	defer c.doRequest.Unlock()
+
 	var err error
 
 	c.closeOnce.Do(func() {
