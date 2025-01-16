@@ -160,9 +160,9 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 			})
 		case SkipSubDirs:
 			// Subcollections within this directory should be added as objects
-			skipcolls = slices.DeleteFunc(slices.Clone(subcollections), func(c Collection) bool {
+			skipcolls = append(skipcolls, slices.DeleteFunc(slices.Clone(subcollections), func(c Collection) bool {
 				return !strings.HasPrefix(c.Path, coll.Path+"/")
-			})
+			})...)
 
 			subcollections = slices.DeleteFunc(subcollections, func(c Collection) bool {
 				return strings.HasPrefix(c.Path, coll.Path+"/")
