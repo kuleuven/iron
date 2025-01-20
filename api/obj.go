@@ -643,7 +643,7 @@ func (api *API) executeAccessQuery(ctx context.Context, query PreparedQuery) ([]
 	var (
 		out []Access
 		ids []int64
-		ptr = map[int64]*Access{}
+		ptr = map[int64]int{}
 	)
 
 	results := query.Execute(ctx)
@@ -662,7 +662,7 @@ func (api *API) executeAccessQuery(ctx context.Context, query PreparedQuery) ([]
 
 		out = append(out, a)
 		ids = append(ids, a.User.ID)
-		ptr[a.User.ID] = &out[len(out)-1]
+		ptr[a.User.ID] = len(out) - 1
 	}
 
 	if err := results.Err(); err != nil {
@@ -676,11 +676,7 @@ func (api *API) executeAccessQuery(ctx context.Context, query PreparedQuery) ([]
 	}
 
 	for _, u := range users {
-		if ptr[u.ID] == nil {
-			continue
-		}
-
-		ptr[u.ID].User = u
+		out[ptr[u.ID]].User = u
 	}
 
 	return out, results.Err()

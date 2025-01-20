@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -65,7 +66,7 @@ func (a *App) Command() *cobra.Command {
 	rootCmd.PersistentFlags().BoolVarP(&a.admin, "admin", "a", false, "Enable admin access")
 	rootCmd.PersistentFlags().BoolVar(&a.native, "native", false, "Use native protocol")
 
-	rootCmd.AddCommand(a.mkdir(), a.rmdir(), a.mvdir(), a.rm(), a.mv(), a.cp(), a.create(), a.put(), a.get(), a.chmod(), a.inherit())
+	rootCmd.AddCommand(a.mkdir(), a.rmdir(), a.mvdir(), a.rm(), a.mv(), a.cp(), a.create(), a.put(), a.get(), a.chmod(), a.inherit(), a.listAccess())
 
 	return rootCmd
 }
@@ -294,6 +295,32 @@ func (a *App) inherit() *cobra.Command {
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Change inheritance recursively")
 	cmd.Flags().BoolVar(&inherit, "enable", true, "Enable inheritance")
+
+	return cmd
+}
+
+func (a *App) listAccess() *cobra.Command {
+	var typ string
+
+	cmd := &cobra.Command{
+		Use:   "lsAccess <path>",
+		Short: "Query a data object",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out, err := a.ListAccess(a.ctx, args[0], api.ObjectType(typ))
+			if err != nil {
+				return err
+			}
+
+			for _, access := range out {
+				fmt.Printf("%v %s\n", access.User, access.Permission)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&typ, "type", "t", "data", "Object type")
 
 	return cmd
 }
