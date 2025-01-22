@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
@@ -130,13 +131,27 @@ func (api *API) ReplicateDataObject(ctx context.Context, path string, resource s
 	return api.ElevateRequest(ctx, msg.DATA_OBJ_REPL_AN, request, &msg.EmptyResponse{}, path)
 }
 
-// TrimDataObject replicates a data object from the specified resource.
+// TrimDataObject removes a data object from the specified resource.
 func (api *API) TrimDataObject(ctx context.Context, path string, resource string) error {
 	request := msg.DataObjectRequest{
 		Path: path,
 	}
 
 	request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
+	request.KeyVals.Add(msg.COPIES_KW, "1")
+
+	api.setFlags(&request.KeyVals)
+
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_TRIM_AN, request, &msg.EmptyResponse{}, path)
+}
+
+// TrimDataObjectReplica removes a specific replica of a data object.
+func (api *API) TrimDataObjectReplica(ctx context.Context, path string, replicaNumber int) error {
+	request := msg.DataObjectRequest{
+		Path: path,
+	}
+
+	request.KeyVals.Add(msg.REPL_NUM_KW, strconv.Itoa(replicaNumber))
 
 	api.setFlags(&request.KeyVals)
 

@@ -29,4 +29,5 @@ const (
 	STAGE_OBJ_KW          KeyWord = "stage_object"
 	SYNC_OBJ_KW           KeyWord = "sync_object"
 	IN_REPL_KW            KeyWord = "in_repl"
+	REPL_NUM_KW           KeyWord = "replNum"
 )

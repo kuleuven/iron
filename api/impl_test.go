@@ -106,6 +106,14 @@ func TestTrimDataObject(t *testing.T) {
 	}
 }
 
+func TestTrimDataObjectReplica(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.TrimDataObjectReplica(context.Background(), "test", 0); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRenameDataObject(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 
