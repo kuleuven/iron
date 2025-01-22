@@ -188,6 +188,36 @@ func TestListUsers(t *testing.T) {
 	}
 }
 
+func TestListResources(t *testing.T) {
+	testConn.NextResponse = msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 10,
+		TotalRowCount:  1,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 302, ResultLen: 1, Values: []string{"resc_name"}},
+			{AttributeIndex: 303, ResultLen: 1, Values: []string{"testZone"}},
+			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
+			{AttributeIndex: 305, ResultLen: 1, Values: []string{"class"}},
+			{AttributeIndex: 306, ResultLen: 1, Values: []string{"server"}},
+			{AttributeIndex: 307, ResultLen: 1, Values: []string{"/path/to/resc"}},
+			{AttributeIndex: 316, ResultLen: 1, Values: []string{"context string"}},
+			{AttributeIndex: 311, ResultLen: 1, Values: []string{"10000"}},
+			{AttributeIndex: 312, ResultLen: 1, Values: []string{"10000"}},
+		},
+	}
+
+	list, err := testAPI.ListResources(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(list) != 1 {
+		t.Errorf("expected 1 user, got %d", len(list))
+	}
+}
+
 func TestListSubCollections(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,

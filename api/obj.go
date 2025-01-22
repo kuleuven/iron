@@ -396,6 +396,50 @@ func (api *API) ListUsers(ctx context.Context, conditions ...Condition) ([]User,
 	return result, results.Err()
 }
 
+// ListResources returns a list of resources satisfying the given conditions
+func (api *API) ListResources(ctx context.Context, conditions ...Condition) ([]Resource, error) {
+	result := []Resource{}
+
+	results := api.Query(
+		msg.ICAT_COLUMN_R_RESC_ID,
+		msg.ICAT_COLUMN_R_RESC_NAME,
+		msg.ICAT_COLUMN_R_ZONE_NAME,
+		msg.ICAT_COLUMN_R_TYPE_NAME,
+		msg.ICAT_COLUMN_R_CLASS_NAME,
+		msg.ICAT_COLUMN_R_LOC,
+		msg.ICAT_COLUMN_R_VAULT_PATH,
+		msg.ICAT_COLUMN_R_RESC_CONTEXT,
+		msg.ICAT_COLUMN_R_CREATE_TIME,
+		msg.ICAT_COLUMN_R_MODIFY_TIME,
+	).With(conditions...).Execute(ctx)
+
+	defer results.Close()
+
+	for results.Next() {
+		r := Resource{}
+
+		err := results.Scan(
+			&r.ID,
+			&r.Name,
+			&r.Zone,
+			&r.Type,
+			&r.Class,
+			&r.Location,
+			&r.Path,
+			&r.Context,
+			&r.CreatedAt,
+			&r.ModifiedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, r)
+	}
+
+	return result, results.Err()
+}
+
 // ListDataObjectsInCollection returns a list of data objects contained in a collection
 func (api *API) ListDataObjectsInCollection(ctx context.Context, collectionPath string) ([]DataObject, error) {
 	return api.ListDataObjects(ctx, Equal(msg.ICAT_COLUMN_COLL_NAME, collectionPath))
