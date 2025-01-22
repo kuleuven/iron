@@ -284,6 +284,10 @@ func (r *Result) cleanup() {
 }
 
 func parseValue(value string, dest interface{}) error {
+	if value == "" {
+		return nil
+	}
+
 	switch reflect.ValueOf(dest).Elem().Kind() { //nolint:exhaustive
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i, err := strconv.ParseInt(value, 10, 64)
