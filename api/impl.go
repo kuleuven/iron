@@ -138,6 +138,9 @@ func (api *API) TrimDataObject(ctx context.Context, path string, resource string
 	}
 
 	request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
+
+	// Despite being deprecated, the irods server won't trim anything if this is not specified,
+	// and only two replicas exists.
 	request.KeyVals.Add(msg.COPIES_KW, "1")
 
 	api.setFlags(&request.KeyVals)
@@ -152,6 +155,10 @@ func (api *API) TrimDataObjectReplica(ctx context.Context, path string, replicaN
 	}
 
 	request.KeyVals.Add(msg.REPL_NUM_KW, strconv.Itoa(replicaNumber))
+
+	// Despite being deprecated, the irods server won't trim anything if this is not specified,
+	// and only two replicas exists.
+	request.KeyVals.Add(msg.COPIES_KW, "1")
 
 	api.setFlags(&request.KeyVals)
 
