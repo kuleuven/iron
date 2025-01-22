@@ -135,6 +135,7 @@ func (d *DataObject) Sys() any {
 
 type Resource struct {
 	ID         int64
+	ParentID   int64
 	Name       string
 	Zone       string
 	Type       string
@@ -289,6 +290,7 @@ func (api *API) GetResource(ctx context.Context, name string) (*Resource, error)
 
 	err := api.QueryRow(
 		msg.ICAT_COLUMN_R_RESC_ID,
+		msg.ICAT_COLUMN_R_RESC_PARENT,
 		msg.ICAT_COLUMN_R_RESC_NAME,
 		msg.ICAT_COLUMN_R_ZONE_NAME,
 		msg.ICAT_COLUMN_R_TYPE_NAME,
@@ -303,6 +305,7 @@ func (api *API) GetResource(ctx context.Context, name string) (*Resource, error)
 		fmt.Sprintf(equalTo, name),
 	).Execute(ctx).Scan(
 		&r.ID,
+		&r.ParentID,
 		&r.Name,
 		&r.Zone,
 		&r.Type,
@@ -402,6 +405,7 @@ func (api *API) ListResources(ctx context.Context, conditions ...Condition) ([]R
 
 	results := api.Query(
 		msg.ICAT_COLUMN_R_RESC_ID,
+		msg.ICAT_COLUMN_R_RESC_PARENT,
 		msg.ICAT_COLUMN_R_RESC_NAME,
 		msg.ICAT_COLUMN_R_ZONE_NAME,
 		msg.ICAT_COLUMN_R_TYPE_NAME,
@@ -420,6 +424,7 @@ func (api *API) ListResources(ctx context.Context, conditions ...Condition) ([]R
 
 		err := results.Scan(
 			&r.ID,
+			&r.ParentID,
 			&r.Name,
 			&r.Zone,
 			&r.Type,

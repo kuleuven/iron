@@ -117,11 +117,12 @@ func TestGetDataObject(t *testing.T) {
 func TestGetResource(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 10,
+		AttributeCount: 11,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 302, ResultLen: 1, Values: []string{"resc_name"}},
 			{AttributeIndex: 303, ResultLen: 1, Values: []string{"testZone"}},
 			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
@@ -191,11 +192,12 @@ func TestListUsers(t *testing.T) {
 func TestListResources(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 10,
+		AttributeCount: 11,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 302, ResultLen: 1, Values: []string{"resc_name"}},
 			{AttributeIndex: 303, ResultLen: 1, Values: []string{"testZone"}},
 			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
