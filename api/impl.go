@@ -114,6 +114,35 @@ func (api *API) DeleteDataObject(ctx context.Context, path string, skipTrash boo
 	return api.ElevateRequest(ctx, msg.DATA_OBJ_UNLINK_AN, request, &msg.EmptyResponse{}, path)
 }
 
+// ReplicateDataObject replicates a data object to the specified resource.
+func (api *API) ReplicateDataObject(ctx context.Context, path string, resource string) error {
+	request := msg.DataObjectRequest{
+		Path:          path,
+		OperationType: msg.OPER_TYPE_REPLICATE_DATA_OBJ,
+	}
+
+	if resource != "" {
+		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
+	}
+
+	api.setFlags(&request.KeyVals)
+
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_REPL_AN, request, &msg.EmptyResponse{}, path)
+}
+
+// TrimDataObject replicates a data object from the specified resource.
+func (api *API) TrimDataObject(ctx context.Context, path string, resource string) error {
+	request := msg.DataObjectRequest{
+		Path: path,
+	}
+
+	request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
+
+	api.setFlags(&request.KeyVals)
+
+	return api.ElevateRequest(ctx, msg.DATA_OBJ_TRIM_AN, request, &msg.EmptyResponse{}, path)
+}
+
 // RenameDataObject renames a data object.
 // It will fail if the target already exists.
 func (api *API) RenameDataObject(ctx context.Context, oldPath, newPath string) error {

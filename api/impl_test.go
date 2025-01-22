@@ -90,6 +90,22 @@ func TestDeleteDataObject(t *testing.T) {
 	}
 }
 
+func TestReplicateDataObject(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.ReplicateDataObject(context.Background(), "test", "otherResource"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTrimDataObject(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.TrimDataObject(context.Background(), "test", "otherResource"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRenameDataObject(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 
