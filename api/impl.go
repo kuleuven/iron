@@ -308,7 +308,7 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	}
 
 	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
-	if err == nil && mode&O_APPEND != 0 {
+	if err == nil && mode&O_APPEND != 0 && mode&O_TRUNC == 0 {
 		// Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)
 	}
