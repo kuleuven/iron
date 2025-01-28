@@ -294,7 +294,7 @@ func (h *handle) Touch(mtime time.Time) error {
 
 var ErrSameConnection = errors.New("same connection")
 
-func (h *handle) Reopen(conn Conn, mode int) (File, error) {
+func (h *handle) Reopen(conn Conn, mode int) (File, error) { //nolint:funlen
 	h.Lock()
 	defer h.Unlock()
 

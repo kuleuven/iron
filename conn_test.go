@@ -202,7 +202,7 @@ func TestConnPamPasswordTLS(t *testing.T) {
 
 	go pamResponses(server)
 
-	f, err := os.CreateTemp("", "")
+	f, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 
 	go pamResponses(server)
 
-	f, err := os.CreateTemp("", "")
+	f, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func TestOldVersion(t *testing.T) {
 	}
 }
 
-func TestRequest(t *testing.T) {
+func TestRequest(t *testing.T) { //nolint:funlen
 	ctx := context.Background()
 	transport, server := connPipe()
 
