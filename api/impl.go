@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 )
 
@@ -272,6 +273,12 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 		return nil, err
 	}
 
+	h.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error { //nolint:contextcheck
+		logrus.Warnf("Emergency close of %s", path)
+
+		return h.Close()
+	})
+
 	return &h, err
 }
 
@@ -318,6 +325,12 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 
 		return nil, err
 	}
+
+	h.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error { //nolint:contextcheck
+		logrus.Warnf("Emergency close of %s", path)
+
+		return h.Close()
+	})
 
 	return &h, err
 }

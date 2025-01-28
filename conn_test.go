@@ -425,6 +425,14 @@ func TestRequest(t *testing.T) {
 		t.Error(err)
 	}
 
+	var called int
+
+	conn.RegisterCloseHandler(func() error {
+		called++
+
+		return nil
+	})
+
 	err = conn.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -435,5 +443,9 @@ func TestRequest(t *testing.T) {
 	}, &msg.CollectionOperationStat{})
 	if err != nil {
 		t.Fatalf("expected error, got nil")
+	}
+
+	if called != 1 {
+		t.Fatalf("expected 1, got %d", called)
 	}
 }

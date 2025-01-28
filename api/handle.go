@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 )
 
@@ -20,11 +21,12 @@ type handle struct {
 	FileDescriptor msg.FileDescriptor
 
 	// Housekeeping
-	origin       *handle        // If this handle is a reopened handle, this contains the original handle
-	wg           sync.WaitGroup // Waitgroup if the file was reopened, for the reopened handle to be closed
-	truncateSize int64          // If nonnegative, truncate the file to this size after closing
-	touchTime    time.Time      // If non-zero, touch the file to this time after closing
-	curOffset    int64          // Current offset of the file
+	origin                    *handle        // If this handle is a reopened handle, this contains the original handle
+	wg                        sync.WaitGroup // Waitgroup if the file was reopened, for the reopened handle to be closed
+	truncateSize              int64          // If nonnegative, truncate the file to this size after closing
+	touchTime                 time.Time      // If non-zero, touch the file to this time after closing
+	curOffset                 int64          // Current offset of the file
+	unregisterEmergencyCloser func()
 	sync.Mutex
 }
 
@@ -33,6 +35,8 @@ func (h *handle) Name() string {
 }
 
 func (h *handle) Close() error {
+	h.unregisterEmergencyCloser()
+
 	if h.origin != nil {
 		err := h.closeReopenedHandle()
 
@@ -349,6 +353,12 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	}
 
 	h.wg.Add(1) // Add to waitgroup
+
+	h2.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error {
+		logrus.Warnf("Emergency close of %s", h2.path)
+
+		return h2.Close()
+	})
 
 	return &h2, nil
 }

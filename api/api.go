@@ -47,6 +47,10 @@ type Conn interface {
 
 	// Close closes the connection or releases it back to the pool.
 	Close() error
+
+	// RegisterCloseHandler registers a function to be called when the connection is
+	// about to closed. It is used to ensure opened files are closed.
+	RegisterCloseHandler(handler func() error) context.CancelFunc
 }
 
 type ObjectType string

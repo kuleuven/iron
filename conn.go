@@ -62,6 +62,11 @@ type Conn interface {
 	// It is safe to call Close multiple times.
 	// This method is thread-safe but will obviously make future requests fail.
 	Close() error
+
+	// RegisterCloseHandler registers a function to be called when the connection is
+	// about to closed. It is used to clean up state before the connection is closed.
+	// The CloseHandler can be unregistered by calling the returned function.
+	RegisterCloseHandler(handler func() error) context.CancelFunc
 }
 
 type conn struct {
@@ -79,10 +84,11 @@ type conn struct {
 	transportErrors int
 
 	// housekeeping
-	doRequest sync.Mutex
-	doClose   sync.Mutex
-	closed    bool
-	closeErr  error
+	doRequest     sync.Mutex
+	doClose       sync.Mutex
+	closeHandlers []func() error
+	closed        bool
+	closeErr      error
 }
 
 // Dialer is used to connect to an IRODS server.
@@ -582,14 +588,40 @@ func (c *conn) Close() error {
 		return c.closeErr
 	}
 
+	for _, handler := range c.closeHandlers {
+		if handler == nil {
+			continue
+		}
+
+		if err := handler(); err != nil {
+			c.closeErr = multierr.Append(c.closeErr, err)
+		}
+	}
+
 	c.doRequest.Lock()
 	defer c.doRequest.Unlock()
 
-	c.closeErr = msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0)
+	c.closeErr = multierr.Append(c.closeErr, msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0))
 	c.closeErr = multierr.Append(c.closeErr, c.Conn().Close())
 	c.closed = true
 
 	return c.closeErr
+}
+
+func (c *conn) RegisterCloseHandler(handler func() error) context.CancelFunc {
+	c.doClose.Lock()
+	defer c.doClose.Unlock()
+
+	c.closeHandlers = append(c.closeHandlers, handler)
+
+	i := len(c.closeHandlers) - 1
+
+	return func() {
+		c.doClose.Lock()
+		defer c.doClose.Unlock()
+
+		c.closeHandlers[i] = nil
+	}
 }
 
 func (c *conn) CloseOnCancel(ctx context.Context) context.CancelFunc {

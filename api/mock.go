@@ -86,3 +86,9 @@ func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumb
 func (c *mockConn) Close() error {
 	return nil
 }
+
+func (c *mockConn) RegisterCloseHandler(handler func() error) context.CancelFunc {
+	return func() {
+		// do nothing
+	}
+}
