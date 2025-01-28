@@ -79,8 +79,10 @@ type conn struct {
 	transportErrors int
 
 	// housekeeping
-	closeOnce sync.Once
 	doRequest sync.Mutex
+	doClose   sync.Mutex
+	closed    bool
+	closeErr  error
 }
 
 // Dialer is used to connect to an IRODS server.
@@ -573,19 +575,21 @@ func (c *conn) buildError(m msg.Message) string {
 }
 
 func (c *conn) Close() error {
-	var err error
+	c.doClose.Lock()
+	defer c.doClose.Unlock()
 
-	c.closeOnce.Do(func() {
-		c.doRequest.Lock()
+	if c.closed {
+		return c.closeErr
+	}
 
-		defer c.doRequest.Unlock()
+	c.doRequest.Lock()
+	defer c.doRequest.Unlock()
 
-		err = msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0)
-	})
+	c.closeErr = msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0)
+	c.closeErr = multierr.Append(c.closeErr, c.Conn().Close())
+	c.closed = true
 
-	err = multierr.Append(err, c.Conn().Close())
-
-	return err
+	return c.closeErr
 }
 
 func (c *conn) CloseOnCancel(ctx context.Context) context.CancelFunc {
