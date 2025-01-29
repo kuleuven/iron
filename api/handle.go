@@ -350,7 +350,7 @@ var ErrSameConnection = errors.New("same connection")
 
 var ErrCannotTruncate = errors.New("cannot truncate in reopened handle")
 
-func (h *handle) Reopen(conn Conn, mode int) (File, error) { //nolint:funlen
+func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	h.Lock()
 	defer h.Unlock()
 
