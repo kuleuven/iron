@@ -176,14 +176,86 @@ func TestTouchDataObject(t *testing.T) {
 
 	testConn.NextBin = []byte("testcontent")
 
-	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
+	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	size, err := file.Size()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if size != 0 {
+		t.Fatalf("expected size 0, got %d", size)
 	}
 
 	err = file.Touch(time.Now())
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenDataObjectSize(t *testing.T) {
+	testConn.NextResponses = []any{
+		msg.FileDescriptor(1),
+		msg.SeekResponse{
+			Offset: 100,
+		},
+		msg.EmptyResponse{},
+	}
+
+	testConn.NextBin = []byte("testcontent")
+
+	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_APPEND)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	size, err := file.Size()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if size != 100 {
+		t.Fatalf("expected size 100, got %d", size)
+	}
+
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenDataObjectSize2(t *testing.T) {
+	testConn.NextResponses = []any{
+		msg.FileDescriptor(1),
+		msg.SeekResponse{
+			Offset: 100,
+		},
+		msg.SeekResponse{
+			Offset: 0,
+		},
+		msg.EmptyResponse{},
+	}
+
+	testConn.NextBin = []byte("testcontent")
+
+	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	size, err := file.Size()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if size != 100 {
+		t.Fatalf("expected size 100, got %d", size)
 	}
 
 	if err := file.Close(); err != nil {

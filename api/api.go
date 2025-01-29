@@ -91,6 +91,9 @@ type File interface {
 	// If the file was reopened, Close() will block until the additional handles are closed.
 	Close() error
 
+	// Size returns the size of the file
+	Size() (int64, error)
+
 	// Seek moves file pointer of a data object, returns offset
 	Seek(offset int64, whence int) (int64, error)
 

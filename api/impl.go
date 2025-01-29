@@ -238,7 +238,7 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 	request := msg.DataObjectRequest{
 		Path:       path,
 		CreateMode: 0o644,
-		OpenFlags:  (mode &^ O_APPEND) | O_CREAT,
+		OpenFlags:  (mode &^ O_APPEND) | O_CREAT | O_EXCL,
 	}
 
 	request.KeyVals.Add(msg.DATA_TYPE_KW, "generic")
@@ -259,14 +259,16 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 	}
 
 	h := handle{
-		api:          api,
-		conn:         conn,
-		ctx:          ctx,
-		path:         path,
-		truncateSize: -1,
+		object: &object{
+			api:          api,
+			ctx:          ctx,
+			path:         path,
+			truncateSize: -1,
+		},
+		conn: conn,
 	}
 
-	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CREATE_AN, request, &h.FileDescriptor, path)
+	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CREATE_AN, request, &h.fileDescriptor, path)
 	if err != nil {
 		err = multierr.Append(err, conn.Close())
 
@@ -307,17 +309,25 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	}
 
 	h := handle{
-		api:          api,
-		conn:         conn,
-		ctx:          ctx,
-		path:         path,
-		truncateSize: -1,
+		object: &object{
+			api:          api,
+			ctx:          ctx,
+			path:         path,
+			actualSize:   -1,
+			truncateSize: -1,
+		},
+		conn: conn,
 	}
 
-	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
-	if err == nil && mode&O_APPEND != 0 && mode&O_TRUNC == 0 {
+	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_OPEN_AN, request, &h.fileDescriptor)
+	if err == nil && mode&O_TRUNC == 0 && mode&O_EXCL == 0 && mode&O_APPEND != 0 {
 		// Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)
+	}
+
+	if mode&O_TRUNC != 0 || mode&O_EXCL != 0 {
+		// File is truncated or created, so the actual size is 0
+		h.object.actualSize = 0
 	}
 
 	if err != nil {

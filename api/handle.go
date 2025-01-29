@@ -13,58 +13,140 @@ import (
 	"go.uber.org/multierr"
 )
 
-type handle struct {
-	api            *API
-	ctx            context.Context //nolint:containedctx
-	conn           Conn
-	path           string
-	FileDescriptor msg.FileDescriptor
+type object struct {
+	api          *API
+	ctx          context.Context //nolint:containedctx
+	path         string
+	actualSize   int64          // If nonnegative, the actual size of the file. If negative, the actual size is unknown
+	truncateSize int64          // If nonnegative and less than actualSize, truncate the file to this size after closing
+	touchTime    time.Time      // If non-zero, touch the file to this time after closing
+	wg           sync.WaitGroup // Waitgroup for the reopened handle to be closed
+	sync.Mutex
+}
 
-	// Housekeeping
-	origin                    *handle        // If this handle is a reopened handle, this contains the original handle
-	wg                        sync.WaitGroup // Waitgroup if the file was reopened, for the reopened handle to be closed
-	truncateSize              int64          // If nonnegative, truncate the file to this size after closing
-	touchTime                 time.Time      // If non-zero, touch the file to this time after closing
-	curOffset                 int64          // Current offset of the file
-	unregisterEmergencyCloser func()
+func (o *object) ActualSize() int64 {
+	o.Lock()
+	defer o.Unlock()
+
+	return o.actualSize
+}
+
+func (o *object) TruncatedSize() int64 {
+	o.Lock()
+	defer o.Unlock()
+
+	return o.truncateSize
+}
+
+func (o *object) SetActualSize(size int64) {
+	o.Lock()
+	defer o.Unlock()
+
+	o.actualSize = size
+}
+
+func (o *object) SetTruncatedSize(size int64) {
+	o.Lock()
+	defer o.Unlock()
+
+	o.truncateSize = size
+}
+
+func (o *object) SetTouchTime(t time.Time) {
+	o.Lock()
+	defer o.Unlock()
+
+	o.touchTime = t
+}
+
+func (o *object) IncreaseSizesIfNeeded(size int64) {
+	o.Lock()
+	defer o.Unlock()
+
+	if size > o.truncateSize && o.truncateSize >= 0 {
+		o.truncateSize = size
+	}
+
+	if size > o.actualSize && o.actualSize >= 0 {
+		o.actualSize = size
+	}
+}
+
+type handle struct {
+	object                    *object
+	reopened                  bool
+	conn                      Conn
+	fileDescriptor            msg.FileDescriptor
+	curOffset                 int64  // Current offset of the file
+	unregisterEmergencyCloser func() // Function to unregister the emergency closer
 	sync.Mutex
 }
 
 func (h *handle) Name() string {
-	return h.path
+	return h.object.path
+}
+
+func (h *handle) Size() (int64, error) {
+	if size := h.object.ActualSize(); size >= 0 {
+		return size, nil
+	}
+
+	h.Lock()
+	defer h.Unlock()
+
+	offset := h.curOffset
+
+	size, err := h.seek(0, 2)
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = h.seek(offset, 0)
+
+	return size, err
 }
 
 func (h *handle) Close() error {
 	h.unregisterEmergencyCloser()
 
-	if h.origin != nil {
-		err := h.closeReopenedHandle()
+	if h.reopened {
+		h.Lock()
+		defer h.Unlock()
 
+		defer h.object.wg.Done()
+
+		err := h.doCloseReopened()
 		err = multierr.Append(err, h.conn.Close())
 
 		return err
 	}
 
-	h.wg.Wait()
+	h.object.wg.Wait()
 
 	h.Lock()
 	defer h.Unlock()
 
+	// If the file was truncated to the actual size, don't truncate it
+	if h.object.truncateSize == h.object.actualSize {
+		h.object.truncateSize = -1
+	}
+
 	var replicaInfo *ReplicaAccessInfo
 
-	if h.truncateSize >= 0 || !h.touchTime.IsZero() {
+	// Request the replica info if the file needs to be truncated or touched
+	if h.object.truncateSize >= 0 || !h.object.touchTime.IsZero() {
 		var err error
 
 		replicaInfo, err = h.getReplicaAccessInfo()
 		if err != nil {
-			err = multierr.Append(err, h.closeOriginalHandle())
+			err = multierr.Append(err, h.doCloseHandle())
 			err = multierr.Append(err, h.conn.Close())
 
 			return err
 		}
 	}
 
-	if err := h.closeOriginalHandle(); err != nil {
+	if err := h.doCloseHandle(); err != nil {
 		err = multierr.Append(err, h.conn.Close())
 
 		return err
@@ -85,63 +167,65 @@ func (h *handle) Close() error {
 	return h.conn.Close()
 }
 
-func (h *handle) closeReopenedHandle() error {
-	defer h.origin.wg.Done()
-
+func (h *handle) doCloseReopened() error {
 	request := msg.CloseDataObjectReplicaRequest{
-		FileDescriptor: h.FileDescriptor,
+		FileDescriptor: h.fileDescriptor,
 	}
 
 	return h.conn.Request(context.Background(), msg.REPLICA_CLOSE_APN, request, &msg.EmptyResponse{})
 }
 
-func (h *handle) closeOriginalHandle() error {
+func (h *handle) doCloseHandle() error {
 	request := msg.OpenedDataObjectRequest{
-		FileDescriptor: h.FileDescriptor,
+		FileDescriptor: h.fileDescriptor,
 	}
 
 	return h.conn.Request(context.Background(), msg.DATA_OBJ_CLOSE_AN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) doTruncate(replicaInfo *ReplicaAccessInfo) error {
-	if h.truncateSize < 0 {
+	if h.object.truncateSize < 0 {
 		return nil
 	}
 
 	request := msg.DataObjectRequest{
-		Path: h.path,
-		Size: h.truncateSize,
+		Path: h.object.path,
+		Size: h.object.truncateSize,
 	}
 
 	request.KeyVals.Add(msg.RESC_HIER_STR_KW, replicaInfo.ResourceHierarchy)
 	request.KeyVals.Add(msg.REPLICA_TOKEN_KW, replicaInfo.ReplicaToken)
 
-	h.api.setFlags(&request.KeyVals)
+	h.object.api.setFlags(&request.KeyVals)
 
-	return h.conn.Request(h.ctx, msg.REPLICA_TRUNCATE_AN, request, &msg.EmptyResponse{})
+	return h.conn.Request(h.object.ctx, msg.REPLICA_TRUNCATE_AN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) doTouch(replicaInfo *ReplicaAccessInfo) error {
-	if h.touchTime.IsZero() {
+	if h.object.touchTime.IsZero() {
 		return nil
 	}
 
 	request := msg.TouchDataObjectReplicaRequest{
-		Path: h.path,
+		Path: h.object.path,
 		Options: msg.TouchOptions{
-			SecondsSinceEpoch: h.touchTime.Unix(),
+			SecondsSinceEpoch: h.object.touchTime.Unix(),
 			ReplicaNumber:     replicaInfo.ReplicaNumber,
 			NoCreate:          true,
 		},
 	}
 
-	return h.conn.Request(h.ctx, msg.TOUCH_APN, request, &msg.EmptyResponse{})
+	return h.conn.Request(h.object.ctx, msg.TOUCH_APN, request, &msg.EmptyResponse{})
 }
 
 func (h *handle) Seek(offset int64, whence int) (int64, error) {
 	h.Lock()
 	defer h.Unlock()
 
+	return h.seek(offset, whence)
+}
+
+func (h *handle) seek(offset int64, whence int) (int64, error) {
 	if whence == 0 && offset == h.curOffset {
 		return h.curOffset, nil
 	}
@@ -151,27 +235,33 @@ func (h *handle) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	request := msg.OpenedDataObjectRequest{
-		FileDescriptor: h.FileDescriptor,
+		FileDescriptor: h.fileDescriptor,
 		Whence:         whence,
 		Offset:         offset,
 	}
 
-	h.api.setFlags(&request.KeyVals)
+	h.object.api.setFlags(&request.KeyVals)
 
 	var response msg.SeekResponse
 
-	err := h.conn.Request(h.ctx, msg.DATA_OBJ_LSEEK_AN, request, &response)
+	if err := h.conn.Request(h.object.ctx, msg.DATA_OBJ_LSEEK_AN, request, &response); err != nil {
+		return response.Offset, err
+	}
 
 	h.curOffset = response.Offset
 
-	return response.Offset, err
+	if whence == 2 {
+		h.object.SetActualSize(response.Offset - offset)
+	}
+
+	return response.Offset, nil
 }
 
 func (h *handle) Read(b []byte) (int, error) {
 	h.Lock()
 	defer h.Unlock()
 
-	truncatedSize := h.truncatedSize()
+	truncatedSize := h.object.TruncatedSize()
 
 	if truncatedSize >= 0 && truncatedSize <= h.curOffset {
 		return 0, io.EOF
@@ -186,15 +276,15 @@ func (h *handle) Read(b []byte) (int, error) {
 	}
 
 	request := msg.OpenedDataObjectRequest{
-		FileDescriptor: h.FileDescriptor,
+		FileDescriptor: h.fileDescriptor,
 		Size:           len(b),
 	}
 
-	h.api.setFlags(&request.KeyVals)
+	h.object.api.setFlags(&request.KeyVals)
 
 	var response msg.ReadResponse
 
-	if err := h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_READ_AN, request, &response, nil, b); err != nil {
+	if err := h.conn.RequestWithBuffers(h.object.ctx, msg.DATA_OBJ_READ_AN, request, &response, nil, b); err != nil {
 		return 0, err
 	}
 
@@ -217,47 +307,21 @@ func (h *handle) Write(b []byte) (int, error) {
 	defer h.Unlock()
 
 	request := msg.OpenedDataObjectRequest{
-		FileDescriptor: h.FileDescriptor,
+		FileDescriptor: h.fileDescriptor,
 		Size:           len(b),
 	}
 
-	h.api.setFlags(&request.KeyVals)
+	h.object.api.setFlags(&request.KeyVals)
 
-	if err := h.conn.RequestWithBuffers(h.ctx, msg.DATA_OBJ_WRITE_AN, request, &msg.EmptyResponse{}, b, nil); err != nil {
+	if err := h.conn.RequestWithBuffers(h.object.ctx, msg.DATA_OBJ_WRITE_AN, request, &msg.EmptyResponse{}, b, nil); err != nil {
 		return 0, err
 	}
 
 	h.curOffset += int64(len(b))
 
-	if h.truncatedSize() >= 0 && h.curOffset > h.truncatedSize() {
-		h.setTruncatedSize(h.curOffset)
-	}
+	h.object.IncreaseSizesIfNeeded(h.curOffset)
 
 	return len(b), nil
-}
-
-func (h *handle) truncatedSize() int64 {
-	if h.origin != nil {
-		h.origin.Lock()
-		defer h.origin.Unlock()
-
-		return h.origin.truncateSize
-	}
-
-	return h.truncateSize
-}
-
-func (h *handle) setTruncatedSize(size int64) {
-	if h.origin != nil {
-		h.origin.Lock()
-		defer h.origin.Unlock()
-
-		h.origin.truncateSize = size
-
-		return
-	}
-
-	h.truncateSize = size
 }
 
 var ErrInvalidSize = errors.New("invalid size")
@@ -267,45 +331,33 @@ func (h *handle) Truncate(size int64) error {
 		return ErrInvalidSize
 	}
 
-	h.Lock()
-	defer h.Unlock()
-
-	h.setTruncatedSize(size)
+	h.object.SetTruncatedSize(size)
 
 	return nil
 }
 
 func (h *handle) Touch(mtime time.Time) error {
-	h.Lock()
-	defer h.Unlock()
-
-	if h.origin != nil {
-		return h.origin.Touch(mtime)
-	}
-
 	if mtime.IsZero() {
 		mtime = time.Now()
 	}
 
-	h.touchTime = mtime
+	h.object.SetTouchTime(mtime)
 
 	return nil
 }
 
 var ErrSameConnection = errors.New("same connection")
 
+var ErrCannotTruncate = errors.New("cannot truncate in reopened handle")
+
 func (h *handle) Reopen(conn Conn, mode int) (File, error) { //nolint:funlen
 	h.Lock()
 	defer h.Unlock()
 
-	if h.origin != nil {
-		return h.origin.Reopen(conn, mode)
-	}
-
 	if conn == nil {
 		var err error
 
-		conn, err = h.api.Connect(h.ctx)
+		conn, err = h.object.api.Connect(h.object.ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -313,6 +365,10 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) { //nolint:funlen
 
 	if conn == h.conn { // Check that the caller didn't provide the same connection
 		return nil, ErrSameConnection
+	}
+
+	if mode&O_TRUNC != 0 {
+		return nil, ErrCannotTruncate
 	}
 
 	replicaInfo, err := h.getReplicaAccessInfo()
@@ -323,25 +379,22 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) { //nolint:funlen
 	}
 
 	request := msg.DataObjectRequest{
-		Path:      h.path,
+		Path:      h.object.path,
 		OpenFlags: mode &^ O_APPEND,
 	}
 
 	request.KeyVals.Add(msg.RESC_HIER_STR_KW, replicaInfo.ResourceHierarchy)
 	request.KeyVals.Add(msg.REPLICA_TOKEN_KW, replicaInfo.ReplicaToken)
 
-	h.api.setFlags(&request.KeyVals)
+	h.object.api.setFlags(&request.KeyVals)
 
 	h2 := handle{
-		api:          h.api,
-		conn:         conn,
-		ctx:          h.ctx,
-		path:         h.path,
-		origin:       h,
-		truncateSize: -1,
+		object:   h.object,
+		conn:     conn,
+		reopened: true,
 	}
 
-	err = conn.Request(h.ctx, msg.DATA_OBJ_OPEN_AN, request, &h.FileDescriptor)
+	err = conn.Request(h.object.ctx, msg.DATA_OBJ_OPEN_AN, request, &h.fileDescriptor)
 	if err == nil && mode&O_APPEND != 0 { // Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)
 	}
@@ -352,10 +405,10 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) { //nolint:funlen
 		return nil, err
 	}
 
-	h.wg.Add(1) // Add to waitgroup
+	h.object.wg.Add(1) // Add to waitgroup
 
 	h2.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error {
-		logrus.Warnf("Emergency close of %s", h2.path)
+		logrus.Warnf("Emergency close of %s", h.object.path)
 
 		return h2.Close()
 	})
@@ -374,7 +427,7 @@ var ErrIncompleteReplicaAccessInfo = errors.New("incomplete replica access info"
 func (h *handle) getReplicaAccessInfo() (*ReplicaAccessInfo, error) {
 	response := msg.GetDescriptorInfoResponse{}
 
-	if err := h.conn.Request(h.ctx, msg.GET_FILE_DESCRIPTOR_INFO_APN, msg.GetDescriptorInfoRequest{FileDescriptor: h.FileDescriptor}, &response); err != nil {
+	if err := h.conn.Request(h.object.ctx, msg.GET_FILE_DESCRIPTOR_INFO_APN, msg.GetDescriptorInfoRequest{FileDescriptor: h.fileDescriptor}, &response); err != nil {
 		return nil, err
 	}
 
