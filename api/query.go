@@ -230,6 +230,10 @@ func (r *Result) Scan(dest ...interface{}) error {
 // Close releases all resources associated with the result.
 // It's safe to call Close multiple times.
 func (r *Result) Close() error {
+	if r.result == nil {
+		return r.closeErr
+	}
+
 	r.cleanup()
 
 	return r.closeErr
