@@ -277,7 +277,7 @@ func Split(path string) (string, string) {
 		}
 	}
 
-	if path[0] == '/' {
+	if len(path) > 0 && path[0] == '/' {
 		return "/", path[1:]
 	}
 
