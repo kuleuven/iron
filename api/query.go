@@ -36,6 +36,15 @@ func Equal[V string | int | int64](column msg.ColumnNumber, value V) Condition {
 	}
 }
 
+// NotEqual creates a Condition that checks if the specified column is equal to the given value.
+func NotEqual[V string | int | int64](column msg.ColumnNumber, value V) Condition {
+	return Condition{
+		Column: column,
+		Op:     "<>",
+		Value:  fmt.Sprintf("'%v'", value),
+	}
+}
+
 // Like creates a Condition that checks if the specified column matches the given SQL LIKE expression.
 func Like(column msg.ColumnNumber, value string) Condition {
 	return Condition{

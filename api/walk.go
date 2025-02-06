@@ -123,7 +123,7 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 	pmap := collectionIDPathMap(parents)
 
 	// Find all subcollections
-	subcollections, err := api.ListCollections(ctx, In(msg.ICAT_COLUMN_COLL_PARENT_NAME, names))
+	subcollections, err := api.ListCollections(ctx, In(msg.ICAT_COLUMN_COLL_PARENT_NAME, names), NotEqual(msg.ICAT_COLUMN_COLL_NAME, "/"))
 	if err != nil {
 		return api.handleWalkError(fn, names, err)
 	}
