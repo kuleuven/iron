@@ -10,12 +10,13 @@ import (
 var responses = []any{
 	msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 5,
+		AttributeCount: 6,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"/test"}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -23,13 +24,14 @@ var responses = []any{
 	},
 	msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 6,
+		AttributeCount: 7,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"2", "3"}},
 			{AttributeIndex: 501, ResultLen: 1, Values: []string{"/test/test'2", "/test/test3"}},
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods", "user"}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone", "zone"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
@@ -37,7 +39,7 @@ var responses = []any{
 	},
 	msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 14,
+		AttributeCount: 15,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -48,6 +50,7 @@ var responses = []any{
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
 			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
+			{AttributeIndex: 412, ResultLen: 2, Values: []string{"zone", "zone"}},
 			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
 			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
@@ -88,11 +91,11 @@ var responses = []any{
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
 
-	msg.QueryResponse{AttributeCount: 6},
-	msg.QueryResponse{AttributeCount: 14},
+	msg.QueryResponse{AttributeCount: 7},
+	msg.QueryResponse{AttributeCount: 15},
 
-	msg.QueryResponse{AttributeCount: 6},
-	msg.QueryResponse{AttributeCount: 14},
+	msg.QueryResponse{AttributeCount: 7},
+	msg.QueryResponse{AttributeCount: 15},
 }
 
 func TestWalk(t *testing.T) {

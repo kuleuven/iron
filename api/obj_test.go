@@ -12,12 +12,13 @@ import (
 func TestGetCollection(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 5,
+		AttributeCount: 6,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -49,7 +50,7 @@ func TestGetCollection(t *testing.T) {
 		t.Errorf("object path should be %s, but is %s", expected, obj.Path)
 	}
 
-	if obj.Mode() != os.FileMode(0o750)|os.ModeDir {
+	if obj.Mode() != os.FileMode(0o750)|os.ModeDir|os.ModeSetgid {
 		t.Errorf("object mode should be %o, but is %o", os.FileMode(0o750)|os.ModeDir, obj.Mode())
 	}
 
@@ -61,7 +62,7 @@ func TestGetCollection(t *testing.T) {
 func TestGetDataObject(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 13,
+		AttributeCount: 14,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -71,6 +72,7 @@ func TestGetDataObject(t *testing.T) {
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
 			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{"zone", "zone"}},
 			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
 			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
@@ -224,13 +226,14 @@ func TestListResources(t *testing.T) {
 func TestListSubCollections(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 6,
+		AttributeCount: 7,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 501, ResultLen: 1, Values: []string{"coll_name"}},
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
@@ -246,7 +249,7 @@ func TestListSubCollections(t *testing.T) {
 func TestListDataObjects(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 15,
+		AttributeCount: 16,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -258,6 +261,7 @@ func TestListDataObjects(t *testing.T) {
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
 			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{"zone", "zone"}},
 			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
 			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},

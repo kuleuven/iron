@@ -22,6 +22,7 @@ type Collection struct {
 	ID          int64
 	Path        string // Path has an absolute path to the collection
 	Owner       string
+	OwnerZone   string
 	CreatedAt   time.Time
 	ModifiedAt  time.Time
 	Inheritance bool
@@ -78,6 +79,7 @@ type DataObject struct {
 type Replica struct {
 	Number            int
 	Owner             string
+	OwnerZone         string
 	Checksum          string
 	Status            string
 	Size              int64
@@ -188,6 +190,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 	err := api.QueryRow(
 		msg.ICAT_COLUMN_COLL_ID,
 		msg.ICAT_COLUMN_COLL_OWNER_NAME,
+		msg.ICAT_COLUMN_COLL_OWNER_ZONE,
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
 		msg.ICAT_COLUMN_COLL_INHERITANCE,
@@ -197,6 +200,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 	).Execute(ctx).Scan(
 		&c.ID,
 		&c.Owner,
+		&c.OwnerZone,
 		&c.CreatedAt,
 		&c.ModifiedAt,
 		&c.Inheritance,
@@ -223,6 +227,7 @@ func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, er
 		msg.ICAT_COLUMN_DATA_REPL_NUM,
 		msg.ICAT_COLUMN_DATA_SIZE,
 		msg.ICAT_COLUMN_D_OWNER_NAME,
+		msg.ICAT_COLUMN_D_OWNER_ZONE,
 		msg.ICAT_COLUMN_D_DATA_CHECKSUM,
 		msg.ICAT_COLUMN_D_REPL_STATUS,
 		msg.ICAT_COLUMN_D_RESC_NAME,
@@ -250,6 +255,7 @@ func (api *API) GetDataObject(ctx context.Context, path string) (*DataObject, er
 			&replica.Number,
 			&replica.Size,
 			&replica.Owner,
+			&replica.OwnerZone,
 			&replica.Checksum,
 			&replica.Status,
 			&replica.ResourceName,
@@ -475,6 +481,7 @@ func (api *API) ListDataObjects(ctx context.Context, conditions ...Condition) ([
 		msg.ICAT_COLUMN_DATA_REPL_NUM,
 		msg.ICAT_COLUMN_DATA_SIZE,
 		msg.ICAT_COLUMN_D_OWNER_NAME,
+		msg.ICAT_COLUMN_D_OWNER_ZONE,
 		msg.ICAT_COLUMN_D_DATA_CHECKSUM,
 		msg.ICAT_COLUMN_D_REPL_STATUS,
 		msg.ICAT_COLUMN_D_RESC_NAME,
@@ -502,6 +509,7 @@ func (api *API) ListDataObjects(ctx context.Context, conditions ...Condition) ([
 			&replica.Number,
 			&replica.Size,
 			&replica.Owner,
+			&replica.OwnerZone,
 			&replica.Checksum,
 			&replica.Status,
 			&replica.ResourceName,
@@ -538,6 +546,7 @@ func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([
 		msg.ICAT_COLUMN_COLL_ID,
 		msg.ICAT_COLUMN_COLL_NAME,
 		msg.ICAT_COLUMN_COLL_OWNER_NAME,
+		msg.ICAT_COLUMN_COLL_OWNER_ZONE,
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
 		msg.ICAT_COLUMN_COLL_INHERITANCE,
@@ -552,6 +561,7 @@ func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([
 			&c.ID,
 			&c.Path,
 			&c.Owner,
+			&c.OwnerZone,
 			&c.CreatedAt,
 			&c.ModifiedAt,
 			&c.Inheritance,
