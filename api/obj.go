@@ -19,11 +19,12 @@ type Object interface {
 var _ os.FileInfo = &Collection{}
 
 type Collection struct {
-	ID         int64
-	Path       string // Path has an absolute path to the collection
-	Owner      string
-	CreatedAt  time.Time
-	ModifiedAt time.Time
+	ID          int64
+	Path        string // Path has an absolute path to the collection
+	Owner       string
+	CreatedAt   time.Time
+	ModifiedAt  time.Time
+	Inheritance bool
 }
 
 func (c *Collection) Identifier() int64 {
@@ -43,6 +44,10 @@ func (c *Collection) ModTime() time.Time {
 }
 
 func (c *Collection) Mode() os.FileMode {
+	if c.Inheritance {
+		return os.FileMode(0o750) | os.ModeDir | os.ModeSetgid
+	}
+
 	return os.FileMode(0o750) | os.ModeDir
 }
 
@@ -185,6 +190,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 		msg.ICAT_COLUMN_COLL_OWNER_NAME,
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
+		msg.ICAT_COLUMN_COLL_INHERITANCE,
 	).Where(
 		msg.ICAT_COLUMN_COLL_NAME,
 		fmt.Sprintf(equalTo, path),
@@ -193,6 +199,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 		&c.Owner,
 		&c.CreatedAt,
 		&c.ModifiedAt,
+		&c.Inheritance,
 	)
 	if err != nil {
 		return nil, err
@@ -277,7 +284,7 @@ func Split(path string) (string, string) {
 		}
 	}
 
-	if len(path) > 0 && path[0] == '/' {
+	if path != "" && path[0] == '/' {
 		return "/", path[1:]
 	}
 
@@ -533,6 +540,7 @@ func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([
 		msg.ICAT_COLUMN_COLL_OWNER_NAME,
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
+		msg.ICAT_COLUMN_COLL_INHERITANCE,
 	).With(conditions...).Execute(ctx)
 
 	defer results.Close()
@@ -546,6 +554,7 @@ func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([
 			&c.Owner,
 			&c.CreatedAt,
 			&c.ModifiedAt,
+			&c.Inheritance,
 		); err != nil {
 			return nil, err
 		}

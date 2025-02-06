@@ -10,7 +10,7 @@ import (
 var responses = []any{
 	msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 4,
+		AttributeCount: 5,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -18,11 +18,12 @@ var responses = []any{
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"/test"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
+			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
 		},
 	},
 	msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 5,
+		AttributeCount: 6,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -31,6 +32,7 @@ var responses = []any{
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods", "user"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
+			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
 		},
 	},
 	msg.QueryResponse{
@@ -86,10 +88,10 @@ var responses = []any{
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
 
-	msg.QueryResponse{AttributeCount: 5},
+	msg.QueryResponse{AttributeCount: 6},
 	msg.QueryResponse{AttributeCount: 14},
 
-	msg.QueryResponse{AttributeCount: 5},
+	msg.QueryResponse{AttributeCount: 6},
 	msg.QueryResponse{AttributeCount: 14},
 }
 

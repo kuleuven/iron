@@ -12,7 +12,7 @@ import (
 func TestGetCollection(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 4,
+		AttributeCount: 5,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -20,6 +20,7 @@ func TestGetCollection(t *testing.T) {
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
 		},
 	}
 
@@ -223,7 +224,7 @@ func TestListResources(t *testing.T) {
 func TestListSubCollections(t *testing.T) {
 	testConn.NextResponse = msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 5,
+		AttributeCount: 6,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -232,6 +233,7 @@ func TestListSubCollections(t *testing.T) {
 			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
 		},
 	}
 
