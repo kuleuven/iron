@@ -152,20 +152,20 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 		case SkipDir:
 			// Need to remove all subcollections and objects within this directory
 			subcollections = slices.DeleteFunc(subcollections, func(c Collection) bool {
-				return strings.HasPrefix(c.Path, coll.Path+"/")
+				return strings.HasPrefix(c.Path, skipPrefix(coll.Path))
 			})
 
 			objects = slices.DeleteFunc(objects, func(o DataObject) bool {
-				return strings.HasPrefix(o.Path, coll.Path+"/")
+				return strings.HasPrefix(o.Path, skipPrefix(coll.Path))
 			})
 		case SkipSubDirs:
 			// Subcollections within this directory should be added as objects
 			skipcolls = append(skipcolls, slices.DeleteFunc(slices.Clone(subcollections), func(c Collection) bool {
-				return !strings.HasPrefix(c.Path, coll.Path+"/")
+				return !strings.HasPrefix(c.Path, skipPrefix(coll.Path))
 			})...)
 
 			subcollections = slices.DeleteFunc(subcollections, func(c Collection) bool {
-				return strings.HasPrefix(c.Path, coll.Path+"/")
+				return strings.HasPrefix(c.Path, skipPrefix(coll.Path))
 			})
 
 			continue
@@ -204,6 +204,14 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 
 	// Iterate over subcollections
 	return api.walkLevel(ctx, fn, subcollections, opts...)
+}
+
+func skipPrefix(colPath string) string {
+	if colPath == "/" {
+		return "/"
+	}
+
+	return colPath + "/"
 }
 
 // walkListDataObjects is an optimized version of ListDataObjects that avoids the extra join with R_COLL_MAIN
