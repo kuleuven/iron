@@ -183,6 +183,14 @@ const equalTo = "= '%s'"
 
 // GetCollection returns a collection for the path
 func (api *API) GetCollection(ctx context.Context, path string) (*Collection, error) {
+	if path == "/" { // Avoid non functioning query if requesting root
+		return &Collection{
+			Path:      "/",
+			Owner:     "rods",
+			OwnerZone: api.Zone,
+		}, nil
+	}
+
 	c := Collection{
 		Path: path,
 	}
