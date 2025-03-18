@@ -31,12 +31,9 @@ type Option struct {
 	// EnvCallback is an optional function that returns the environment settings for the connection
 	// when a new connection is established. If not provided, the default environment settings are used.
 	// This is useful in combination with the DeferConnectionToFirstUse option, to prepare the client
-	// before the connection parameters are known.
-	EnvCallback func() (Env, error)
-
-	// EnvCallbackCacheDuration is the duration for which the environment settings are cached.
-	// If set to 0, the environment settings are cached indefinitely.
-	EnvCallbackCacheDuration time.Duration
+	// before the connection parameters are known. The returned time.Time is the time until which the
+	// environment settings are valid, or zero if they are valid indefinitely.
+	EnvCallback func() (Env, time.Time, error)
 
 	// Admin is a flag that indicates whether the client should act in admin mode.
 	Admin bool
@@ -51,16 +48,16 @@ type Option struct {
 }
 
 type Client struct {
-	ctx             context.Context //nolint:containedctx
-	env             *Env
-	option          Option
-	protocol        msg.Protocol
-	envCallbackTime time.Time
-	available, all  []*conn
-	waiting         int
-	ready           chan *conn
-	dialErr         error
-	lock            sync.Mutex
+	ctx               context.Context //nolint:containedctx
+	env               *Env
+	option            Option
+	protocol          msg.Protocol
+	envCallbackExpiry time.Time
+	available, all    []*conn
+	waiting           int
+	ready             chan *conn
+	dialErr           error
+	lock              sync.Mutex
 	*api.API
 }
 
@@ -130,7 +127,7 @@ func (c *Client) Env() Env {
 			return Env{}
 		}
 
-		env, err := c.option.EnvCallback()
+		env, expiry, err := c.option.EnvCallback()
 		if err != nil {
 			c.dialErr = err
 
@@ -138,12 +135,12 @@ func (c *Client) Env() Env {
 		}
 
 		c.env = &env
-		c.envCallbackTime = time.Now()
+		c.envCallbackExpiry = expiry
 		c.API.Username = env.Username
 		c.API.Zone = env.Zone
 		c.API.DefaultResource = env.DefaultResource
 
-		if c.option.EnvCallbackCacheDuration <= 0 {
+		if expiry.IsZero() {
 			c.option.EnvCallback = nil // No need to call the callback again
 		}
 	}
@@ -152,7 +149,7 @@ func (c *Client) Env() Env {
 }
 
 func (c *Client) needsEnvCallback() bool {
-	return c.option.EnvCallback != nil && (c.envCallbackTime.IsZero() || time.Since(c.envCallbackTime) > c.option.EnvCallbackCacheDuration)
+	return c.option.EnvCallback != nil && (c.envCallbackExpiry.IsZero() || time.Now().After(c.envCallbackExpiry))
 }
 
 // Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
@@ -209,7 +206,7 @@ func (c *Client) newConn() (*conn, error) {
 
 	// If an EnvCallback is provided, use it to retrieve the environment settings
 	if c.needsEnvCallback() {
-		env, err := c.option.EnvCallback()
+		env, expiry, err := c.option.EnvCallback()
 		if err != nil {
 			c.dialErr = err
 
@@ -217,12 +214,12 @@ func (c *Client) newConn() (*conn, error) {
 		}
 
 		c.env = &env
-		c.envCallbackTime = time.Now()
+		c.envCallbackExpiry = expiry
 		c.API.Username = env.Username
 		c.API.Zone = env.Zone
 		c.API.DefaultResource = env.DefaultResource
 
-		if c.option.EnvCallbackCacheDuration <= 0 {
+		if expiry.IsZero() {
 			c.option.EnvCallback = nil // No need to call the callback again
 		}
 	}

@@ -42,7 +42,7 @@ func TestClient(t *testing.T) {
 	client, err := New(context.Background(), env, Option{
 		ClientName:                "test",
 		DeferConnectionToFirstUse: true,
-		EnvCallback:               func() (Env, error) { return env, nil },
+		EnvCallback:               func() (Env, time.Time, error) { return env, time.Time{}, nil },
 		DiscardConnectionAge:      time.Hour,
 	})
 	if err != nil {
