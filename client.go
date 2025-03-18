@@ -42,22 +42,27 @@ type Option struct {
 	// This is an experimental feature and may be removed in a future version.
 	UseNativeProtocol bool
 
+	// GeneratedNativePasswordAge is the maximum age of a generated native password before it is discarded.
+	// In case pam authentication is used, this should be put to a value lower than the PAM timeout which is set on the server.
+	GeneratedNativePasswordAge time.Duration
+
 	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
-	// In case pam authentication is used, this should be put to a value lower than the PAM timeout.
 	DiscardConnectionAge time.Duration
 }
 
 type Client struct {
-	ctx               context.Context //nolint:containedctx
-	env               *Env
-	option            Option
-	protocol          msg.Protocol
-	envCallbackExpiry time.Time
-	available, all    []*conn
-	waiting           int
-	ready             chan *conn
-	dialErr           error
-	lock              sync.Mutex
+	ctx                  context.Context //nolint:containedctx
+	env                  *Env
+	option               Option
+	protocol             msg.Protocol
+	nativePassword       string
+	envCallbackExpiry    time.Time
+	nativePasswordExpiry time.Time
+	available, all       []*conn
+	waiting              int
+	ready                chan *conn
+	dialErr              error
+	lock                 sync.Mutex
 	*api.API
 }
 
@@ -139,6 +144,7 @@ func (c *Client) Env() Env {
 		c.API.Username = env.Username
 		c.API.Zone = env.Zone
 		c.API.DefaultResource = env.DefaultResource
+		c.nativePasswordExpiry = time.Time{}
 
 		if expiry.IsZero() {
 			c.option.EnvCallback = nil // No need to call the callback again
@@ -218,6 +224,7 @@ func (c *Client) newConn() (*conn, error) {
 		c.API.Username = env.Username
 		c.API.Zone = env.Zone
 		c.API.DefaultResource = env.DefaultResource
+		c.nativePasswordExpiry = time.Time{}
 
 		if expiry.IsZero() {
 			c.option.EnvCallback = nil // No need to call the callback again
@@ -227,9 +234,9 @@ func (c *Client) newConn() (*conn, error) {
 	env := *c.env
 
 	// Only use pam_password for first connection
-	if len(c.all) > 0 && env.AuthScheme != native {
+	if env.AuthScheme != native && time.Now().Before(c.nativePasswordExpiry) {
 		env.AuthScheme = native
-		env.Password = c.all[0].NativePassword()
+		env.Password = c.nativePassword
 	}
 
 	conn, err := dial(c.ctx, env, c.option.ClientName, c.protocol)
@@ -237,6 +244,12 @@ func (c *Client) newConn() (*conn, error) {
 		c.dialErr = err
 
 		return nil, err
+	}
+
+	// Save pam_password for next connection
+	if env.AuthScheme != native {
+		c.nativePassword = conn.NativePassword()
+		c.nativePasswordExpiry = conn.connectedAt.Add(c.option.GeneratedNativePasswordAge)
 	}
 
 	c.all = append(c.all, conn)
