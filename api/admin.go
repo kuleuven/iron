@@ -54,6 +54,23 @@ func (api *API) ModifyReplicaAttribute(ctx context.Context, path string, replica
 	return api.Request(ctx, msg.MOD_DATA_OBJ_META_AN, request, &msg.EmptyResponse{})
 }
 
+// RegisterReplica registers a replica of a data object.
+// This is an administrative call, a connection using a rodsadmin is required.
+func (api *API) RegisterReplica(ctx context.Context, path string, resource string, physicalPath string) error {
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.DataObjectInfo{
+		ObjPath:  path,
+		RescName: resource,
+	}
+
+	request.KeyVals.Add(msg.FILE_PATH_KW, physicalPath)
+
+	return api.Request(ctx, msg.PHY_PATH_REG_AN, request, &msg.EmptyResponse{})
+}
+
 // CreateUser creates a user with the given type
 // If a zone needs to be specified, use the username#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
