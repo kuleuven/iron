@@ -333,6 +333,12 @@ type ModDataObjMetaRequest struct {
 	KeyVals SSKeyVal       `xml:"KeyValPair_PI"`
 }
 
+type UnregDataObjRequest struct {
+	XMLName xml.Name       `xml:"ModDataObjMeta_PI"`
+	DataObj DataObjectInfo `xml:"DataObjInfo_PI"`
+	KeyVals SSKeyVal       `xml:"KeyValPair_PI"`
+}
+
 type DataObjectInfo struct {
 	XMLName                  xml.Name           `xml:"DataObjInfo_PI"`
 	ObjPath                  string             `xml:"objPath"`

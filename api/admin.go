@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"gitea.icts.kuleuven.be/coz/iron/msg"
 	"gitea.icts.kuleuven.be/coz/iron/scramble"
@@ -62,8 +61,8 @@ func (api *API) RegisterReplica(ctx context.Context, path string, resource strin
 		return ErrRequiresAdmin
 	}
 
-	request := &msg.DataObjectInfo{
-		ObjPath: path,
+	request := &msg.DataObjectRequest{
+		Path: path,
 	}
 
 	request.KeyVals.Add(msg.DATA_TYPE_KW, "generic")
@@ -71,40 +70,6 @@ func (api *API) RegisterReplica(ctx context.Context, path string, resource strin
 	request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
 
 	return api.Request(ctx, msg.PHY_PATH_REG_AN, request, &msg.EmptyResponse{})
-}
-
-// UnregisterObject unregisters a data object from the specified resource.
-func (api *API) UnregisterObject(ctx context.Context, path string, resource string) error {
-	if !api.Admin {
-		return ErrRequiresAdmin
-	}
-
-	request := msg.DataObjectRequest{
-		Path: path,
-	}
-
-	request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
-
-	api.setFlags(&request.KeyVals)
-
-	return api.ElevateRequest(ctx, msg.UNREG_DATA_OBJ_AN, request, &msg.EmptyResponse{}, path)
-}
-
-// UnregisterObjectReplica unregisters a specific replica of a data object.
-func (api *API) UnregisterObjectReplica(ctx context.Context, path string, replicaNumber int) error {
-	if !api.Admin {
-		return ErrRequiresAdmin
-	}
-
-	request := msg.DataObjectRequest{
-		Path: path,
-	}
-
-	request.KeyVals.Add(msg.REPL_NUM_KW, strconv.Itoa(replicaNumber))
-
-	api.setFlags(&request.KeyVals)
-
-	return api.ElevateRequest(ctx, msg.UNREG_DATA_OBJ_AN, request, &msg.EmptyResponse{}, path)
 }
 
 // CreateUser creates a user with the given type
