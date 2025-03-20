@@ -32,6 +32,42 @@ func TestModifyReplicaAttribute(t *testing.T) {
 	}
 }
 
+func TestRegisterReplica(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.RegisterReplica(context.Background(), "test", "test", "/test"); err != ErrRequiresAdmin {
+		t.Error(err)
+	}
+
+	if err := testAPI.AsAdmin().RegisterReplica(context.Background(), "test", "test", "/test"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUnregisterObject(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.UnregisterObject(context.Background(), "test", "test"); err != ErrRequiresAdmin {
+		t.Error(err)
+	}
+
+	if err := testAPI.AsAdmin().UnregisterObject(context.Background(), "test", "test"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUnregisterObjectReplica(t *testing.T) {
+	testConn.NextResponse = msg.EmptyResponse{}
+
+	if err := testAPI.UnregisterObjectReplica(context.Background(), "test", 1); err != ErrRequiresAdmin {
+		t.Error(err)
+	}
+
+	if err := testAPI.AsAdmin().UnregisterObjectReplica(context.Background(), "test", 1); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestAdminCalls(t *testing.T) {
 	testConn.NextResponses = slices.Repeat([]any{msg.EmptyResponse{}}, 10)
 
