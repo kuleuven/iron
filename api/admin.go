@@ -68,6 +68,7 @@ func (api *API) RegisterReplica(ctx context.Context, path string, resource strin
 	request.KeyVals.Add(msg.DATA_TYPE_KW, "generic")
 	request.KeyVals.Add(msg.FILE_PATH_KW, physicalPath)
 	request.KeyVals.Add(msg.DEST_RESC_NAME_KW, resource)
+	request.KeyVals.Add(msg.REG_REPL_KW, "")
 
 	return api.Request(ctx, msg.PHY_PATH_REG_AN, request, &msg.EmptyResponse{})
 }
