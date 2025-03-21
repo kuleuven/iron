@@ -93,7 +93,7 @@ func TestDeleteDataObject(t *testing.T) {
 func TestReplicateDataObject(t *testing.T) {
 	testConn.NextResponse = msg.EmptyResponse{}
 
-	if err := testAPI.ReplicateDataObject(context.Background(), "test", "otherResource"); err != nil {
+	if err := testAPI.WithNumThreads(1).ReplicateDataObject(context.Background(), "test", "otherResource"); err != nil {
 		t.Fatal(err)
 	}
 }

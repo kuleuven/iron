@@ -121,6 +121,7 @@ func (api *API) ReplicateDataObject(ctx context.Context, path string, resource s
 	request := msg.DataObjectRequest{
 		Path:          path,
 		OperationType: msg.OPER_TYPE_REPLICATE_DATA_OBJ,
+		Threads:       api.NumThreads,
 	}
 
 	if resource != "" {
@@ -199,10 +200,12 @@ func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) err
 			{
 				Path:          oldPath,
 				OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_SRC,
+				Threads:       api.NumThreads,
 			},
 			{
 				Path:          newPath,
 				OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_DEST,
+				Threads:       api.NumThreads,
 			},
 		},
 	}

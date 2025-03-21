@@ -23,6 +23,7 @@ type API struct {
 	Connect         func(context.Context) (Conn, error) // Handler to obtain a connection to perform requests on
 	Admin           bool                                // Whether to act as admin by sending the admin keyword
 	DefaultResource string                              // Default resource to use when creating data objects
+	NumThreads      int                                 // Number of threads to use for server-side copies
 }
 
 // Conn is a limited interface to an iRODS connection to avoid dependency cycles.
@@ -137,6 +138,13 @@ func (api API) AsAdmin() *API {
 // WithDefaultResource returns a new API with the default resource set
 func (api API) WithDefaultResource(resource string) *API {
 	api.DefaultResource = resource
+
+	return &api
+}
+
+// WithNumThreads returns a new API with the number of threads set
+func (api API) WithNumThreads(n int) *API {
+	api.NumThreads = n
 
 	return &api
 }
