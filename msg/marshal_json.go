@@ -14,7 +14,12 @@ func marshalJSON(obj any, protocol Protocol, msgType string) (*Message, error) {
 
 	xmlObject := BinBytesBuf{
 		Length: len(jsonBody),
-		Data:   base64.StdEncoding.EncodeToString(jsonBody),
+		Data:   string(jsonBody),
+	}
+
+	// only base64 encode for XML
+	if protocol == XML {
+		xmlObject.Data = base64.StdEncoding.EncodeToString(jsonBody)
 	}
 
 	return Marshal(xmlObject, protocol, msgType)
@@ -23,13 +28,19 @@ func marshalJSON(obj any, protocol Protocol, msgType string) (*Message, error) {
 func unmarshalJSON(msg Message, protocol Protocol, obj any) error {
 	var xmlObject BinBytesBuf
 
-	if err := Unmarshal(msg, protocol, &xmlObject); err != nil {
+	err := Unmarshal(msg, protocol, &xmlObject)
+	if err != nil {
 		return err
 	}
 
-	jsonBody, err := base64.StdEncoding.DecodeString(xmlObject.Data)
-	if err != nil {
-		return fmt.Errorf("failed to decode base64 data: %w", err)
+	jsonBody := []byte(xmlObject.Data)
+
+	// only base64 decode for XML
+	if protocol == XML {
+		jsonBody, err = base64.StdEncoding.DecodeString(xmlObject.Data)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 data: %w", err)
+		}
 	}
 
 	// remove trail \x00
