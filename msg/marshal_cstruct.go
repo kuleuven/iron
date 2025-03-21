@@ -218,7 +218,11 @@ func decodeC(e reflect.Value, buf *bufio.Reader) error {
 
 		value = value[0 : len(value)-1]
 
-		e.Set(reflect.ValueOf(value))
+		if value == anullstr {
+			return nil
+		}
+
+		e.Set(reflect.ValueOf(value).Convert(e.Type()))
 
 		return nil
 
