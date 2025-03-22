@@ -567,8 +567,19 @@ func (c *conn) buildError(m msg.Message) string {
 
 	var rodsErr msg.ErrorResponse
 
-	if xml.Unmarshal(m.Body.Error, &rodsErr) != nil {
-		return string(m.Body.Error)
+	if c.protocol == msg.Native {
+		if err := msg.DecodeC(m.Body.Error, &rodsErr); err != nil {
+			return string(m.Body.Error)
+		}
+	} else {
+		payload, err := msg.PostprocessXML(m.Body.Error)
+		if err != nil {
+			return string(m.Body.Error)
+		}
+
+		if xml.Unmarshal(payload, &rodsErr) != nil {
+			return string(m.Body.Error)
+		}
 	}
 
 	var msgs []string

@@ -15,7 +15,7 @@ func TestXMLMarshal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	preprocessed, err := preprocessXML(buf.Bytes())
+	preprocessed, err := PreprocessXML(buf.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestXMLMarshal(t *testing.T) {
 		t.Fatalf("expected %s, got %s", expected, preprocessed)
 	}
 
-	postprocessed, err := postprocessXML(preprocessed)
+	postprocessed, err := PostprocessXML(preprocessed)
 	if err != nil {
 		t.Fatal(err)
 	}

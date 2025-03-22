@@ -33,7 +33,7 @@ func marshalXML(obj any, msgType string) (*Message, error) {
 		return nil, fmt.Errorf("failed to marshal irods message to xml: %w", err)
 	}
 
-	body, err = preprocessXML(body)
+	body, err = PreprocessXML(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to preprocess xml: %w", err)
 	}
@@ -63,7 +63,7 @@ func unmarshalXML(msg Message, obj any) error {
 		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
 	}
 
-	body, err := postprocessXML(msg.Body.Message)
+	body, err := PostprocessXML(msg.Body.Message)
 	if err != nil {
 		return fmt.Errorf("failed to postprocess xml: %w", err)
 	}
@@ -71,8 +71,8 @@ func unmarshalXML(msg Message, obj any) error {
 	return xml.Unmarshal(body, obj)
 }
 
-// preprocessXML translates output of xml.Marshal into XML that IRODS understands.
-func preprocessXML(in []byte) ([]byte, error) {
+// PreprocessXML translates output of xml.Marshal into XML that IRODS understands.
+func PreprocessXML(in []byte) ([]byte, error) {
 	buf := in
 	out := &bytes.Buffer{}
 
@@ -120,8 +120,8 @@ func preprocessXML(in []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// postprocessXML checks for invalid utf-8 characters.
-func postprocessXML(in []byte) ([]byte, error) {
+// PostprocessXML checks for invalid utf-8 characters.
+func PostprocessXML(in []byte) ([]byte, error) {
 	buf := in
 	out := &bytes.Buffer{}
 

@@ -15,6 +15,37 @@ import (
 )
 
 func marshalCStruct(obj any, msgType string) (*Message, error) {
+	body, err := EncodeC(obj)
+
+	return &Message{
+		Header: Header{
+			Type:       msgType,
+			MessageLen: uint32(len(body)),
+		},
+		Body: Body{
+			Message: body,
+		},
+	}, err
+}
+
+func unmarshalCStruct(msg Message, obj any) error {
+	if msg.Header.MessageLen == 0 {
+		// A CollectionOperationStat is a special case and allowed to be empty if the server doesn't send it
+		if _, ok := obj.(*CollectionOperationStat); ok {
+			return nil
+		}
+
+		return fmt.Errorf("message length is zero")
+	}
+
+	if msg.Header.ErrorLen > 0 {
+		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
+	}
+
+	return DecodeC(msg.Body.Message, obj)
+}
+
+func EncodeC(obj any) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	w := bufio.NewWriter(buf)
 
@@ -35,35 +66,14 @@ func marshalCStruct(obj any, msgType string) (*Message, error) {
 
 	body := buf.Bytes()
 
-	return &Message{
-		Header: Header{
-			Type:       msgType,
-			MessageLen: uint32(len(body)),
-		},
-		Body: Body{
-			Message: body,
-		},
-	}, nil
+	return body, nil
 }
 
-func unmarshalCStruct(msg Message, obj any) error {
-	if msg.Header.MessageLen == 0 {
-		// A CollectionOperationStat is a special case and allowed to be empty if the server doesn't send it
-		if _, ok := obj.(*CollectionOperationStat); ok {
-			return nil
-		}
-
-		return fmt.Errorf("message length is zero")
-	}
-
-	if msg.Header.ErrorLen > 0 {
-		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
-	}
-
+func DecodeC(payload []byte, obj any) error {
 	e := reflect.ValueOf(obj).Elem()
 
 	// We append a 0 byte just in case, but in principal all strings should be 0-terminated
-	buf := bufio.NewReader(bytes.NewBuffer(append(msg.Body.Message, 0)))
+	buf := bufio.NewReader(bytes.NewBuffer(append(payload, 0)))
 
 	return decodeC(e, buf)
 }
