@@ -224,13 +224,13 @@ func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) err
 }
 
 const (
-	O_RDONLY = os.O_RDONLY //nolint:stylecheck
-	O_WRONLY = os.O_WRONLY //nolint:stylecheck
-	O_RDWR   = os.O_RDWR   //nolint:stylecheck
-	O_CREAT  = os.O_CREATE //nolint:stylecheck
-	O_EXCL   = os.O_EXCL   //nolint:stylecheck
-	O_TRUNC  = os.O_TRUNC  //nolint:stylecheck
-	O_APPEND = os.O_APPEND // Irods does not support O_APPEND, we need to seek to the end //nolint:stylecheck
+	O_RDONLY = os.O_RDONLY
+	O_WRONLY = os.O_WRONLY
+	O_RDWR   = os.O_RDWR
+	O_CREAT  = os.O_CREATE
+	O_EXCL   = os.O_EXCL
+	O_TRUNC  = os.O_TRUNC
+	O_APPEND = os.O_APPEND // Irods does not support O_APPEND, we need to seek to the end //nolint:staticcheck
 )
 
 // CreateDataObject creates a data object.

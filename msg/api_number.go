@@ -1,4 +1,4 @@
-//nolint:stylecheck,dupl
+//nolint:dupl
 package msg
 
 // APINumber is a api number type
