@@ -20,6 +20,10 @@ type Option struct {
 	// the first use of the Connect() method.
 	DeferConnectionToFirstUse bool
 
+	// AtFirstUse is an optional function that is called when the first connection is established,
+	// before the connection is returned to the caller of Connect().
+	AtFirstUse func(*api.API)
+
 	// Maximum number of connections that can be established at any given time.
 	MaxConns int
 
@@ -62,6 +66,7 @@ type Client struct {
 	waiting                int
 	ready                  chan *conn
 	dialErr                error
+	firstUse               sync.Once
 	lock                   sync.Mutex
 	*api.API
 }
@@ -166,13 +171,23 @@ func (c *Client) Connect() (Conn, error) {
 
 	c.discardOldConnections()
 
+	wrap := func(conn *conn) Conn {
+		c.firstUse.Do(func() {
+			if c.option.AtFirstUse != nil {
+				c.option.AtFirstUse(conn.API())
+			}
+		})
+
+		return &returnOnClose{conn, c}
+	}
+
 	if len(c.available) > 0 {
 		defer c.lock.Unlock()
 
 		conn := c.available[0]
 		c.available = c.available[1:]
 
-		return &returnOnClose{conn, c}, nil
+		return wrap(conn), nil
 	}
 
 	if len(c.all) < c.option.MaxConns {
@@ -183,7 +198,7 @@ func (c *Client) Connect() (Conn, error) {
 			return nil, err
 		}
 
-		return &returnOnClose{conn, c}, nil
+		return wrap(conn), nil
 	}
 
 	if c.option.AllowConcurrentUse {
@@ -197,14 +212,14 @@ func (c *Client) Connect() (Conn, error) {
 		// Mark the connection as reused
 		c.reused = append(c.reused, first)
 
-		return &returnOnClose{first, c}, nil
+		return wrap(first), nil
 	}
 
 	// None available, block until one becomes available
 	c.waiting++
 	c.lock.Unlock()
 
-	return &returnOnClose{<-c.ready, c}, nil
+	return wrap(<-c.ready), nil
 }
 
 func (c *Client) newConn() (*conn, error) {
