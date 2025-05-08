@@ -117,7 +117,7 @@ func (api *API) DeleteDataObject(ctx context.Context, path string, skipTrash boo
 }
 
 // ReplicateDataObject replicates a data object to the specified resource.
-func (api *API) ReplicateDataObject(ctx context.Context, path string, resource string) error {
+func (api *API) ReplicateDataObject(ctx context.Context, path, resource string) error {
 	request := msg.DataObjectRequest{
 		Path:          path,
 		OperationType: msg.OPER_TYPE_REPLICATE_DATA_OBJ,
@@ -134,7 +134,7 @@ func (api *API) ReplicateDataObject(ctx context.Context, path string, resource s
 }
 
 // TrimDataObject removes a data object from the specified resource.
-func (api *API) TrimDataObject(ctx context.Context, path string, resource string) error {
+func (api *API) TrimDataObject(ctx context.Context, path, resource string) error {
 	request := msg.DataObjectRequest{
 		Path: path,
 	}
@@ -350,7 +350,7 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 
 // ModifyAccess modifies the access level of a data object or collection.
 // For users of federated zones, specify <name>#<zone> as user.
-func (api *API) ModifyAccess(ctx context.Context, path string, user string, accessLevel string, recursive bool) error {
+func (api *API) ModifyAccess(ctx context.Context, path, user, accessLevel string, recursive bool) error {
 	if api.Admin {
 		accessLevel = fmt.Sprintf("admin:%s", accessLevel)
 	}
@@ -377,7 +377,7 @@ func (api *API) ModifyAccess(ctx context.Context, path string, user string, acce
 }
 
 // SetCollectionInheritance sets the inheritance of a collection.
-func (api *API) SetCollectionInheritance(ctx context.Context, path string, inherit bool, recursive bool) error {
+func (api *API) SetCollectionInheritance(ctx context.Context, path string, inherit, recursive bool) error {
 	inheritStr := "inherit"
 
 	if !inherit {

@@ -80,10 +80,10 @@ func (a *App) mkdir() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if recursive {
-				return a.Client.CreateCollectionAll(a.ctx, args[0])
+				return a.CreateCollectionAll(a.ctx, args[0])
 			}
 
-			return a.Client.CreateCollection(a.ctx, args[0])
+			return a.CreateCollection(a.ctx, args[0])
 		},
 	}
 
@@ -101,10 +101,10 @@ func (a *App) rmdir() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if recursive {
-				return a.Client.DeleteCollectionAll(a.ctx, args[0], skip)
+				return a.DeleteCollectionAll(a.ctx, args[0], skip)
 			}
 
-			return a.Client.DeleteCollection(a.ctx, args[0], skip)
+			return a.DeleteCollection(a.ctx, args[0], skip)
 		},
 	}
 
@@ -120,7 +120,7 @@ func (a *App) mvdir() *cobra.Command {
 		Short: "Move a collection",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.Client.RenameCollection(a.ctx, args[0], args[1])
+			return a.RenameCollection(a.ctx, args[0], args[1])
 		},
 	}
 }
@@ -133,7 +133,7 @@ func (a *App) rm() *cobra.Command {
 		Short: "Remove a data object",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.Client.DeleteDataObject(a.ctx, args[0], skip)
+			return a.DeleteDataObject(a.ctx, args[0], skip)
 		},
 	}
 
@@ -148,7 +148,7 @@ func (a *App) mv() *cobra.Command {
 		Short: "Move a data object",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.Client.RenameDataObject(a.ctx, args[0], args[1])
+			return a.RenameDataObject(a.ctx, args[0], args[1])
 		},
 	}
 }
@@ -159,7 +159,7 @@ func (a *App) cp() *cobra.Command {
 		Short: "Copy a data object",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.Client.CopyDataObject(a.ctx, args[0], args[1])
+			return a.CopyDataObject(a.ctx, args[0], args[1])
 		},
 	}
 }

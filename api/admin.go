@@ -56,7 +56,7 @@ func (api *API) ModifyReplicaAttribute(ctx context.Context, path string, replica
 
 // RegisterReplica registers a replica of a data object.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) RegisterReplica(ctx context.Context, path string, resource string, physicalPath string) error {
+func (api *API) RegisterReplica(ctx context.Context, path, resource, physicalPath string) error {
 	if !api.Admin {
 		return ErrRequiresAdmin
 	}
@@ -76,7 +76,7 @@ func (api *API) RegisterReplica(ctx context.Context, path string, resource strin
 // CreateUser creates a user with the given type
 // If a zone needs to be specified, use the username#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) CreateUser(ctx context.Context, username string, userType string) error {
+func (api *API) CreateUser(ctx context.Context, username, userType string) error {
 	if !api.Admin {
 		return ErrRequiresAdmin
 	}
@@ -103,7 +103,7 @@ func (api *API) CreateGroup(ctx context.Context, groupname string) error {
 // ChangeUserPassword changes the password of a user object
 // If a zone needs to be specified, use the username#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) ChangeUserPassword(ctx context.Context, username string, password string) error {
+func (api *API) ChangeUserPassword(ctx context.Context, username, password string) error {
 	if !api.Admin {
 		return ErrRequiresAdmin
 	}
@@ -131,7 +131,7 @@ func (api *API) ChangeUserPassword(ctx context.Context, username string, passwor
 // ChangeUserType changes the type of a user
 // If a zone needs to be specified, use the username#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) ChangeUserType(ctx context.Context, username string, userType string) error {
+func (api *API) ChangeUserType(ctx context.Context, username, userType string) error {
 	if !api.Admin {
 		return ErrRequiresAdmin
 	}
@@ -174,7 +174,7 @@ func (api *API) RemoveGroup(ctx context.Context, groupname string) error {
 // AddGroupMember adds a user to a group.
 // If a zone needs to be specified, use the username#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) AddGroupMember(ctx context.Context, groupname string, username string) error {
+func (api *API) AddGroupMember(ctx context.Context, groupname, username string) error {
 	if !api.Admin {
 		return ErrRequiresAdmin
 	}
@@ -193,7 +193,7 @@ func (api *API) AddGroupMember(ctx context.Context, groupname string, username s
 // RemoveGroupMember removes a user from a group.
 // If a zone needs to be specified, use the username#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
-func (api *API) RemoveGroupMember(ctx context.Context, groupname string, username string) error {
+func (api *API) RemoveGroupMember(ctx context.Context, groupname, username string) error {
 	if !api.Admin {
 		return ErrRequiresAdmin
 	}

@@ -51,18 +51,18 @@ type Option struct {
 }
 
 type Client struct {
-	ctx                  context.Context //nolint:containedctx
-	env                  *Env
-	option               Option
-	protocol             msg.Protocol
-	nativePassword       string
-	envCallbackExpiry    time.Time
-	nativePasswordExpiry time.Time
-	available, all       []*conn
-	waiting              int
-	ready                chan *conn
-	dialErr              error
-	lock                 sync.Mutex
+	ctx                    context.Context //nolint:containedctx
+	env                    *Env
+	option                 Option
+	protocol               msg.Protocol
+	nativePassword         string
+	envCallbackExpiry      time.Time
+	nativePasswordExpiry   time.Time
+	available, all, reused []*conn
+	waiting                int
+	ready                  chan *conn
+	dialErr                error
+	lock                   sync.Mutex
 	*api.API
 }
 
@@ -100,7 +100,7 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	}
 
 	if option.Admin {
-		c.API.Admin = true
+		c.Admin = true
 	}
 
 	// Test first connection unless deferred
@@ -141,9 +141,9 @@ func (c *Client) Env() Env {
 
 		c.env = &env
 		c.envCallbackExpiry = expiry
-		c.API.Username = env.Username
-		c.API.Zone = env.Zone
-		c.API.DefaultResource = env.DefaultResource
+		c.Username = env.Username
+		c.Zone = env.Zone
+		c.DefaultResource = env.DefaultResource
 		c.nativePasswordExpiry = time.Time{}
 
 		if expiry.IsZero() {
@@ -194,7 +194,10 @@ func (c *Client) Connect() (Conn, error) {
 		// Rotate the connection list
 		c.all = append(c.all[1:], first)
 
-		return &dummyCloser{first}, nil
+		// Mark the connection as reused
+		c.reused = append(c.reused, first)
+
+		return &returnOnClose{first, c}, nil
 	}
 
 	// None available, block until one becomes available
@@ -221,9 +224,9 @@ func (c *Client) newConn() (*conn, error) {
 
 		c.env = &env
 		c.envCallbackExpiry = expiry
-		c.API.Username = env.Username
-		c.API.Zone = env.Zone
-		c.API.DefaultResource = env.DefaultResource
+		c.Username = env.Username
+		c.Zone = env.Zone
+		c.DefaultResource = env.DefaultResource
 		c.nativePasswordExpiry = time.Time{}
 
 		if expiry.IsZero() {
@@ -260,6 +263,15 @@ func (c *Client) newConn() (*conn, error) {
 func (c *Client) returnConn(conn *conn) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
+	// If the connection is reused, remove it from the reused list and return
+	for i := range c.reused {
+		if c.reused[i] == conn {
+			c.reused = append(c.reused[:i], c.reused[i+1:]...)
+
+			return nil
+		}
+	}
 
 	if conn.transportErrors > 0 || c.option.DiscardConnectionAge > 0 && time.Since(conn.connectedAt) > c.option.DiscardConnectionAge {
 		for i := range c.all {

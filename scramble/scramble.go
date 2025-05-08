@@ -25,7 +25,7 @@ const (
 )
 
 // ObfuscateNewPassword obfuscates new password for changing
-func ObfuscateNewPassword(newPassword string, oldPassword string, signature string) string {
+func ObfuscateNewPassword(newPassword, oldPassword, signature string) string {
 	pwdLen := len(newPassword)
 
 	if pwdLen > maxPasswordLength {
@@ -47,7 +47,7 @@ func ObfuscateNewPassword(newPassword string, oldPassword string, signature stri
 }
 
 // ScrambleV2 scrambles string (ver2)
-func ScrambleV2(newPassword string, oldPassword string, signature string) string {
+func ScrambleV2(newPassword, oldPassword, signature string) string {
 	v2prefixLen := len(v2Prefix)
 
 	if v2prefixLen > 10 {
@@ -83,7 +83,7 @@ func ScrambleV2(newPassword string, oldPassword string, signature string) string
 }
 
 // Scramble scrambles string
-func Scramble(toScramble string, key string, scramblePrefix string, blockChaining bool) string {
+func Scramble(toScramble, key, scramblePrefix string, blockChaining bool) string {
 	if key == "" {
 		key = defaultPasswordKey
 	}

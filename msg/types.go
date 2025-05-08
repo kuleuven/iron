@@ -92,7 +92,7 @@ type IIKeyVal struct {
 	Values  []int    `xml:"ivalue" sizeField:"iiLen"`
 }
 
-func (kv *IIKeyVal) Add(key int, val int) {
+func (kv *IIKeyVal) Add(key, val int) {
 	kv.Keys = append(kv.Keys, key)
 	kv.Values = append(kv.Values, val)
 	kv.Length++

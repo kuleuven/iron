@@ -34,9 +34,9 @@ func (r *record) Access() []Access {
 type WalkFunc func(path string, record Record, err error) error
 
 var (
-	SkipAll     = filepath.SkipAll
-	SkipDir     = filepath.SkipDir
-	SkipSubDirs = errors.New("skip children of subdirectories of this directory") //nolint:stylecheck
+	SkipAll     = filepath.SkipAll                                                //nolint:errname
+	SkipDir     = filepath.SkipDir                                                //nolint:errname
+	SkipSubDirs = errors.New("skip children of subdirectories of this directory") //nolint:stylecheck,staticcheck,errname
 )
 
 type WalkOption int

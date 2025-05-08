@@ -6,7 +6,7 @@ import (
 )
 
 func TestEnvLoadFromFile(t *testing.T) {
-	f, err := os.CreateTemp("", "")
+	f, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
