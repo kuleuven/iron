@@ -1,4 +1,4 @@
-//nolint:dupl
+//nolint:staticcheck,dupl
 package msg
 
 // ColumnNumber is an ICAT Column number type
