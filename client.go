@@ -168,7 +168,6 @@ func (c *Client) needsEnvCallback() bool {
 // If the maximum number of connections has been reached, it will block until a connection becomes available.
 func (c *Client) Connect() (Conn, error) {
 	c.lock.Lock()
-
 	c.discardOldConnections()
 
 	wrap := func(conn *conn) Conn {
@@ -219,7 +218,20 @@ func (c *Client) Connect() (Conn, error) {
 	c.waiting++
 	c.lock.Unlock()
 
-	return wrap(<-c.ready), nil
+	conn := <-c.ready
+
+	if conn != nil {
+		return wrap(conn), nil
+	}
+
+	// We received a token from a returned connection that was closed
+	// In this case we are allowed to create a new connection
+	conn, err := c.newConn()
+	if err != nil {
+		return nil, err
+	}
+
+	return wrap(conn), nil
 }
 
 func (c *Client) newConn() (*conn, error) {
@@ -281,20 +293,31 @@ func (c *Client) returnConn(conn *conn) error {
 
 	// If the connection is reused, remove it from the reused list and return
 	for i := range c.reused {
-		if c.reused[i] == conn {
-			c.reused = append(c.reused[:i], c.reused[i+1:]...)
-
-			return nil
+		if c.reused[i] != conn {
+			continue
 		}
+
+		c.reused = append(c.reused[:i], c.reused[i+1:]...)
+
+		return nil
 	}
 
 	if conn.transportErrors > 0 || c.option.DiscardConnectionAge > 0 && time.Since(conn.connectedAt) > c.option.DiscardConnectionAge {
 		for i := range c.all {
-			if c.all[i] == conn {
-				c.all = append(c.all[:i], c.all[i+1:]...)
-
-				return conn.Close()
+			if c.all[i] != conn {
+				continue
 			}
+
+			c.all = append(c.all[:i], c.all[i+1:]...)
+
+			// If someone is waiting for a connection, we must inform them
+			// that it is allowed to call newConn()
+			if c.waiting > 0 {
+				c.waiting--
+				c.ready <- nil
+			}
+
+			return conn.Close()
 		}
 	}
 
