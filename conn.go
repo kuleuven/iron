@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -179,6 +180,12 @@ func (c *conn) NativePassword() string {
 // Handshake performs a handshake with the IRODS server.
 func (c *conn) Handshake(ctx context.Context) error {
 	if err := c.startup(ctx); err != nil {
+		// If the context is closed, the error will be a "closed network connection" error.
+		// In that case, return the context error instead
+		if cErr := ctx.Err(); cErr != nil && errors.Is(err, net.ErrClosed) {
+			return cErr
+		}
+
 		return err
 	}
 
