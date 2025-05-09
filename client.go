@@ -177,7 +177,7 @@ func (c *Client) Connect() (Conn, error) {
 			}
 		})
 
-		return &returnOnClose{conn, c}
+		return &returnOnClose{conn: conn, client: c}
 	}
 
 	if len(c.available) > 0 {
@@ -378,11 +378,17 @@ func (*dummyCloser) Close() error {
 
 type returnOnClose struct {
 	*conn
-	client *Client
+	once     sync.Once
+	closeErr error
+	client   *Client
 }
 
 func (r *returnOnClose) Close() error {
-	return r.client.returnConn(r.conn)
+	r.once.Do(func() {
+		r.closeErr = r.client.returnConn(r.conn)
+	})
+
+	return r.closeErr
 }
 
 // Close closes all connections managed by the client, ensuring that any errors
