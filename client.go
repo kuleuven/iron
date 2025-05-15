@@ -302,7 +302,7 @@ func (c *Client) returnConn(conn *conn) error {
 		return nil
 	}
 
-	if conn.transportErrors > 0 || c.option.DiscardConnectionAge > 0 && time.Since(conn.connectedAt) > c.option.DiscardConnectionAge {
+	if conn.transportErrors > 0 || conn.sqlErrors > 0 || c.option.DiscardConnectionAge > 0 && time.Since(conn.connectedAt) > c.option.DiscardConnectionAge {
 		for i := range c.all {
 			if c.all[i] != conn {
 				continue

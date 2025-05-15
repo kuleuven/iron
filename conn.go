@@ -83,6 +83,7 @@ type conn struct {
 	clientSignature string
 	nativePassword  string
 	transportErrors int
+	sqlErrors       int
 
 	// housekeeping
 	doRequest     sync.Mutex
@@ -512,6 +513,10 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 	}
 
 	if m.Header.IntInfo < 0 {
+		if msg.ErrorCode(m.Header.IntInfo) == msg.CAT_SQL_ERR {
+			c.sqlErrors++
+		}
+
 		return &msg.IRODSError{
 			Code:    msg.ErrorCode(m.Header.IntInfo),
 			Message: c.buildError(m),
@@ -558,6 +563,10 @@ func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 	}
 
 	if m.Header.IntInfo < 0 {
+		if msg.ErrorCode(m.Header.IntInfo) == msg.CAT_SQL_ERR {
+			c.sqlErrors++
+		}
+
 		return &msg.IRODSError{
 			Code:    msg.ErrorCode(m.Header.IntInfo),
 			Message: c.buildError(m),
