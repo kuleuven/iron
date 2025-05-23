@@ -11,6 +11,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -629,6 +630,16 @@ func (c *conn) Close() error {
 	defer c.doRequest.Unlock()
 
 	c.closeErr = multierr.Append(c.closeErr, msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0))
+
+	if tlsConn, ok := c.transport.(*tls.Conn); ok {
+		c.closeErr = multierr.Append(c.closeErr, tlsConn.CloseWrite())
+		c.closeErr = multierr.Append(c.closeErr, tlsConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+
+		if _, err := io.Copy(io.Discard, tlsConn); err != nil {
+			c.closeErr = multierr.Append(c.closeErr, err)
+		}
+	}
+
 	c.closeErr = multierr.Append(c.closeErr, c.Conn().Close())
 	c.closed = true
 
