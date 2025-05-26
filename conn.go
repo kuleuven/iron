@@ -418,6 +418,7 @@ var ErrNotImplemented = fmt.Errorf("not implemented")
 func (c *conn) authenticateNew(ctx context.Context) error {
 	// Request challenge
 	request := msg.AuthPluginRequest{
+		Scheme:        "native",
 		NextOperation: "auth_agent_auth_request",
 		UserName:      c.env.ProxyUsername,
 		ZoneName:      c.env.ProxyZone,
@@ -439,6 +440,7 @@ func (c *conn) authenticateNew(ctx context.Context) error {
 
 	// Create challenge response
 	request = msg.AuthPluginRequest{
+		Scheme:        "native",
 		NextOperation: "auth_agent_auth_response",
 		UserName:      c.env.ProxyUsername,
 		ZoneName:      c.env.ProxyZone,
