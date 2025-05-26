@@ -192,6 +192,7 @@ const (
 	REPLICA_CLOSE_APN                    APINumber = 20004
 	TOUCH_APN                            APINumber = 20007
 	REPLICA_TRUNCATE_AN                  APINumber = 802
+	AUTH_PLUGIN                          APINumber = 110000
 )
 
 // response codes

@@ -26,6 +26,7 @@ type Env struct {
 	SSLServerName                 string `json:"-"` // If provided, this will be used for server verification
 	ProxyUsername                 string `json:"-"` // Authenticate with proxy credentials
 	ProxyZone                     string `json:"-"` // Authenticate with proxy credentials
+	UseModernAuth                 bool   `json:"-"` // Use modern authentication framework
 }
 
 const (

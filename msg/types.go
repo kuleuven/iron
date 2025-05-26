@@ -427,3 +427,24 @@ type RError struct {
 	Status  int      `xml:"status"`
 	Message string   `xml:"msg"`
 }
+
+type AuthPluginRequest struct { // No xml.Name means this is a json struct
+	TTL                 string `json:"a_ttl"`
+	ForcePasswordPrompt bool   `json:"force_password_prompt"`
+	NextOperation       string `json:"next_operation"`
+	Scheme              string `json:"scheme"`
+	UserName            string `json:"user_name"`
+	ZoneName            string `json:"zone_name"`
+	Digest              string `json:"digest,omitempty"`
+}
+
+type AuthPluginResponse struct { // No xml.Name means this is a json struct
+	TTL                 string `json:"a_ttl"`
+	ForcePasswordPrompt bool   `json:"force_password_prompt"`
+	NextOperation       string `json:"next_operation"`
+	Scheme              string `json:"scheme"`
+	UserName            string `json:"user_name"`
+	ZoneName            string `json:"zone_name"`
+	Challenge           string `json:"request_result,omitempty"`
+	Digest              string `json:"digest,omitempty"`
+}
