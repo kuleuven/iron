@@ -209,7 +209,11 @@ func (c *conn) startup(ctx context.Context) error {
 		ClientRcatZone: c.env.Zone,
 		ProxyUser:      c.env.ProxyUsername,
 		ProxyRcatZone:  c.env.ProxyZone,
-		Option:         fmt.Sprintf("%s;%s", c.option, c.env.ClientServerNegotiation),
+		Option:         c.option,
+	}
+
+	if c.env.ClientServerNegotiation == "request_server_negotiation" {
+		pack.Option = fmt.Sprintf("%s%s", pack.Option, c.env.ClientServerNegotiation)
 	}
 
 	if err := msg.Write(c.transport, pack, nil, msg.XML, "RODS_CONNECT", 0); err != nil {
