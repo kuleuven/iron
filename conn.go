@@ -430,10 +430,8 @@ func (c *conn) authenticateNew(ctx context.Context) error {
 		return err
 	}
 
-	challengeBytes, err := base64.StdEncoding.DecodeString(response.Challenge)
-	if err != nil {
-		return err
-	}
+	// In the new authentication scheme, the server sends the challenge not base64 encoded
+	challengeBytes := []byte(response.Challenge)
 
 	// Save client signature
 	c.clientSignature = hex.EncodeToString(challengeBytes[:min(16, len(challengeBytes))])
