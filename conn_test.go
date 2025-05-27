@@ -155,6 +155,8 @@ func pamResponses(server net.Conn) {
 		Certificates: []tls.Certificate{cert},
 	})
 
+	defer serverTLS.Close()
+
 	assert((&msg.Header{}).Read(serverTLS))
 	assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, nil, msg.XML, "SHARED_SECRET"))
 	assert(msg.Read(serverTLS, &msg.PamAuthRequest{}, nil, msg.XML, "RODS_API_REQ"))
