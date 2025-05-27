@@ -97,7 +97,17 @@ const groupType = "rodsgroup"
 // If a zone needs to be specified, use the groupname#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
 func (api *API) CreateGroup(ctx context.Context, groupname string) error {
-	return api.CreateUser(ctx, groupname, groupType)
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "add",
+		Arg1: "group",
+		Arg2: groupname,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
 }
 
 // ChangeUserPassword changes the password of a user object
@@ -168,7 +178,17 @@ func (api *API) RemoveUser(ctx context.Context, username string) error {
 // If a zone needs to be specified, use the groupname#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
 func (api *API) RemoveGroup(ctx context.Context, groupname string) error {
-	return api.RemoveUser(ctx, groupname)
+	if !api.Admin {
+		return ErrRequiresAdmin
+	}
+
+	request := &msg.AdminRequest{
+		Arg0: "rm",
+		Arg1: "group",
+		Arg2: groupname,
+	}
+
+	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
 }
 
 // AddGroupMember adds a user to a group.
