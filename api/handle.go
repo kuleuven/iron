@@ -394,7 +394,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 		reopened: true,
 	}
 
-	err = conn.Request(h.object.ctx, msg.DATA_OBJ_OPEN_AN, request, &h.fileDescriptor)
+	err = conn.Request(h.object.ctx, msg.DATA_OBJ_OPEN_AN, request, &h2.fileDescriptor)
 	if err == nil && mode&O_APPEND != 0 { // Irods does not support O_APPEND, we need to seek to the end
 		_, err = h.Seek(0, 2)
 	}
