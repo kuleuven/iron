@@ -125,6 +125,11 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	return c, nil
 }
 
+// Option returns the client options.
+func (c *Client) Option() Option {
+	return c.option
+}
+
 // Env returns the client environment.
 func (c *Client) Env() Env {
 	c.lock.Lock()
