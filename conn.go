@@ -676,7 +676,7 @@ func (c *conn) Close() error {
 
 	if tlsConn, ok := c.transport.(*tls.Conn); ok {
 		c.closeErr = multierr.Append(c.closeErr, tlsConn.CloseWrite())
-		c.closeErr = multierr.Append(c.closeErr, tlsConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+		c.closeErr = multierr.Append(c.closeErr, tlsConn.SetReadDeadline(time.Now().Add(100*time.Millisecond)))
 
 		if _, err := io.Copy(io.Discard, tlsConn); err != nil {
 			c.closeErr = multierr.Append(c.closeErr, err)
