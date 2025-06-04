@@ -133,6 +133,8 @@ func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string
 	return newConn(ctx, transport, env, clientName, msg.XML)
 }
 
+const requestServerNegotiationToken = "request_server_negotiation"
+
 func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, protocol msg.Protocol) (*conn, error) {
 	c := &conn{
 		transport:   transport,
@@ -144,7 +146,7 @@ func newConn(ctx context.Context, transport net.Conn, env Env, clientName string
 
 	// Make sure TLS is required when not using native authentication
 	if c.env.AuthScheme != native {
-		if c.env.ClientServerNegotiation != "request_server_negotiation" {
+		if c.env.ClientServerNegotiation != requestServerNegotiationToken {
 			return nil, ErrTLSRequired
 		}
 
@@ -222,7 +224,7 @@ func (c *conn) startup(ctx context.Context) error {
 		Option:         c.option,
 	}
 
-	if c.env.ClientServerNegotiation == "request_server_negotiation" {
+	if c.env.ClientServerNegotiation == requestServerNegotiationToken {
 		pack.Option = fmt.Sprintf("%s%s", pack.Option, c.env.ClientServerNegotiation)
 	}
 
@@ -230,7 +232,7 @@ func (c *conn) startup(ctx context.Context) error {
 		return err
 	}
 
-	if c.env.ClientServerNegotiation == "request_server_negotiation" {
+	if c.env.ClientServerNegotiation == requestServerNegotiationToken {
 		if err := c.handshakeNegotiation(); err != nil {
 			return err
 		}

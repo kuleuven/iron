@@ -91,8 +91,6 @@ func (api *API) CreateUser(ctx context.Context, username, userType string) error
 	return api.Request(ctx, msg.GENERAL_ADMIN_AN, request, &msg.EmptyResponse{})
 }
 
-const groupType = "rodsgroup"
-
 // CreateGroup creates a group.
 // If a zone needs to be specified, use the groupname#zone format.
 // This is an administrative call, a connection using a rodsadmin is required.
