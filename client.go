@@ -52,6 +52,9 @@ type Option struct {
 
 	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
 	DiscardConnectionAge time.Duration
+
+	// DialFunc is an optional function that overrides the default dial function.
+	DialFunc DialFunc
 }
 
 type Client struct {
@@ -274,7 +277,7 @@ func (c *Client) newConn() (*conn, error) {
 		env.Password = c.nativePassword
 	}
 
-	conn, err := dial(c.ctx, env, c.option.ClientName, c.protocol)
+	conn, err := dial(c.ctx, env, c.option.ClientName, c.option.DialFunc, c.protocol)
 	if err != nil {
 		c.dialErr = err
 

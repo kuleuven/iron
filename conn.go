@@ -99,14 +99,24 @@ var Dialer = net.Dialer{
 	Timeout: time.Minute,
 }
 
+type DialFunc func(ctx context.Context, env Env, clientName string) (net.Conn, error)
+
+func DefaultDialFunc(ctx context.Context, env Env, clientName string) (net.Conn, error) {
+	return Dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
+}
+
 // Dial connects to an IRODS server and creates a new connection.
 // The caller is responsible for closing the connection when it is no longer needed.
 func Dial(ctx context.Context, env Env, clientName string) (Conn, error) {
-	return dial(ctx, env, clientName, msg.XML)
+	return dial(ctx, env, clientName, DefaultDialFunc, msg.XML)
 }
 
-func dial(ctx context.Context, env Env, clientName string, protocol msg.Protocol) (*conn, error) {
-	conn, err := Dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
+func dial(ctx context.Context, env Env, clientName string, dialFunc DialFunc, protocol msg.Protocol) (*conn, error) {
+	if dialFunc == nil {
+		dialFunc = DefaultDialFunc
+	}
+
+	conn, err := dialFunc(ctx, env, clientName)
 	if err != nil {
 		return nil, err
 	}

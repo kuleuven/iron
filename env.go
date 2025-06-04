@@ -23,7 +23,7 @@ type Env struct {
 	ClientServerNegotiationPolicy string `json:"irods_client_server_policy"`
 	DefaultResource               string `json:"irods_default_resource"`
 	PamTTL                        int    `json:"-"` // For pam authentication, the TTL to use for the generated native password
-	SSLServerName                 string `json:"-"` // If provided, this will be used for server verification
+	SSLServerName                 string `json:"-"` // If provided, this will be used for server verification, instead of the hostname
 	ProxyUsername                 string `json:"-"` // Authenticate with proxy credentials
 	ProxyZone                     string `json:"-"` // Authenticate with proxy credentials
 	UseModernAuth                 bool   `json:"-"` // Use modern authentication framework
