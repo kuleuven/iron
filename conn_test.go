@@ -12,9 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kuleuven/iron/msg"
 	"github.com/acomagu/bufpipe"
+	"github.com/kuleuven/iron/msg"
 )
+
+const mockVersion = "4.3.2"
 
 type mockConn struct {
 	io.Reader
@@ -26,7 +28,7 @@ func (c *mockConn) Close() error {
 }
 
 func (c *mockConn) ServerVersion() string {
-	return "4.3.2"
+	return mockVersion
 }
 
 func (c *mockConn) ClientSignature() string {
@@ -101,7 +103,53 @@ func TestConnNative(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if conn.ServerVersion() != "4.3.2" {
+	if conn.ServerVersion() != mockVersion {
+		t.Errorf("bad server version: %s", conn.ServerVersion())
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConnNativeNew(t *testing.T) {
+	ctx := context.Background()
+	transport, server := connPipe()
+
+	msg.Write(server, msg.ClientServerNegotiation{
+		Result: "CS_NEG_DONT_CARE",
+	}, nil, msg.XML, "RODS_CS_NEG_T", 0)
+
+	msg.Write(server, msg.Version{
+		ReleaseVersion: releaseVer,
+	}, nil, msg.XML, "RODS_VERSION", 0)
+
+	msg.Write(server, msg.AuthPluginResponse{
+		Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+	}, nil, msg.XML, "RODS_API_REPLY", 0)
+
+	msg.Write(server, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+
+	env := Env{
+		Host:                          "localhost",
+		Port:                          1247,
+		Zone:                          "testZone",
+		Username:                      "testUser",
+		Password:                      "testPassword",
+		AuthScheme:                    "native",
+		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+		UseModernAuth:                 true,
+	}
+
+	env.ApplyDefaults()
+
+	conn, err := NewConn(ctx, transport, env, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if conn.ServerVersion() != mockVersion {
 		t.Errorf("bad server version: %s", conn.ServerVersion())
 	}
 
