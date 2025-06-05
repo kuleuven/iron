@@ -17,8 +17,8 @@ Replacement for <https://github.com/cyverse/go-irodsclient> that provides a clea
 
 ```go
 import (   
-	"gitea.icts.kuleuven.be/coz/iron"
-	"gitea.icts.kuleuven.be/coz/iron/api"
+	"github.com/kuleuven/iron"
+	"github.com/kuleuven/iron/api"
 )
 
 func example() error {
