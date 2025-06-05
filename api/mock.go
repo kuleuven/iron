@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 // mock an API for testing purposes

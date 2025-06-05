@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"gitea.icts.kuleuven.be/coz/iron/cmd/iron/cli"
+	"github.com/kuleuven/iron/cmd/iron/cli"
 	"github.com/sirupsen/logrus"
 )
 

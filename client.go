@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/api"
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/msg"
 	"go.uber.org/multierr"
 )
 

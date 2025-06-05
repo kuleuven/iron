@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 type Object interface {

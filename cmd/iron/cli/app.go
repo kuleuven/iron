@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"gitea.icts.kuleuven.be/coz/iron"
-	"gitea.icts.kuleuven.be/coz/iron/api"
+	"github.com/kuleuven/iron"
+	"github.com/kuleuven/iron/api"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

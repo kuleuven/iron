@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 
 	"github.com/sirupsen/logrus"
 )

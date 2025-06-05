@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 var responses = []any{

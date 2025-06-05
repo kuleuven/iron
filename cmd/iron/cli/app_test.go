@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"gitea.icts.kuleuven.be/coz/iron"
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron"
+	"github.com/kuleuven/iron/msg"
 )
 
 func writeConfig(env iron.Env) (string, error) {

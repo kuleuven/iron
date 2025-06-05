@@ -5,7 +5,7 @@ import (
 	"os"
 	"slices"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 type bulk map[int64]*Attributes

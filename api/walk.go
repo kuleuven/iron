@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 type Record interface {

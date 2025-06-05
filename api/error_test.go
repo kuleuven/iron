@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 	"go.uber.org/multierr"
 )
 

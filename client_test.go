@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 func TestClient(t *testing.T) {

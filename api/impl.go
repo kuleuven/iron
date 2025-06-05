@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 )

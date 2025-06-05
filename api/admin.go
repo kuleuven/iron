@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
-	"gitea.icts.kuleuven.be/coz/iron/scramble"
+	"github.com/kuleuven/iron/msg"
+	"github.com/kuleuven/iron/scramble"
 )
 
 var ErrRequiresAdmin = errors.New("this API call requires api.Admin = true")

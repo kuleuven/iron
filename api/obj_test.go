@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 func TestGetCollection(t *testing.T) {

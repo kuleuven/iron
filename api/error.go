@@ -3,7 +3,7 @@ package api
 import (
 	"errors"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 func ErrorCode(err error) (msg.ErrorCode, bool) {

@@ -3,7 +3,7 @@ package decode
 import (
 	"fmt"
 
-	"gitea.icts.kuleuven.be/coz/iron/msg"
+	"github.com/kuleuven/iron/msg"
 )
 
 var ErrNotARequest = fmt.Errorf("not a request")

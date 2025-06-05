@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"gitea.icts.kuleuven.be/coz/iron/api"
-	"gitea.icts.kuleuven.be/coz/iron/msg"
-	"gitea.icts.kuleuven.be/coz/iron/scramble"
+	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/msg"
+	"github.com/kuleuven/iron/scramble"
 	"github.com/hashicorp/go-rootcerts"
 	"go.uber.org/multierr"
 
