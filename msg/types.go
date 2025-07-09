@@ -449,4 +449,7 @@ type AuthPluginResponse struct { // No xml.Name means this is a json struct
 	Digest              string `json:"digest,omitempty"`
 }
 
-type Checksum []byte
+type Checksum struct {
+	XMLName  xml.Name `xml:"STR_PI"`
+	Checksum string   `xml:"myStr"`
+}

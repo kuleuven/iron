@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -353,7 +355,11 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	return &h, err
 }
 
-// Checksum returns the sha2 checksum of a data object as stored in the catalog.
+const shaPrefix = "sha2:"
+
+var ErrChecksumNotFound = errors.New("checksum not found")
+
+// Checksum returns the sha256 checksum of a data object as stored in the catalog.
 // If no checksum is present, it is calculated on the fly.
 // A target resource can be specified with WithDefaultResource() first if needed.
 // A replica number can be specified with WithReplicaNumber() first if needed.
@@ -389,7 +395,11 @@ func (api *API) Checksum(ctx context.Context, path string, force bool) ([]byte, 
 		return nil, err
 	}
 
-	return []byte(checksum), nil
+	if !strings.HasPrefix(checksum.Checksum, shaPrefix) {
+		return nil, fmt.Errorf("%w: prefix %s missing", ErrChecksumNotFound, shaPrefix)
+	}
+
+	return base64.StdEncoding.DecodeString(strings.TrimPrefix(checksum.Checksum, shaPrefix))
 }
 
 // ModifyAccess modifies the access level of a data object or collection.
