@@ -23,6 +23,7 @@ type API struct {
 	Connect         func(context.Context) (Conn, error) // Handler to obtain a connection to perform requests on
 	Admin           bool                                // Whether to act as admin by sending the admin keyword
 	DefaultResource string                              // Default resource to use when creating data objects
+	ReplicaNumber   *int                                // Replica number to use for open/checksum operations
 	NumThreads      int                                 // Number of threads to use for server-side copies
 }
 
@@ -145,6 +146,13 @@ func (api API) WithDefaultResource(resource string) *API {
 // WithNumThreads returns a new API with the number of threads set
 func (api API) WithNumThreads(n int) *API {
 	api.NumThreads = n
+
+	return &api
+}
+
+// WithReplicaNumber returns a new API with the replica number set
+func (api API) WithReplicaNumber(n int) *API {
+	api.ReplicaNumber = &n
 
 	return &api
 }

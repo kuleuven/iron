@@ -448,3 +448,5 @@ type AuthPluginResponse struct { // No xml.Name means this is a json struct
 	Challenge           string `json:"request_result,omitempty"`
 	Digest              string `json:"digest,omitempty"`
 }
+
+type Checksum []byte

@@ -289,6 +289,7 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 
 // OpenDataObject opens a data object.
 // A target resource can be specified with WithDefaultResource() first if needed.
+// A replica number can be specified with WithReplicaNumber() first if needed.
 // This method blocks an irods connection until the file has been closed.
 // If the context is canceled, Seek, Read, Write, Truncate, Touch and Reopen will fail.
 func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File, error) {
@@ -302,6 +303,10 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 
 	if api.DefaultResource != "" {
 		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
+	}
+
+	if api.ReplicaNumber != nil {
+		request.KeyVals.Add(msg.REPL_NUM_KW, strconv.Itoa(*api.ReplicaNumber))
 	}
 
 	api.setFlags(&request.KeyVals)
@@ -346,6 +351,45 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	})
 
 	return &h, err
+}
+
+// Checksum returns the sha2 checksum of a data object as stored in the catalog.
+// If no checksum is present, it is calculated on the fly.
+// A target resource can be specified with WithDefaultResource() first if needed.
+// A replica number can be specified with WithReplicaNumber() first if needed.
+// The force flag is used to recompute any saved checksums.
+func (api *API) Checksum(ctx context.Context, path string, force bool) ([]byte, error) {
+	request := msg.DataObjectRequest{
+		Path: path,
+	}
+
+	if api.DefaultResource != "" {
+		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
+	}
+
+	if api.ReplicaNumber != nil {
+		request.KeyVals.Add(msg.REPL_NUM_KW, strconv.Itoa(*api.ReplicaNumber))
+	}
+
+	if force {
+		request.KeyVals.Add(msg.FORCE_CHKSUM_KW, "")
+	}
+
+	api.setFlags(&request.KeyVals)
+
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var checksum msg.Checksum
+
+	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CHKSUM_AN, request, &checksum, path)
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(checksum), nil
 }
 
 // ModifyAccess modifies the access level of a data object or collection.
