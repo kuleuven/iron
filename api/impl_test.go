@@ -130,6 +130,16 @@ func TestCopyDataObject(t *testing.T) {
 	}
 }
 
+func TestChecksum(t *testing.T) {
+	testConn.NextResponse = msg.Checksum{
+		Checksum: "sha2:aabbaabbaabbaabbaabb",
+	}
+
+	if _, err := testAPI.Checksum(context.Background(), "test", false); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOpenDataObject(t *testing.T) {
 	testConn.NextResponses = []any{
 		msg.FileDescriptor(1),
