@@ -88,14 +88,15 @@ var responses = []any{
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
+	msg.QueryResponse{AttributeCount: 7},
+	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
-
+	msg.QueryResponse{AttributeCount: 7},
 	msg.QueryResponse{AttributeCount: 7},
 	msg.QueryResponse{AttributeCount: 15},
-
-	msg.QueryResponse{AttributeCount: 7},
-	msg.QueryResponse{AttributeCount: 15},
+	msg.QueryResponse{AttributeCount: 3},
+	msg.QueryResponse{AttributeCount: 4},
 }
 
 func TestWalk(t *testing.T) {
@@ -109,8 +110,44 @@ func TestWalk(t *testing.T) {
 	}
 }
 
-func TestWalkSkip(t *testing.T) {
+func TestWalkL(t *testing.T) {
 	testConn.NextResponses = responses
+
+	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+		return err
+	}, FetchAccess, FetchMetadata, LexographicalOrder)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWalkLS(t *testing.T) {
+	testConn.NextResponses = responses
+
+	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+		return err
+	}, FetchAccess, FetchMetadata, LexographicalOrder, NoSkip)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWalkBF(t *testing.T) {
+	testConn.NextResponses = responses
+
+	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+		return err
+	}, FetchAccess, FetchMetadata, BreadthFirst)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWalkSkip(t *testing.T) {
+	testConn.NextResponses = responses[:8]
+	testConn.NextResponses = append(testConn.NextResponses,
+		msg.QueryResponse{AttributeCount: 3},
+		msg.QueryResponse{AttributeCount: 4})
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		if path == "/test" {

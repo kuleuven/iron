@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-rootcerts"
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/scramble"
-	"github.com/hashicorp/go-rootcerts"
 	"go.uber.org/multierr"
 
 	"github.com/sirupsen/logrus"

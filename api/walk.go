@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kuleuven/iron/msg"
+	"github.com/sirupsen/logrus"
 )
 
 type Record interface {
@@ -42,9 +43,34 @@ var (
 type WalkOption int
 
 const (
+	// FetchAccess prefetches ACL information for all records. If not given,
+	// the Access() method will be empty on all records.
 	FetchAccess WalkOption = 1 << iota
+
+	// FetchMetadata prefetches metadata for all records. If not given,
+	// the Metadata() method will be empty on all records.
 	FetchMetadata
+
+	// If the option LexographicalOrder is given, the order is guaranteed to be
+	// lexographical, but the irods queries will be significantly more expensive,
+	// unless the option NoSkip is also given.
+	LexographicalOrder
+
+	// If the option NoSkip is given, the walk function may not return SkipSubDirs
+	// or SkipDir, but it may return SkipAll. This is useful in combination with
+	// LexographicalOrder to speed up the irods queries.
+	NoSkip
+
+	// If the option BreadthFirst is given, a single level of collections is handled
+	// first, before moving to the next level: collections at level N are handled first,
+	// followed by data objects at level N+1, collections at level N+1 for which children
+	// are skipped (see SkipSubDirs option) and finally collections at level N + 1.
+	// Note that this option caches at level N, a list of subcollections of level N + 1,
+	// this might require a significant amount of memory for large collections.
+	BreadthFirst
 )
+
+var ErrSkipNotAllowed = errors.New("skip not allowed")
 
 // Walk traverses the iRODS hierarchy rooted at the given path, calling the
 // given function for each encountered file or directory. The function is
@@ -57,25 +83,38 @@ const (
 // visited as apparent being empty. This avoids querying all children of the
 // subcollections; otherwise the walk function on a collection is called after
 // retrieving all children in memory.
-// The order in which the collections are visited is not specified. The only
-// guarantees are that parent collections are visited before their children;
-// and that data objects within a collection are visited in lexographical
-// order.
+// The order in which the collections are visited is not specified in general.
+// The only guarantees are that parent collections are visited before their
+// children.
 func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...WalkOption) error {
 	collection, err := api.GetCollection(ctx, path)
 	if err != nil {
 		return walkFn(path, nil, err)
 	}
 
-	return api.walkLevel(ctx, walkFn, []Collection{*collection}, opts...)
+	switch {
+	case slices.Contains(opts, BreadthFirst):
+		return api.walkBreadthFirst(ctx, walkFn, []Collection{*collection}, opts...)
+	case slices.Contains(opts, LexographicalOrder) && slices.Contains(opts, NoSkip):
+		return api.walkLexographicalNoSkip(ctx, walkFn, []Collection{*collection}, opts...)
+	case slices.Contains(opts, LexographicalOrder):
+		return api.walkLexographical(ctx, walkFn, []Collection{*collection}, opts...)
+	default:
+		return api.walkBatches(ctx, walkFn, []Collection{*collection}, opts...)
+	}
 }
 
 const maxBatchLength = 14000
 
-// walkLevel traverses a single level of the iRODS hierarchy, by expanding the children
+// walkBatches traverses a single level of the iRODS hierarchy, by expanding the children
 // of the given list of parent collections. It splits the traversal into batches to avoid
-// exceeding the maximum IN condition length.
-func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
+// exceeding the maximum IN condition length. It recurses to the subcollections of each batch,
+// before moving to the next batch.
+func (api *API) walkBatches(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
+	return callBatches(api.walkBatch, ctx, fn, parents, opts...)
+}
+
+func callBatches(callback func(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error, ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
 	if len(parents) == 0 {
 		return nil
 	}
@@ -87,9 +126,9 @@ func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents []Collection
 
 	for _, item := range parents {
 		if strings.Contains(item.Path, "'") {
-			// The irods IN condition used in walkLevelBatch cannot cope with single quotes
+			// The irods IN condition used in callback cannot cope with single quotes
 			// Do a batch with a single item instead, so the = condition can be used
-			if err := api.walkLevelBatch(ctx, fn, []Collection{item}); err != nil {
+			if err := callback(ctx, fn, []Collection{item}, opts...); err != nil {
 				return err
 			}
 
@@ -97,7 +136,7 @@ func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents []Collection
 		}
 
 		if n+len(item.Path)+4 > maxBatchLength {
-			if err := api.walkLevelBatch(ctx, fn, batch, opts...); err != nil {
+			if err := callback(ctx, fn, batch, opts...); err != nil {
 				return err
 			}
 
@@ -110,14 +149,228 @@ func (api *API) walkLevel(ctx context.Context, fn WalkFunc, parents []Collection
 	}
 
 	if len(batch) > 0 {
-		return api.walkLevelBatch(ctx, fn, batch, opts...)
+		if err := callback(ctx, fn, batch, opts...); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// walkLevelBatch traverses a single batch level of the iRODS hierarchy in batches.
-func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error { //nolint:funlen
+func (api *API) walkBatch(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
+	logrus.Infof("calling walkCollections on %v", parents)
+
+	subcols, err := api.walkCollections(ctx, fn, parents, opts...)
+	if err != nil {
+		return err
+	}
+
+	return api.walkBatches(ctx, fn, subcols, opts...)
+}
+
+// walkBreadthFirst traverses a single level of the iRODS hierarchy, by expanding the children
+// of the given list of parent collections. It splits the traversal into batches to avoid
+// exceeding the maximum IN condition length. It then recurses to the next level.
+func (api *API) walkBreadthFirst(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
+	if len(parents) == 0 {
+		return nil
+	}
+
+	var (
+		batch          []Collection
+		subcollections []Collection
+		n              int
+	)
+
+	for _, item := range parents {
+		if strings.Contains(item.Path, "'") {
+			// The irods IN condition used in walkLevelBatch cannot cope with single quotes
+			// Do a batch with a single item instead, so the = condition can be used
+			subcols, err := api.walkCollections(ctx, fn, []Collection{item}, opts...)
+			if err != nil {
+				return err
+			}
+
+			subcollections = append(subcollections, subcols...)
+
+			continue
+		}
+
+		if n+len(item.Path)+4 > maxBatchLength {
+			subcols, err := api.walkCollections(ctx, fn, batch, opts...)
+			if err != nil {
+				return err
+			}
+
+			subcollections = append(subcollections, subcols...)
+
+			batch = nil
+			n = 0
+		}
+
+		batch = append(batch, item)
+		n += len(item.Path) + 4
+	}
+
+	if len(batch) > 0 {
+		subcols, err := api.walkCollections(ctx, fn, batch, opts...)
+		if err != nil {
+			return err
+		}
+
+		subcollections = append(subcollections, subcols...)
+	}
+
+	return api.walkBreadthFirst(ctx, fn, subcollections, opts...)
+}
+
+func (api *API) walkLexographical(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error { //nolint:gocognit
+	type result struct {
+		path   string
+		record Record
+		err    error
+	}
+
+	for _, item := range parents {
+		var (
+			first = true
+			queue []result
+		)
+
+		subcols, err := api.walkCollections(ctx, func(path string, record Record, err error) error {
+			if first {
+				first = false
+
+				return fn(path, record, err)
+			}
+
+			queue = append(queue, result{path, record, err})
+
+			return nil
+		}, []Collection{item}, opts...)
+		if err != nil {
+			return err
+		}
+
+		slices.SortFunc(queue, func(a, b result) int {
+			return strings.Compare(a.path, b.path)
+		})
+
+		slices.SortFunc(subcols, func(a, b Collection) int {
+			return strings.Compare(a.Path, b.Path)
+		})
+
+		// Iterate over queue and subcols
+		for len(subcols) > 0 || len(queue) > 0 {
+			switch {
+			case len(subcols) == 0 || (len(queue) > 0 && queue[0].path < subcols[0].Path):
+				err := fn(queue[0].path, queue[0].record, queue[0].err)
+				if err == SkipDir && (queue[0].err != nil || queue[0].record.IsDir()) {
+					err = nil
+				}
+
+				if err != nil {
+					return err
+				}
+
+				queue = queue[1:]
+			default:
+				err = api.walkLexographical(ctx, fn, subcols[:1], opts...)
+				if err != nil {
+					return err
+				}
+
+				subcols = subcols[1:]
+			}
+		}
+	}
+
+	return nil
+}
+
+func (api *API) walkLexographicalNoSkip(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
+	return callBatches(api.walkLexographicalNoSkipBatch, ctx, fn, parents, opts...)
+}
+
+func (api *API) walkLexographicalNoSkipBatch(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error { //nolint:funlen
+	type result struct {
+		path   string
+		record Record
+		err    error
+	}
+
+	var (
+		first = true
+		queue []result
+	)
+
+	subcols, err := api.walkCollections(ctx, func(path string, record Record, err error) error {
+		if first {
+			first = false
+
+			return fn(path, record, err)
+		}
+
+		queue = append(queue, result{path, record, err})
+
+		return nil
+	}, parents, opts...)
+	if err != nil {
+		return err
+	}
+
+	slices.SortFunc(queue, func(a, b result) int {
+		return strings.Compare(a.path, b.path)
+	})
+
+	var skipAll bool
+
+	err = api.walkLexographicalNoSkip(ctx, func(path string, record Record, err error) error {
+		for len(queue) > 0 && queue[0].path < path {
+			switch err := fn(queue[0].path, queue[0].record, queue[0].err); err {
+			case SkipAll:
+				skipAll = true
+
+				return SkipAll
+			case SkipDir, SkipSubDirs:
+				return ErrSkipNotAllowed
+			case nil:
+				queue = queue[1:]
+			default:
+				return err
+			}
+		}
+
+		return fn(path, record, err)
+	}, subcols, opts...)
+	if err != nil || skipAll {
+		return err
+	}
+
+	for _, item := range queue {
+		switch err := fn(item.path, item.record, item.err); err {
+		case SkipAll:
+			skipAll = true
+
+			return nil
+		case SkipDir, SkipSubDirs:
+			return ErrSkipNotAllowed
+		case nil:
+			continue
+		default:
+			return err
+		}
+	}
+
+	return nil
+}
+
+// walkCollections runs the walk function on each given collection, its containing
+// data objects, and if SkipSubDirs was returned, its subcollections.
+// The function returns a list of subcollections of the given collections for which
+// SkipSubDirs was not returned. The caller is expected to run walkCollections on
+// this list for further traversal.
+func (api *API) walkCollections(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) ([]Collection, error) { //nolint:funlen
 	ids := collectionIDs(parents)
 	names := collectionPaths(parents)
 	pmap := collectionIDPathMap(parents)
@@ -125,20 +378,20 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 	// Find all subcollections
 	subcollections, err := api.ListCollections(ctx, In(msg.ICAT_COLUMN_COLL_PARENT_NAME, names), NotEqual(msg.ICAT_COLUMN_COLL_NAME, "/"))
 	if err != nil {
-		return api.handleWalkError(fn, names, err)
+		return nil, api.handleWalkError(fn, names, err)
 	}
 
 	// Find all objects
 	objects, err := api.walkListDataObjects(ctx, ids, pmap)
 	if err != nil {
-		return api.handleWalkError(fn, names, err)
+		return nil, api.handleWalkError(fn, names, err)
 	}
 
 	bulk := bulk{}
 
 	// Find attributes of the parents
 	if err := bulk.PrefetchCollections(ctx, api, ids, opts...); err != nil {
-		return api.handleWalkError(fn, names, err)
+		return nil, api.handleWalkError(fn, names, err)
 	}
 
 	var skipcolls []Collection
@@ -148,9 +401,13 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 		err := fn(coll.Path, bulk.Record(&coll), nil)
 		switch err {
 		case SkipAll:
-			return nil
+			return nil, nil
 		case SkipDir:
 			// Need to remove all subcollections and objects within this directory
+			ids = slices.DeleteFunc(ids, func(id int64) bool {
+				return id == coll.ID
+			})
+
 			subcollections = slices.DeleteFunc(subcollections, func(c Collection) bool {
 				return strings.HasPrefix(c.Path, skipPrefix(coll.Path))
 			})
@@ -167,12 +424,10 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 			subcollections = slices.DeleteFunc(subcollections, func(c Collection) bool {
 				return strings.HasPrefix(c.Path, skipPrefix(coll.Path))
 			})
-
-			continue
 		case nil:
 			continue
 		default:
-			return err
+			return nil, err
 		}
 	}
 
@@ -183,9 +438,9 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 	for _, o := range objects {
 		err := fn(o.Path, bulk.Record(&o), attrErr)
 		if err == filepath.SkipAll {
-			return nil
+			return nil, nil
 		} else if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -196,14 +451,14 @@ func (api *API) walkLevelBatch(ctx context.Context, fn WalkFunc, parents []Colle
 	for _, c := range skipcolls {
 		err := fn(c.Path, bulk.Record(&c), attrErr)
 		if err == filepath.SkipAll {
-			return nil
+			return nil, nil
 		} else if err != nil && err != SkipDir && err != SkipSubDirs {
-			return err
+			return nil, err
 		}
 	}
 
-	// Iterate over subcollections
-	return api.walkLevel(ctx, fn, subcollections, opts...)
+	// Return all unvisited subcollections
+	return subcollections, nil
 }
 
 func skipPrefix(colPath string) string {
