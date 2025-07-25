@@ -274,10 +274,6 @@ func (r *Result) executeQuery() {
 	if Is(r.err, msg.CAT_NO_ROWS_FOUND) {
 		r.err = nil
 	}
-
-	if r.err == nil && r.result.AttributeCount != len(r.Query.columns) {
-		r.err = fmt.Errorf("%w: expected %d arguments, got %d", ErrAttributeIndexMismatch, len(r.Query.columns), r.result.AttributeCount)
-	}
 }
 
 func (r *Result) cleanup() {
