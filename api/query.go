@@ -276,7 +276,7 @@ func (r *Result) executeQuery() {
 	}
 
 	if r.err == nil && r.result.AttributeCount != len(r.Query.columns) {
-		r.err = fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, len(r.Query.columns), r.result.AttributeCount)
+		r.err = fmt.Errorf("%w: expected %d arguments, got %d", ErrAttributeIndexMismatch, len(r.Query.columns), r.result.AttributeCount)
 	}
 }
 

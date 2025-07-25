@@ -98,7 +98,7 @@ func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...
 	case slices.Contains(opts, LexographicalOrder) && slices.Contains(opts, NoSkip):
 		return api.walkLexographicalNoSkip(ctx, walkFn, []Collection{*collection}, opts...)
 	case slices.Contains(opts, LexographicalOrder):
-		return api.walkLexographical(ctx, walkFn, []Collection{*collection}, opts...)
+		return api.walkLexographical(ctx, walkFn, *collection, opts...)
 	default:
 		return api.walkBatches(ctx, walkFn, []Collection{*collection}, opts...)
 	}
@@ -224,68 +224,75 @@ func (api *API) walkBreadthFirst(ctx context.Context, fn WalkFunc, parents []Col
 	return api.walkBreadthFirst(ctx, fn, subcollections, opts...)
 }
 
-func (api *API) walkLexographical(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error { //nolint:gocognit
-	type result struct {
-		path   string
-		record Record
-		err    error
+type result struct {
+	path   string
+	record Record
+	err    error
+}
+
+func (api *API) walkLexographical(ctx context.Context, fn WalkFunc, parent Collection, opts ...WalkOption) error {
+	queue, subcols, err := api.listCollection(ctx, fn, parent, opts...)
+	if err != nil {
+		return err
 	}
 
-	for _, item := range parents {
-		var (
-			first = true
-			queue []result
-		)
-
-		subcols, err := api.walkCollections(ctx, func(path string, record Record, err error) error {
-			if first {
-				first = false
-
-				return fn(path, record, err)
+	// Iterate over queue and subcols
+	for _, item := range queue {
+		for len(subcols) > 0 && subcols[0].Path < item.path {
+			err = api.walkLexographical(ctx, fn, subcols[0], opts...)
+			if err != nil {
+				return err
 			}
 
-			queue = append(queue, result{path, record, err})
-
-			return nil
-		}, []Collection{item}, opts...)
-		if err != nil {
-			return err
+			subcols = subcols[1:]
 		}
 
-		slices.SortFunc(queue, func(a, b result) int {
-			return strings.Compare(a.path, b.path)
-		})
+		err := fn(item.path, item.record, item.err)
+		if err != nil && err != SkipDir {
+			return err
+		}
+	}
 
-		slices.SortFunc(subcols, func(a, b Collection) int {
-			return strings.Compare(a.Path, b.Path)
-		})
-
-		// Iterate over queue and subcols
-		for len(subcols) > 0 || len(queue) > 0 {
-			switch {
-			case len(subcols) == 0 || (len(queue) > 0 && queue[0].path < subcols[0].Path):
-				err := fn(queue[0].path, queue[0].record, queue[0].err)
-				if err == SkipDir && (queue[0].err != nil || queue[0].record.IsDir()) {
-					err = nil
-				}
-
-				if err != nil {
-					return err
-				}
-
-				queue = queue[1:]
-			default:
-				err = api.walkLexographical(ctx, fn, subcols[:1], opts...)
-				if err != nil {
-					return err
-				}
-
-				subcols = subcols[1:]
-			}
+	for _, subcol := range subcols {
+		err = api.walkLexographical(ctx, fn, subcol, opts...)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func (api *API) listCollection(ctx context.Context, fn WalkFunc, parent Collection, opts ...WalkOption) ([]result, []Collection, error) {
+	var (
+		first   = true
+		results []result
+	)
+
+	subcols, err := api.walkCollections(ctx, func(path string, record Record, err error) error {
+		if first {
+			first = false
+
+			return fn(path, record, err)
+		}
+
+		results = append(results, result{path, record, err})
+
+		return nil
+	}, []Collection{parent}, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	slices.SortFunc(results, func(a, b result) int {
+		return strings.Compare(a.path, b.path)
+	})
+
+	slices.SortFunc(subcols, func(a, b Collection) int {
+		return strings.Compare(a.Path, b.Path)
+	})
+
+	return results, subcols, nil
 }
 
 func (api *API) walkLexographicalNoSkip(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
