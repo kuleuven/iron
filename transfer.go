@@ -20,6 +20,7 @@ import (
 
 type Options struct {
 	Exclusive   bool     // Do not overwrite existing files
+	MinThreads  int      // Minimum number of parallel streams.
 	MaxThreads  int      // Maximum number of parallel streams, defaults to maximum number of connections
 	SyncModTime bool     // Sync modification time
 	Progress    Progress // Optional progress tracking callbacks
@@ -40,7 +41,10 @@ type Progress interface {
 }
 
 // Upload uploads a local file to the iRODS server using parallel transfers.
-// The number of threads must be lower or equal to the number of connections the client can make.
+// The number of threads used will be the number of available connections, up
+// to the maximum number of threads specified. If this number is lower than the
+// specified minimum number of threads, the minimum number of threads will be used,
+// and the copy process will partially block until all connections are available.
 func (c *Client) Upload(ctx context.Context, local, remote string, opts Options) error {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
@@ -111,8 +115,12 @@ func (c *Client) upload(_ context.Context, w api.File, local string, opts Option
 	ww := &transfer.ReopenRangeWriter{
 		WriteSeekCloser: w,
 		Reopen: func() (transfer.WriteSeekCloser, error) {
-			conn := pool[0]
-			pool = pool[1:]
+			var conn api.Conn
+
+			if len(pool) > 0 {
+				conn = pool[0]
+				pool = pool[1:]
+			}
 
 			return w.Reopen(conn, api.O_WRONLY)
 		},
@@ -120,7 +128,13 @@ func (c *Client) upload(_ context.Context, w api.File, local string, opts Option
 
 	defer ww.Close()
 
-	return finish(transfer.CopyN(ww, &transfer.ReaderAtRangeReader{ReaderAt: r}, stat.Size(), len(pool)+1, opts.Progress))
+	threads := max(opts.MinThreads, len(pool)+1)
+
+	if c.option.AllowConcurrentUse {
+		threads = len(pool) + 1
+	}
+
+	return finish(transfer.CopyN(ww, &transfer.ReaderAtRangeReader{ReaderAt: r}, stat.Size(), threads, opts.Progress))
 }
 
 // Download downloads a remote file from the iRODS server using parallel transfers.
@@ -190,8 +204,12 @@ func (c *Client) download(ctx context.Context, file *os.File, remote string, opt
 	rr := &transfer.ReopenRangeReader{
 		ReadSeekCloser: r,
 		Reopen: func() (io.ReadSeekCloser, error) {
-			conn := pool[0]
-			pool = pool[1:]
+			var conn api.Conn
+
+			if len(pool) > 0 {
+				conn = pool[0]
+				pool = pool[1:]
+			}
 
 			return r.Reopen(conn, api.O_RDONLY)
 		},
@@ -199,7 +217,13 @@ func (c *Client) download(ctx context.Context, file *os.File, remote string, opt
 
 	defer rr.Close()
 
-	return transfer.CopyN(&transfer.WriterAtRangeWriter{WriterAt: file}, rr, size, len(pool)+1, opts.Progress)
+	threads := max(opts.MinThreads, len(pool)+1)
+
+	if c.option.AllowConcurrentUse {
+		threads = len(pool) + 1
+	}
+
+	return transfer.CopyN(&transfer.WriterAtRangeWriter{WriterAt: file}, rr, size, threads, opts.Progress)
 }
 
 func findSize(r io.Seeker) (int64, error) {

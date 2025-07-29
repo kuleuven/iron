@@ -360,6 +360,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
+		transfer.CopyNDelayStart = true
 
 		return client.Upload(context.Background(), f.Name(), "test", Options{
 			//	SyncModTime: true,

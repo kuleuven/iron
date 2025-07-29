@@ -60,12 +60,24 @@ func (worker *Worker) Copy(w io.Writer, r io.Reader, size int64) {
 	})
 }
 
+// CopyNDelayStart is a flag to delay the start of the copy threads
+// until all Range Readers have been prepared. It can be used in tests
+// for deterministic behaviour.
+var CopyNDelayStart bool
+
 func (worker *Worker) CopyN(w RangeWriter, r RangeReader, size int64, threads int) {
+	worker.progress.AddTotalFiles(1)
+	worker.progress.AddTotalBytes(size)
+
 	rangeSize := calculateRangeSize(size, threads)
 
 	var wg errgroup.Group
 
 	start := make(chan struct{})
+
+	if !CopyNDelayStart {
+		close(start)
+	}
 
 	for offset := int64(0); offset < size; offset += rangeSize {
 		rr := r.Range(offset, rangeSize)
@@ -78,10 +90,9 @@ func (worker *Worker) CopyN(w RangeWriter, r RangeReader, size int64, threads in
 		})
 	}
 
-	close(start)
-
-	worker.progress.AddTotalFiles(1)
-	worker.progress.AddTotalBytes(size)
+	if CopyNDelayStart {
+		close(start)
+	}
 
 	worker.wg.Go(func() error {
 		if err := wg.Wait(); err != nil {

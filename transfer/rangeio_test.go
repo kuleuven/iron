@@ -148,7 +148,7 @@ func TestReopenRangeWriter(t *testing.T) {
 	}
 
 	rangeWriter = writer.Range(0, 5)
-	data = []byte("Hello")
+	data = []byte("Grand")
 
 	n, err = rangeWriter.Write(data)
 	if err != nil {
@@ -159,8 +159,8 @@ func TestReopenRangeWriter(t *testing.T) {
 		t.Errorf("Expected 5 bytes written, got %d", n)
 	}
 
-	if string(buf[0:5]) != "Hello" {
-		t.Errorf("Expected 'Hello' at offset 0, got %q", string(buf[0:5]))
+	if string(buf[0:5]) != "Grand" {
+		t.Errorf("Expected 'Grand' at offset 0, got %q", string(buf[0:5]))
 	}
 }
 
