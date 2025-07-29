@@ -2,7 +2,6 @@ package transfer
 
 import (
 	"io"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -66,16 +65,20 @@ func (worker *Worker) CopyN(w RangeWriter, r RangeReader, size int64, threads in
 
 	var wg errgroup.Group
 
+	start := make(chan struct{})
+
 	for offset := int64(0); offset < size; offset += rangeSize {
 		rr := r.Range(offset, rangeSize)
 		ww := w.Range(offset, rangeSize)
 
 		wg.Go(func() error {
+			<-start
+
 			return copyBuffer(ww, rr, worker.progress)
 		})
-
-		time.Sleep(10 * time.Millisecond)
 	}
+
+	close(start)
 
 	worker.progress.AddTotalFiles(1)
 	worker.progress.AddTotalBytes(size)

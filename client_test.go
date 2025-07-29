@@ -240,17 +240,6 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 					&msg.DataObjectRequest{},
 					msg.FileDescriptor(1),
 				},
-
-				{
-					msg.DATA_OBJ_WRITE_AN,
-					&msg.OpenedDataObjectRequest{},
-					msg.EmptyResponse{},
-				},
-				{
-					msg.DATA_OBJ_WRITE_AN,
-					&msg.OpenedDataObjectRequest{},
-					msg.EmptyResponse{},
-				},
 				{
 					msg.GET_FILE_DESCRIPTOR_INFO_APN,
 					&msg.GetDescriptorInfoRequest{},
@@ -260,6 +249,16 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 							"resource_hierarchy": "blub",
 						},
 					},
+				},
+				{
+					msg.DATA_OBJ_WRITE_AN,
+					&msg.OpenedDataObjectRequest{},
+					msg.EmptyResponse{},
+				},
+				{
+					msg.DATA_OBJ_WRITE_AN,
+					&msg.OpenedDataObjectRequest{},
+					msg.EmptyResponse{},
 				},
 				{
 					msg.DATA_OBJ_CLOSE_AN,
