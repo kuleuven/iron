@@ -124,14 +124,24 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 
 		defer client.Close()
 
-		conn, err := client.Connect()
+		conns, err := client.ConnectAvailable(1)
 		if err != nil {
 			return err
 		}
 
-		_, err = client.TryConnect()
-		if err != ErrNoConnectionsAvailable {
-			return fmt.Errorf("expected error %v, got %v", ErrNoConnectionsAvailable, err)
+		if len(conns) != 1 {
+			return fmt.Errorf("expected 1 connection, got %d", len(conns))
+		}
+
+		conn := conns[0]
+
+		conns, err = client.ConnectAvailable(1)
+		if err != nil {
+			return err
+		}
+
+		if len(conns) != 0 {
+			return fmt.Errorf("expected 1 connection, got %d", len(conns))
 		}
 
 		done := make(chan struct{})

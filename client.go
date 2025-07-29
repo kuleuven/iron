@@ -174,16 +174,6 @@ func (c *Client) needsEnvCallback() bool {
 
 var ErrNoConnectionsAvailable = errors.New("no connections available")
 
-// TryConnect tries to connect to the iRODS server,
-// by either returning an available connection or creating a new one.
-// If the maximum number of connections has been reached, it will return ErrNoConnectionsAvailable.
-func (c *Client) TryConnect() (Conn, error) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	return c.tryConnect()
-}
-
 // Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
 // If all connections are busy, it will create a new one up to the maximum number of connections.
 // If the maximum number of connections has been reached, it will block until a connection becomes available,
@@ -232,10 +222,10 @@ func (c *Client) Connect() (Conn, error) {
 	return &returnOnClose{conn: conn, client: c}, nil
 }
 
-// Available returns a list of available connections to the iRODS server,
+// ConnectAvailable returns a list of available connections to the iRODS server,
 // up to the specified number. If no connections are available, it will return
 // an empty list. Retrieved connections must be closed by the caller.
-func (c *Client) Available(n int) ([]Conn, error) {
+func (c *Client) ConnectAvailable(n int) ([]Conn, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

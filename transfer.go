@@ -101,7 +101,7 @@ func (c *Client) upload(_ context.Context, w api.File, local string, opts Option
 	}
 
 	// Acquire all available connections
-	pool, err := c.Available(maxThreads - 1)
+	pool, err := c.ConnectAvailable(maxThreads - 1)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (c *Client) download(ctx context.Context, file *os.File, remote string, opt
 	}
 
 	// Acquire all available connections
-	pool, err := c.Available(maxThreads - 1)
+	pool, err := c.ConnectAvailable(maxThreads - 1)
 	if err != nil {
 		return err
 	}
