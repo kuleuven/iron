@@ -4,10 +4,12 @@ go 1.23.2
 
 require (
 	github.com/acomagu/bufpipe v1.0.4
+	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/go-rootcerts v1.0.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
 	go.uber.org/multierr v1.11.0
+	golang.org/x/sync v0.16.0
 )
 
 require (

@@ -368,7 +368,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	}
 
 	if mode&O_TRUNC != 0 {
-		return nil, ErrCannotTruncate
+		return nil, multierr.Append(ErrCannotTruncate, conn.Close())
 	}
 
 	replicaInfo, err := h.getReplicaAccessInfo()

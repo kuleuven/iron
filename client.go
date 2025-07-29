@@ -3,6 +3,7 @@ package iron
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"time"
@@ -90,7 +91,7 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 		env:      &env,
 		option:   option,
 		protocol: msg.XML,
-		ready:    make(chan *conn),
+		ready:    make(chan *conn, option.MaxConns),
 	}
 
 	if option.UseNativeProtocol {
@@ -171,41 +172,57 @@ func (c *Client) needsEnvCallback() bool {
 	return c.option.EnvCallback != nil && (c.envCallbackExpiry.IsZero() || time.Now().After(c.envCallbackExpiry))
 }
 
-// Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
-// If all connections are busy, it will create a new one up to the maximum number of connections.
-// If the maximum number of connections has been reached, it will block until a connection becomes available.
-func (c *Client) Connect() (Conn, error) {
+// TryConnect tries to connect to the iRODS server,
+// by either returning an available connection or creating a new one.
+// If the maximum number of connections has been reached, it will return ErrNoConnectionsAvailable.
+func (c *Client) TryConnect() (Conn, error) {
 	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.tryConnect()
+}
+
+var ErrNoConnectionsAvailable = errors.New("no connections available")
+
+func (c *Client) tryConnect() (Conn, error) {
 	c.discardOldConnections()
 
-	wrap := func(conn *conn) Conn {
+	if len(c.available) > 0 {
+		conn := c.available[0]
+		c.available = c.available[1:]
+
+		return &returnOnClose{conn: conn, client: c}, nil
+	}
+
+	if len(c.all) < c.option.MaxConns {
+		conn, err := c.newConn()
+		if err != nil {
+			return nil, err
+		}
+
 		c.firstUse.Do(func() {
 			if c.option.AtFirstUse != nil {
 				c.option.AtFirstUse(conn.API())
 			}
 		})
 
-		return &returnOnClose{conn: conn, client: c}
+		return &returnOnClose{conn: conn, client: c}, nil
 	}
 
-	if len(c.available) > 0 {
+	return nil, ErrNoConnectionsAvailable
+}
+
+// Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
+// If all connections are busy, it will create a new one up to the maximum number of connections.
+// If the maximum number of connections has been reached, it will block until a connection becomes available,
+// or reuse an existing connection in case AllowConcurrentUse is enabled.
+func (c *Client) Connect() (Conn, error) {
+	c.lock.Lock()
+
+	if conn, err := c.tryConnect(); err != ErrNoConnectionsAvailable {
 		defer c.lock.Unlock()
 
-		conn := c.available[0]
-		c.available = c.available[1:]
-
-		return wrap(conn), nil
-	}
-
-	if len(c.all) < c.option.MaxConns {
-		defer c.lock.Unlock()
-
-		conn, err := c.newConn()
-		if err != nil {
-			return nil, err
-		}
-
-		return wrap(conn), nil
+		return conn, err
 	}
 
 	if c.option.AllowConcurrentUse {
@@ -219,18 +236,19 @@ func (c *Client) Connect() (Conn, error) {
 		// Mark the connection as reused
 		c.reused = append(c.reused, first)
 
-		return wrap(first), nil
+		return &returnOnClose{conn: first, client: c}, nil
 	}
 
 	// None available, block until one becomes available
 	c.waiting++
 	c.lock.Unlock()
 
-	conn := <-c.ready
-
-	if conn != nil {
-		return wrap(conn), nil
+	if conn := <-c.ready; conn != nil {
+		return &returnOnClose{conn: conn, client: c}, nil
 	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	// We received a token from a returned connection that was closed
 	// In this case we are allowed to create a new connection
@@ -239,7 +257,7 @@ func (c *Client) Connect() (Conn, error) {
 		return nil, err
 	}
 
-	return wrap(conn), nil
+	return &returnOnClose{conn: conn, client: c}, nil
 }
 
 func (c *Client) newConn() (*conn, error) {

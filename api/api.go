@@ -124,7 +124,8 @@ type File interface {
 	// and another connection from the pool will be used and blocked until the
 	// file is closed. When called using iron.Conn directly, the caller is
 	// responsible for providing a valid connection.
-	// Reopen takes ownership of the connection, and closes it when done.
+	// Reopen takes ownership of the connection, and closes it when done,
+	// also if an error is returned.
 	// A reopened file must be closed before the original handle is closed.
 	Reopen(conn Conn, mode int) (File, error)
 }
