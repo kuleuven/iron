@@ -353,7 +353,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 		return client.Upload(context.Background(), f.Name(), "test", Options{
 			//	SyncModTime: true,
-			Threads: 2,
+			MaxThreads: 2,
 		})
 	})
 
@@ -451,7 +451,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 
 		return client.Download(context.Background(), f.Name(), "test", Options{
 			//	SyncModTime: true,
-			Threads: 1,
+			MaxThreads: 1,
 		})
 	})
 

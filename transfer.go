@@ -20,7 +20,7 @@ import (
 
 type Options struct {
 	Exclusive   bool     // Do not overwrite existing files
-	Threads     int      // Number of chunks that will be streamed in parallel, should be lower or equal to the number of connections the client can make
+	MaxThreads  int      // Maximum number of parallel streams, defaults to maximum number of connections
 	SyncModTime bool     // Sync modification time
 	Progress    Progress // Optional progress tracking callbacks
 }
@@ -90,20 +90,37 @@ func (c *Client) upload(_ context.Context, w api.File, local string, opts Option
 		return w.Touch(stat.ModTime())
 	}
 
-	if opts.Threads <= 1 || c.option.MaxConns <= 1 || c.option.AllowConcurrentUse {
+	maxThreads := c.option.MaxConns
+
+	if opts.MaxThreads > 0 {
+		maxThreads = min(opts.MaxThreads, c.option.MaxConns)
+	}
+
+	if maxThreads <= 1 {
 		return finish(transfer.Copy(w, r, stat.Size(), opts.Progress))
 	}
+
+	// Acquire all available connections
+	pool, err := c.Available(maxThreads - 1)
+	if err != nil {
+		return err
+	}
+
+	defer closeConnections(pool) //nolint:errcheck
 
 	ww := &transfer.ReopenRangeWriter{
 		WriteSeekCloser: w,
 		Reopen: func() (transfer.WriteSeekCloser, error) {
-			return w.Reopen(nil, api.O_WRONLY)
+			conn := pool[0]
+			pool = pool[1:]
+
+			return w.Reopen(conn, api.O_WRONLY)
 		},
 	}
 
 	defer ww.Close()
 
-	return finish(transfer.CopyN(ww, &transfer.ReaderAtRangeReader{ReaderAt: r}, stat.Size(), min(opts.Threads, c.option.MaxConns), opts.Progress))
+	return finish(transfer.CopyN(ww, &transfer.ReaderAtRangeReader{ReaderAt: r}, stat.Size(), len(pool)+1, opts.Progress))
 }
 
 // Download downloads a remote file from the iRODS server using parallel transfers.
@@ -152,20 +169,37 @@ func (c *Client) download(ctx context.Context, file *os.File, remote string, opt
 		return err
 	}
 
-	if opts.Threads <= 1 || c.option.MaxConns <= 1 || c.option.AllowConcurrentUse {
+	maxThreads := c.option.MaxConns
+
+	if opts.MaxThreads > 0 {
+		maxThreads = min(opts.MaxThreads, c.option.MaxConns)
+	}
+
+	if maxThreads <= 1 {
 		return transfer.Copy(file, r, size, opts.Progress)
 	}
+
+	// Acquire all available connections
+	pool, err := c.Available(maxThreads - 1)
+	if err != nil {
+		return err
+	}
+
+	defer closeConnections(pool) //nolint:errcheck
 
 	rr := &transfer.ReopenRangeReader{
 		ReadSeekCloser: r,
 		Reopen: func() (io.ReadSeekCloser, error) {
-			return r.Reopen(nil, api.O_RDONLY)
+			conn := pool[0]
+			pool = pool[1:]
+
+			return r.Reopen(conn, api.O_RDONLY)
 		},
 	}
 
 	defer rr.Close()
 
-	return transfer.CopyN(&transfer.WriterAtRangeWriter{WriterAt: file}, rr, size, min(opts.Threads, c.option.MaxConns), opts.Progress)
+	return transfer.CopyN(&transfer.WriterAtRangeWriter{WriterAt: file}, rr, size, len(pool)+1, opts.Progress)
 }
 
 func findSize(r io.Seeker) (int64, error) {

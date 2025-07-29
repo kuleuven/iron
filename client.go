@@ -172,6 +172,8 @@ func (c *Client) needsEnvCallback() bool {
 	return c.option.EnvCallback != nil && (c.envCallbackExpiry.IsZero() || time.Now().After(c.envCallbackExpiry))
 }
 
+var ErrNoConnectionsAvailable = errors.New("no connections available")
+
 // TryConnect tries to connect to the iRODS server,
 // by either returning an available connection or creating a new one.
 // If the maximum number of connections has been reached, it will return ErrNoConnectionsAvailable.
@@ -180,36 +182,6 @@ func (c *Client) TryConnect() (Conn, error) {
 	defer c.lock.Unlock()
 
 	return c.tryConnect()
-}
-
-var ErrNoConnectionsAvailable = errors.New("no connections available")
-
-func (c *Client) tryConnect() (Conn, error) {
-	c.discardOldConnections()
-
-	if len(c.available) > 0 {
-		conn := c.available[0]
-		c.available = c.available[1:]
-
-		return &returnOnClose{conn: conn, client: c}, nil
-	}
-
-	if len(c.all) < c.option.MaxConns {
-		conn, err := c.newConn()
-		if err != nil {
-			return nil, err
-		}
-
-		c.firstUse.Do(func() {
-			if c.option.AtFirstUse != nil {
-				c.option.AtFirstUse(conn.API())
-			}
-		})
-
-		return &returnOnClose{conn: conn, client: c}, nil
-	}
-
-	return nil, ErrNoConnectionsAvailable
 }
 
 // Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
@@ -258,6 +230,69 @@ func (c *Client) Connect() (Conn, error) {
 	}
 
 	return &returnOnClose{conn: conn, client: c}, nil
+}
+
+// Available returns a list of available connections to the iRODS server,
+// up to the specified number. If no connections are available, it will return
+// an empty list. Retrieved connections must be closed by the caller.
+func (c *Client) Available(n int) ([]Conn, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	pool := []Conn{}
+
+	for range n {
+		conn, err := c.tryConnect()
+		if err == ErrNoConnectionsAvailable {
+			break
+		} else if err != nil {
+			err = multierr.Append(err, closeConnections(pool))
+
+			return nil, err
+		}
+
+		pool = append(pool, conn)
+	}
+
+	return pool, nil
+}
+
+func closeConnections(pool []Conn) error {
+	var err error
+
+	for _, conn := range pool {
+		err = multierr.Append(err, conn.Close())
+	}
+
+	return err
+}
+
+func (c *Client) tryConnect() (Conn, error) {
+	c.discardOldConnections()
+
+	if len(c.available) > 0 {
+		conn := c.available[0]
+		c.available = c.available[1:]
+
+		return &returnOnClose{conn: conn, client: c}, nil
+	}
+
+	if len(c.all) < c.option.MaxConns {
+		conn, err := c.newConn()
+		if err != nil {
+			return nil, err
+		}
+
+		c.firstUse.Do(func() {
+			if c.option.AtFirstUse != nil {
+				c.option.AtFirstUse(conn.API())
+			}
+		})
+
+		return &returnOnClose{conn: conn, client: c}, nil
+	}
+
+	return nil, ErrNoConnectionsAvailable
 }
 
 func (c *Client) newConn() (*conn, error) {
