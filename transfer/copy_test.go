@@ -118,98 +118,68 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	}
 }
 
-/*
+func TestClientDownload(t *testing.T) {
+	testConn := &api.MockConn{}
 
-func TestClientDownload(t *testing.T) { //nolint:funlen
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	testAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	kv := msg.SSKeyVal{}
+	kv.Add(msg.DATA_TYPE_KW, "generic")
+	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	testConn.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:       "test",
+		CreateMode: 420,
+		KeyVals:    kv,
+	}, msg.FileDescriptor(1))
+	testConn.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Whence:         2,
+	}, msg.SeekResponse{Offset: 4})
+	testConn.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+	}, msg.SeekResponse{Offset: 0})
+	testConn.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.ReadResponse(4), nil, []byte("test"))
+	testConn.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+	}, msg.EmptyResponse{})
+
+	f, err := os.CreateTemp(t.TempDir(), "test")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("expected TCP address, got %T", listener.Addr())
-	}
+	defer os.Remove(f.Name())
 
-	var wg errgroup.Group
-
-	wg.Go(func() error {
-		conn, err := listener.Accept()
-		if err != nil {
-			return err
-		}
-
-		wg.Go(func() error {
-			return runDialog(conn, []Dialog{
-				{
-					msg.AUTH_REQUEST_AN,
-					&msg.AuthRequest{},
-					msg.AuthChallenge{
-						Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-					},
-				},
-				{
-					msg.AUTH_RESPONSE_AN,
-					&msg.AuthChallengeResponse{},
-					msg.AuthResponse{},
-				},
-				{
-					msg.DATA_OBJ_OPEN_AN,
-					&msg.DataObjectRequest{},
-					msg.FileDescriptor(1),
-				},
-				{
-					msg.DATA_OBJ_LSEEK_AN,
-					&msg.OpenedDataObjectRequest{},
-					msg.SeekResponse{},
-				},
-				{
-					msg.DATA_OBJ_CLOSE_AN,
-					&msg.OpenedDataObjectRequest{},
-					msg.EmptyResponse{},
-				},
-			})
-		})
-
-		return nil
-	})
-
-	wg.Go(func() error {
-		defer listener.Close()
-
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation"}
-
-		env.ApplyDefaults()
-
-		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 1})
-		if err != nil {
-			return err
-		}
-
-		defer client.Close()
-
-		f, err := os.CreateTemp(t.TempDir(), "test")
-		if err != nil {
-			return err
-		}
-
-		defer os.Remove(f.Name())
-
-		if err = f.Close(); err != nil {
-			return err
-		}
-
-		transfer.BufferSize = 100
-		transfer.MinimumRangeSize = 200
-
-		return client.Download(context.Background(), f.Name(), "test", transfer.Options{
-			//	SyncModTime: true,
-			MaxThreads: 1,
-		})
-	})
-
-	if err := wg.Wait(); err != nil {
+	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
+
+	BufferSize = 100
+	MinimumRangeSize = 200
+
+	worker := New(testAPI, testAPI, Options{
+		MaxThreads: 1,
+	})
+
+	worker.Download(context.Background(), f.Name(), "test")
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
+	}
+
+	if contents, err := os.ReadFile(f.Name()); err != nil {
+		t.Fatal(err)
+	} else if string(contents) != "test" {
+		t.Errorf("expected 'test', got '%s'", string(contents))
+	}
 }
-*/
