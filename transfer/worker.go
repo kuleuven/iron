@@ -2,9 +2,12 @@ package transfer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +24,9 @@ type Options struct {
 	SyncModTime bool
 	// MaxThreads indicates the maximum threads per transferred file
 	MaxThreads int
+	// VerifyChecksums indicates whether checksums should be verified
+	// to compare an existing file when syncing (UploadDir, DownloadDir)
+	VerifyChecksums bool
 	// Error handler
 	ErrorHandler func(err error) error
 }
@@ -154,6 +160,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 
 		err := wg.Wait()
 		err = multierr.Append(err, ww.Close())
+
 		if err == nil && worker.options.SyncModTime {
 			err = w.Touch(stat.ModTime())
 		}
@@ -232,6 +239,7 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 
 		err := wg.Wait()
 		err = multierr.Append(err, rr.Close())
+
 		err = multierr.Append(err, r.Close())
 		if err != nil {
 			err = multierr.Append(err, os.Remove(local))
@@ -271,23 +279,14 @@ func findSize(r io.Seeker) (int64, error) {
 	return size, nil
 }
 
-/*
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
-func (c *Client) UploadDir(ctx context.Context, local, remote string, opts Options) error {
-	if opts.Threads+1 > c.defaultPool.maxConns {
-		return fmt.Errorf("%w: need at least %d connections, %d available", ErrNoConnectionsAvailable, opts.Threads+1, c.defaultPool.maxConns)
+func (worker *Worker) UploadDir(ctx context.Context, local, remote string) { //nolint:gocognit,funlen
+	if err := worker.IndexPool.CreateCollectionAll(ctx, remote); err != nil {
+		worker.Error(err)
+
+		return
 	}
-
-	// Use a dedicated pool for the actual uploads
-	pool, err := c.defaultPool.Pool(opts.Threads)
-	if err != nil {
-		return err
-	}
-
-	worker := transfer.New(opts.Progress)
-
-	wg, ctx := errgroup.WithContext(ctx)
 
 	type pathRecord struct {
 		path   string
@@ -297,10 +296,10 @@ func (c *Client) UploadDir(ctx context.Context, local, remote string, opts Optio
 	ch := make(chan *pathRecord)
 
 	// Scan the remote directory
-	wg.Go(func() error {
+	worker.wg.Go(func() error {
 		defer close(ch)
 
-		return c.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
+		return worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
 			if err != nil {
 				return err
 			}
@@ -315,7 +314,7 @@ func (c *Client) UploadDir(ctx context.Context, local, remote string, opts Optio
 	})
 
 	// Walk through the local directory
-	wg.Go(func() error {
+	worker.wg.Go(func() error {
 		var (
 			remoteRecord *pathRecord // Keeps a record of the last remote path. We'll iterate the remote paths simultaneously
 			ok           bool
@@ -329,12 +328,12 @@ func (c *Client) UploadDir(ctx context.Context, local, remote string, opts Optio
 
 		return filepath.Walk(local, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return err
+				return worker.options.ErrorHandler(err)
 			}
 
 			relpath, err := filepath.Rel(local, path)
 			if err != nil {
-				return err
+				return worker.options.ErrorHandler(err)
 			}
 
 			irodsPath := toIrodsPath(remote, relpath)
@@ -347,41 +346,13 @@ func (c *Client) UploadDir(ctx context.Context, local, remote string, opts Optio
 				}
 			}
 
-			if info.IsDir() {
-				if remoteRecord != nil && remoteRecord.path == irodsPath {
-					return nil
-				}
-
-				return c.CreateCollection(ctx, irodsPath)
+			if remoteRecord != nil && remoteRecord.path == irodsPath {
+				return worker.upload(ctx, path, info, irodsPath, remoteRecord.record)
 			}
 
-			switch {
-			case remoteRecord == nil || remoteRecord.path > irodsPath:
-				// file does not exist
-			case remoteRecord.record.Size() != info.Size():
-				// size does not match
-			case checksum:
-			if err = c.Verify(ctx, path, irodsPath); !errors.Is(err, ErrChecksumMismatch) {
-				return err
-			}
-			case remoteRecord.record.ModTime().Truncate(time.Second).Equal(info.ModTime().Truncate(time.Second)):
-				return nil
-			default:
-			}
-
-			if err = pool.Upload(ctx, path, irodsPath, remoteRecord == nil || remoteRecord.path > irodsPath, true, worker); err != nil {
-				return err
-			}
-
-			return nil
+			return worker.upload(ctx, path, info, irodsPath, nil)
 		})
 	})
-
-	wg.Go(func() error {
-		return worker.Wait()
-	})
-
-	return wg.Wait()
 }
 
 func toIrodsPath(base, path string) string {
@@ -390,16 +361,108 @@ func toIrodsPath(base, path string) string {
 	}
 
 	return base + "/" + strings.Join(strings.Split(path, string(os.PathSeparator)), "/")
-}*/
+}
 
-/*
+func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo, irodsPath string, remoteInfo api.Record) error {
+	if info.IsDir() {
+		if remoteInfo != nil {
+			return nil
+		}
+
+		if err := worker.IndexPool.CreateCollection(ctx, irodsPath); err != nil {
+			return worker.options.ErrorHandler(err)
+		}
+
+		return nil
+	}
+
+	switch {
+	case remoteInfo == nil:
+		// file does not exist
+	case worker.options.Exclusive:
+		return nil // file already exists, don't overwrite
+	case remoteInfo.Size() != info.Size():
+		// size does not match
+	case worker.options.VerifyChecksums:
+		err := Verify(ctx, worker.IndexPool, path, irodsPath)
+		if err == nil {
+			return nil
+		} else if !errors.Is(err, ErrChecksumMismatch) {
+			return worker.options.ErrorHandler(err)
+		}
+	case remoteInfo.ModTime().Truncate(time.Second).Equal(info.ModTime().Truncate(time.Second)):
+		return nil
+	default:
+	}
+
+	worker.Upload(ctx, path, irodsPath)
+
+	return nil
+}
+
+// DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
+// The local file refers to the local file system. The remote file refers to an iRODS path.
+func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
+	worker.wg.Go(func() error {
+		return worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
+			if err != nil {
+				return worker.options.ErrorHandler(err)
+			}
+
+			path := toLocalPath(local, strings.TrimPrefix(irodsPath, remote))
+
+			fi, err := os.Stat(path)
+			if !os.IsNotExist(err) && err != nil {
+				return worker.options.ErrorHandler(err)
+			}
+
+			return worker.download(ctx, irodsPath, record, path, fi)
+		})
+	})
+}
+
 func toLocalPath(base, path string) string {
 	if path == "" {
 		return base
 	}
 
 	return base + strings.Join(strings.Split(path, "/"), string(os.PathSeparator))
-}*/
+}
+
+func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo api.Record, path string, info os.FileInfo) error {
+	if remoteInfo.IsDir() {
+		if info != nil {
+			return nil
+		}
+
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return worker.options.ErrorHandler(err)
+		}
+
+		return nil
+	}
+
+	switch {
+	case info == nil:
+	// file does not exist
+	case worker.options.Exclusive:
+		return nil // file already exists, don't overwrite
+	case info.Size() != remoteInfo.Size():
+		// size does not match
+	case worker.options.VerifyChecksums:
+		if err := Verify(ctx, worker.IndexPool, path, irodsPath); err == nil {
+			return nil
+		} else if !errors.Is(err, ErrChecksumMismatch) {
+			return worker.options.ErrorHandler(err)
+		}
+	case remoteInfo.ModTime().Truncate(time.Second).Equal(info.ModTime().Truncate(time.Second)):
+		return nil
+	}
+
+	worker.Download(ctx, path, irodsPath)
+
+	return nil
+}
 
 // Error schedules an error
 func (worker *Worker) Error(err error) {
