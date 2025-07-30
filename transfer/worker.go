@@ -279,18 +279,18 @@ func findSize(r io.Seeker) (int64, error) {
 	return size, nil
 }
 
+type pathRecord struct {
+	path   string
+	record api.Record
+}
+
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
-func (worker *Worker) UploadDir(ctx context.Context, local, remote string) { //nolint:gocognit,funlen
+func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	if err := worker.IndexPool.CreateCollectionAll(ctx, remote); err != nil {
 		worker.Error(err)
 
 		return
-	}
-
-	type pathRecord struct {
-		path   string
-		record api.Record
 	}
 
 	ch := make(chan *pathRecord)
@@ -315,43 +315,47 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) { //n
 
 	// Walk through the local directory
 	worker.wg.Go(func() error {
-		var (
-			remoteRecord *pathRecord // Keeps a record of the last remote path. We'll iterate the remote paths simultaneously
-			ok           bool
-		)
-
 		defer func() {
 			for range ch {
 				// skip
 			}
 		}()
 
-		return filepath.Walk(local, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return worker.options.ErrorHandler(err)
+		return worker.uploadWalk(ctx, local, remote, ch)
+	})
+}
+
+func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <-chan *pathRecord) error {
+	var (
+		remoteRecord *pathRecord // Keeps a record of the last remote path. We'll iterate the remote paths simultaneously
+		ok           bool
+	)
+
+	return filepath.Walk(local, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return worker.options.ErrorHandler(err)
+		}
+
+		relpath, err := filepath.Rel(local, path)
+		if err != nil {
+			return worker.options.ErrorHandler(err)
+		}
+
+		irodsPath := toIrodsPath(remote, relpath)
+
+		// Iterate until we find the remote path
+		for remoteRecord == nil || remoteRecord.path < irodsPath {
+			remoteRecord, ok = <-ch
+			if !ok {
+				break
 			}
+		}
 
-			relpath, err := filepath.Rel(local, path)
-			if err != nil {
-				return worker.options.ErrorHandler(err)
-			}
+		if remoteRecord != nil && remoteRecord.path == irodsPath {
+			return worker.upload(ctx, path, info, irodsPath, remoteRecord.record)
+		}
 
-			irodsPath := toIrodsPath(remote, relpath)
-
-			// Iterate until we find the remote path
-			for remoteRecord == nil || remoteRecord.path < irodsPath {
-				remoteRecord, ok = <-ch
-				if !ok {
-					break
-				}
-			}
-
-			if remoteRecord != nil && remoteRecord.path == irodsPath {
-				return worker.upload(ctx, path, info, irodsPath, remoteRecord.record)
-			}
-
-			return worker.upload(ctx, path, info, irodsPath, nil)
-		})
+		return worker.upload(ctx, path, info, irodsPath, nil)
 	})
 }
 
