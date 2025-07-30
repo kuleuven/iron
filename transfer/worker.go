@@ -81,55 +81,6 @@ func (p *progress) Close() error {
 	return nil
 }
 
-// Copy a generic io.Reader to an io.Writer
-func (worker *Worker) Copy(w io.Writer, r io.Reader, size int64, callback func(err error) error) {
-	if callback == nil {
-		callback = func(err error) error {
-			return err
-		}
-	}
-
-	pw := &progress{
-		Label:     "",
-		Size:      size,
-		StartedAt: time.Now(),
-	}
-
-	worker.wg.Go(func() error {
-		defer pw.Close()
-
-		return callback(copyBuffer(w, r, pw))
-	})
-}
-
-// CopyN copies a generic io.Reader to an io.Writer using multiple threads
-func (worker *Worker) CopyN(w RangeWriter, r RangeReader, size int64, threads int) {
-	pw := &progress{
-		Label:     "",
-		Size:      size,
-		StartedAt: time.Now(),
-	}
-
-	rangeSize := calculateRangeSize(size, threads)
-
-	var wg errgroup.Group
-
-	for offset := int64(0); offset < size; offset += rangeSize {
-		wg.Go(func() error {
-			rr := r.Range(offset, rangeSize)
-			ww := w.Range(offset, rangeSize)
-
-			return copyBuffer(ww, rr, pw)
-		})
-	}
-
-	worker.wg.Go(func() error {
-		defer pw.Close()
-
-		return wg.Wait()
-	})
-}
-
 // Wait for all transfers to finish
 func (worker *Worker) Wait() error {
 	return worker.wg.Wait()
