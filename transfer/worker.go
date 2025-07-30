@@ -24,11 +24,16 @@ type Options struct {
 	SyncModTime bool
 	// MaxThreads indicates the maximum threads per transferred file
 	MaxThreads int
+	// MaxQueued indicates the maximum number of queued files
+	// when uploading or downloading a directory
+	MaxQueued int
 	// VerifyChecksums indicates whether checksums should be verified
 	// to compare an existing file when syncing (UploadDir, DownloadDir)
 	VerifyChecksums bool
 	// Error handler
 	ErrorHandler func(err error) error
+	// Progress handler
+	ProgressHandler func(progress Progress)
 }
 
 type Worker struct {
@@ -60,31 +65,48 @@ func New(indexPool, transferPool *api.API, options Options) *Worker {
 	}
 }
 
-type progress struct {
+type Progress struct {
 	Label       string
 	Size        int64
 	Transferred int64
 	StartedAt   time.Time
 	FinishedAt  time.Time
+}
+
+type progressWriter struct {
+	progress Progress
+	handler  func(progress Progress)
 	sync.Mutex
 }
 
-func (p *progress) Write(buf []byte) (int, error) {
+func (p *progressWriter) Write(buf []byte) (int, error) {
 	p.Lock()
 	defer p.Unlock()
 
-	p.Transferred += int64(len(buf))
+	if n := int64(len(buf)); n > 0 {
+		p.progress.Transferred += n
+
+		p.fire()
+	}
 
 	return len(buf), nil
 }
 
-func (p *progress) Close() error {
+func (p *progressWriter) Close() error {
 	p.Lock()
 	defer p.Unlock()
 
-	p.FinishedAt = time.Now()
+	p.progress.FinishedAt = time.Now()
+
+	p.fire()
 
 	return nil
+}
+
+func (p *progressWriter) fire() {
+	if p.handler != nil {
+		p.handler(p.progress)
+	}
 }
 
 // Wait for all transfers to finish
@@ -94,6 +116,7 @@ func (worker *Worker) Wait() error {
 
 // Upload schedules the upload of a local file to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
+// The call blocks until the transfer of all chunks has started.
 func (worker *Worker) Upload(ctx context.Context, local, remote string) { //nolint:funlen
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
@@ -129,11 +152,16 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 	}
 
 	// Schedule the upload
-	pw := &progress{
-		Label:     local,
-		Size:      stat.Size(),
-		StartedAt: time.Now(),
+	pw := &progressWriter{
+		progress: Progress{
+			Label:     local,
+			Size:      stat.Size(),
+			StartedAt: time.Now(),
+		},
+		handler: worker.options.ProgressHandler,
 	}
+
+	pw.fire()
 
 	rr := &ReaderAtRangeReader{ReaderAt: r}
 
@@ -149,8 +177,11 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 	rangeSize := calculateRangeSize(stat.Size(), worker.options.MaxThreads)
 
 	for offset := int64(0); offset < stat.Size(); offset += rangeSize {
+		dst := ww.Range(offset, rangeSize)
+		src := rr.Range(offset, rangeSize)
+
 		wg.Go(func() error {
-			return copyBuffer(ww.Range(offset, rangeSize), rr.Range(offset, rangeSize), pw)
+			return copyBuffer(dst, src, pw)
 		})
 	}
 
@@ -179,6 +210,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 
 // Download schedules the download of a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
+// The call blocks until the transfer of all chunks has started.
 func (worker *Worker) Download(ctx context.Context, local, remote string) { //nolint:funlen
 	mode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
@@ -208,11 +240,16 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 	}
 
 	// Schedule the download
-	pw := &progress{
-		Label:     local,
-		Size:      size,
-		StartedAt: time.Now(),
+	pw := &progressWriter{
+		progress: Progress{
+			Label:     local,
+			Size:      size,
+			StartedAt: time.Now(),
+		},
+		handler: worker.options.ProgressHandler,
 	}
+
+	pw.fire()
 
 	ww := &WriterAtRangeWriter{WriterAt: w}
 
@@ -228,8 +265,11 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 	rangeSize := calculateRangeSize(size, worker.options.MaxThreads)
 
 	for offset := int64(0); offset < size; offset += rangeSize {
+		dst := ww.Range(offset, rangeSize)
+		src := rr.Range(offset, rangeSize)
+
 		wg.Go(func() error {
-			return copyBuffer(ww.Range(offset, rangeSize), rr.Range(offset, rangeSize), pw)
+			return copyBuffer(dst, src, pw)
 		})
 	}
 
@@ -286,6 +326,7 @@ type pathRecord struct {
 
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
+// The call blocks until the source directory has been completely scanned.
 func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	if err := worker.IndexPool.CreateCollectionAll(ctx, remote); err != nil {
 		worker.Error(err)
@@ -293,7 +334,18 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 		return
 	}
 
+	queue := make(chan func(), worker.options.MaxQueued)
+
 	ch := make(chan *pathRecord)
+
+	// Execute the uploads
+	worker.wg.Go(func() error {
+		for fn := range queue {
+			fn()
+		}
+
+		return nil
+	})
 
 	// Scan the remote directory
 	worker.wg.Go(func() error {
@@ -314,24 +366,30 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	})
 
 	// Walk through the local directory
-	worker.wg.Go(func() error {
-		defer func() {
-			for range ch {
-				// skip
-			}
-		}()
+	defer func() {
+		for range ch {
+			// skip
+		}
+	}()
 
-		return worker.uploadWalk(ctx, local, remote, ch)
-	})
+	defer close(queue)
+
+	if err := worker.uploadWalk(ctx, local, remote, ch, queue); err != nil {
+		worker.Error(err)
+	}
 }
 
-func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <-chan *pathRecord) error {
+func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <-chan *pathRecord, queue chan<- func()) error {
 	var (
 		remoteRecord *pathRecord // Keeps a record of the last remote path. We'll iterate the remote paths simultaneously
 		ok           bool
 	)
 
 	return filepath.Walk(local, func(path string, info os.FileInfo, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		if err != nil {
 			return worker.options.ErrorHandler(err)
 		}
@@ -352,10 +410,10 @@ func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <
 		}
 
 		if remoteRecord != nil && remoteRecord.path == irodsPath {
-			return worker.upload(ctx, path, info, irodsPath, remoteRecord.record)
+			return worker.upload(ctx, path, info, irodsPath, remoteRecord.record, queue)
 		}
 
-		return worker.upload(ctx, path, info, irodsPath, nil)
+		return worker.upload(ctx, path, info, irodsPath, nil, queue)
 	})
 }
 
@@ -367,7 +425,7 @@ func toIrodsPath(base, path string) string {
 	return base + "/" + strings.Join(strings.Split(path, string(os.PathSeparator)), "/")
 }
 
-func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo, irodsPath string, remoteInfo api.Record) error {
+func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo, irodsPath string, remoteInfo api.Record, queue chan<- func()) error {
 	if info.IsDir() {
 		if remoteInfo != nil {
 			return nil
@@ -399,30 +457,59 @@ func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo,
 	default:
 	}
 
-	worker.Upload(ctx, path, irodsPath)
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(Progress{
+			Label: path,
+			Size:  info.Size(),
+		})
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case queue <- func() {
+		// This will block until upload can start
+		worker.Upload(ctx, path, irodsPath)
+	}:
+	}
 
 	return nil
 }
 
 // DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
+// The call blocks until the source directory has been completely scanned.
 func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
+	queue := make(chan func(), worker.options.MaxQueued)
+
+	// Execute the downloads
 	worker.wg.Go(func() error {
-		return worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
-			if err != nil {
-				return worker.options.ErrorHandler(err)
-			}
+		for fn := range queue {
+			fn()
+		}
 
-			path := toLocalPath(local, strings.TrimPrefix(irodsPath, remote))
-
-			fi, err := os.Stat(path)
-			if !os.IsNotExist(err) && err != nil {
-				return worker.options.ErrorHandler(err)
-			}
-
-			return worker.download(ctx, irodsPath, record, path, fi)
-		})
+		return nil
 	})
+
+	defer close(queue)
+
+	err := worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
+		if err != nil {
+			return worker.options.ErrorHandler(err)
+		}
+
+		path := toLocalPath(local, strings.TrimPrefix(irodsPath, remote))
+
+		fi, err := os.Stat(path)
+		if !os.IsNotExist(err) && err != nil {
+			return worker.options.ErrorHandler(err)
+		}
+
+		return worker.download(ctx, irodsPath, record, path, fi, queue)
+	})
+	if err != nil {
+		worker.Error(err)
+	}
 }
 
 func toLocalPath(base, path string) string {
@@ -433,7 +520,7 @@ func toLocalPath(base, path string) string {
 	return base + strings.Join(strings.Split(path, "/"), string(os.PathSeparator))
 }
 
-func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo api.Record, path string, info os.FileInfo) error {
+func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo api.Record, path string, info os.FileInfo, queue chan<- func()) error {
 	if remoteInfo.IsDir() {
 		if info != nil {
 			return nil
@@ -463,7 +550,21 @@ func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo
 		return nil
 	}
 
-	worker.Download(ctx, path, irodsPath)
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(Progress{
+			Label: path,
+			Size:  remoteInfo.Size(),
+		})
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case queue <- func() {
+		// This will block until download can start
+		worker.Download(ctx, path, irodsPath)
+	}:
+	}
 
 	return nil
 }

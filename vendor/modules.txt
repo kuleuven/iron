@@ -3,6 +3,7 @@
 github.com/acomagu/bufpipe
 # github.com/dustin/go-humanize v1.0.1
 ## explicit; go 1.16
+github.com/dustin/go-humanize
 # github.com/hashicorp/go-rootcerts v1.0.2
 ## explicit; go 1.12
 github.com/hashicorp/go-rootcerts

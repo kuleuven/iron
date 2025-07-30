@@ -30,7 +30,7 @@ func calculateRangeSize(size int64, threads int) int64 {
 
 var CopyBufferDelay time.Duration
 
-func copyBuffer(w io.Writer, r io.Reader, pw *progress) error {
+func copyBuffer(w io.Writer, r io.Reader, pw *progressWriter) error {
 	if CopyBufferDelay > 0 {
 		time.Sleep(CopyBufferDelay)
 	}

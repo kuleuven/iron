@@ -153,8 +153,13 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	MinimumRangeSize = 200
 	CopyBufferDelay = 500 * time.Millisecond
 
+	pb := ProgressBar()
+
+	defer pb.Close()
+
 	worker := New(testIndexAPI, testTransferAPI, Options{
-		MaxThreads: 2,
+		MaxThreads:      2,
+		ProgressHandler: pb.Handler,
 	})
 
 	worker.UploadDir(context.Background(), dir, "/test")
