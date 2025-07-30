@@ -3,14 +3,11 @@ package iron
 
 import (
 	"context"
-	"errors"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
-	"go.uber.org/multierr"
 )
 
 type Option struct {
@@ -59,19 +56,17 @@ type Option struct {
 }
 
 type Client struct {
-	ctx                    context.Context //nolint:containedctx
-	env                    *Env
-	option                 Option
-	protocol               msg.Protocol
-	nativePassword         string
-	envCallbackExpiry      time.Time
-	nativePasswordExpiry   time.Time
-	available, all, reused []*conn
-	waiting                int
-	ready                  chan *conn
-	dialErr                error
-	firstUse               sync.Once
-	lock                   sync.Mutex
+	ctx                  context.Context //nolint:containedctx
+	env                  *Env
+	option               Option
+	protocol             msg.Protocol
+	nativePassword       string
+	envCallbackExpiry    time.Time
+	nativePasswordExpiry time.Time
+	defaultPool          *Pool
+	dialErr              error
+	firstUse             sync.Once
+	lock                 sync.Mutex
 	*api.API
 }
 
@@ -91,39 +86,25 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 		env:      &env,
 		option:   option,
 		protocol: msg.XML,
-		ready:    make(chan *conn, option.MaxConns),
 	}
 
 	if option.UseNativeProtocol {
 		c.protocol = msg.Native
 	}
 
-	// Register api
-	c.API = &api.API{
-		Username: env.Username,
-		Zone:     env.Zone,
-		Connect: func(ctx context.Context) (api.Conn, error) {
-			return c.Connect()
-		},
-		DefaultResource: env.DefaultResource,
-	}
+	// Create default connection pool
+	c.defaultPool = newPool(c)
 
-	if option.Admin {
-		c.Admin = true
-	}
+	c.API = c.defaultPool.API
 
 	// Test first connection unless deferred
 	if !option.DeferConnectionToFirstUse {
-		conn, err := c.newConn()
+		conn, err := c.defaultPool.newConn()
 		if err != nil {
 			return nil, err
 		}
 
-		c.available = append(c.available, conn)
-	}
-
-	if option.DiscardConnectionAge > 0 {
-		go c.discardOldConnectionsLoop()
+		c.defaultPool.available = append(c.defaultPool.available, conn)
 	}
 
 	return c, nil
@@ -137,7 +118,6 @@ func (c *Client) Option() Option {
 // Env returns the client environment.
 func (c *Client) Env() Env {
 	c.lock.Lock()
-
 	defer c.lock.Unlock()
 
 	// If an EnvCallback is provided, use it to retrieve the environment settings
@@ -172,120 +152,39 @@ func (c *Client) needsEnvCallback() bool {
 	return c.option.EnvCallback != nil && (c.envCallbackExpiry.IsZero() || time.Now().After(c.envCallbackExpiry))
 }
 
-var ErrNoConnectionsAvailable = errors.New("no connections available")
-
 // Connect returns a new connection to the iRODS server. It will first try to reuse an available connection.
 // If all connections are busy, it will create a new one up to the maximum number of connections.
 // If the maximum number of connections has been reached, it will block until a connection becomes available,
 // or reuse an existing connection in case AllowConcurrentUse is enabled.
 func (c *Client) Connect() (Conn, error) {
-	c.lock.Lock()
-
-	if conn, err := c.tryConnect(); err != ErrNoConnectionsAvailable {
-		defer c.lock.Unlock()
-
-		return conn, err
-	}
-
-	if c.option.AllowConcurrentUse {
-		defer c.lock.Unlock()
-
-		first := c.all[0]
-
-		// Rotate the connection list
-		c.all = append(c.all[1:], first)
-
-		// Mark the connection as reused
-		c.reused = append(c.reused, first)
-
-		return &returnOnClose{conn: first, client: c}, nil
-	}
-
-	// None available, block until one becomes available
-	c.waiting++
-	c.lock.Unlock()
-
-	if conn := <-c.ready; conn != nil {
-		return &returnOnClose{conn: conn, client: c}, nil
-	}
-
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	// We received a token from a returned connection that was closed
-	// In this case we are allowed to create a new connection
-	conn, err := c.newConn()
-	if err != nil {
-		return nil, err
-	}
-
-	return &returnOnClose{conn: conn, client: c}, nil
+	return c.defaultPool.Connect()
 }
 
 // ConnectAvailable returns a list of available connections to the iRODS server,
 // up to the specified number. If no connections are available, it will return
 // an empty list. Retrieved connections must be closed by the caller.
+// If n is negative, it will return all available connections.
 func (c *Client) ConnectAvailable(n int) ([]Conn, error) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	pool := []Conn{}
-
-	for range n {
-		conn, err := c.tryConnect()
-		if err == ErrNoConnectionsAvailable {
-			break
-		} else if err != nil {
-			err = multierr.Append(err, closeConnections(pool))
-
-			return nil, err
-		}
-
-		pool = append(pool, conn)
-	}
-
-	return pool, nil
+	return c.defaultPool.ConnectAvailable(n)
 }
 
-func closeConnections(pool []Conn) error {
-	var err error
-
-	for _, conn := range pool {
-		err = multierr.Append(err, conn.Close())
-	}
-
-	return err
+// Close closes all connections managed by the client, ensuring that any errors
+// encountered during the closing process are aggregated and returned. The method
+// is safe to call multiple times and locks the client during execution to prevent
+// concurrent modifications to the connections.
+func (c *Client) Close() error {
+	return c.defaultPool.Close()
 }
 
-func (c *Client) tryConnect() (Conn, error) {
-	c.discardOldConnections()
-
-	if len(c.available) > 0 {
-		conn := c.available[0]
-		c.available = c.available[1:]
-
-		return &returnOnClose{conn: conn, client: c}, nil
-	}
-
-	if len(c.all) < c.option.MaxConns {
-		conn, err := c.newConn()
-		if err != nil {
-			return nil, err
-		}
-
-		c.firstUse.Do(func() {
-			if c.option.AtFirstUse != nil {
-				c.option.AtFirstUse(conn.API())
-			}
-		})
-
-		return &returnOnClose{conn: conn, client: c}, nil
-	}
-
-	return nil, ErrNoConnectionsAvailable
+// Context returns the context used by the client for all of its operations.
+func (c *Client) Context() context.Context {
+	return c.ctx
 }
 
 func (c *Client) newConn() (*conn, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	if c.dialErr != nil {
 		// Dial has already failed, return the same error without retrying
 		return nil, c.dialErr
@@ -333,133 +232,5 @@ func (c *Client) newConn() (*conn, error) {
 		c.nativePasswordExpiry = conn.connectedAt.Add(c.option.GeneratedNativePasswordAge)
 	}
 
-	c.all = append(c.all, conn)
-
 	return conn, nil
-}
-
-func (c *Client) returnConn(conn *conn) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	// If the connection is reused, remove it from the reused list and return
-	for i := range c.reused {
-		if c.reused[i] != conn {
-			continue
-		}
-
-		c.reused = append(c.reused[:i], c.reused[i+1:]...)
-
-		return nil
-	}
-
-	if conn.transportErrors > 0 || conn.sqlErrors > 0 || c.option.DiscardConnectionAge > 0 && time.Since(conn.connectedAt) > c.option.DiscardConnectionAge {
-		for i := range c.all {
-			if c.all[i] != conn {
-				continue
-			}
-
-			c.all = append(c.all[:i], c.all[i+1:]...)
-
-			// If someone is waiting for a connection, we must inform them
-			// that it is allowed to call newConn()
-			if c.waiting > 0 {
-				c.waiting--
-				c.ready <- nil
-			}
-
-			return conn.Close()
-		}
-	}
-
-	if c.waiting > 0 {
-		c.waiting--
-		c.ready <- conn
-
-		return nil
-	}
-
-	c.available = append(c.available, conn)
-
-	return nil
-}
-
-func (c *Client) discardOldConnectionsLoop() {
-	ticker := time.NewTicker(c.option.DiscardConnectionAge / 2)
-
-	for range ticker.C {
-		c.lock.Lock()
-		c.discardOldConnections()
-		c.lock.Unlock()
-	}
-}
-
-func (c *Client) discardOldConnections() {
-	if c.option.DiscardConnectionAge <= 0 {
-		return
-	}
-
-	now := time.Now()
-
-	for i, conn := range c.available {
-		if now.Sub(conn.connectedAt) <= c.option.DiscardConnectionAge {
-			continue
-		}
-
-		j := slices.Index(c.all, conn)
-
-		if j == -1 {
-			continue
-		}
-
-		c.available = append(c.available[:i], c.available[i+1:]...)
-		c.all = append(c.all[:j], c.all[j+1:]...)
-
-		conn.Close()
-	}
-}
-
-type dummyCloser struct {
-	*conn
-}
-
-func (*dummyCloser) Close() error {
-	return nil
-}
-
-type returnOnClose struct {
-	*conn
-	once     sync.Once
-	closeErr error
-	client   *Client
-}
-
-func (r *returnOnClose) Close() error {
-	r.once.Do(func() {
-		r.closeErr = r.client.returnConn(r.conn)
-	})
-
-	return r.closeErr
-}
-
-// Close closes all connections managed by the client, ensuring that any errors
-// encountered during the closing process are aggregated and returned. The method
-// is safe to call multiple times and locks the client during execution to prevent
-// concurrent modifications to the connections.
-func (c *Client) Close() error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	var err error
-
-	for _, conn := range c.all {
-		err = multierr.Append(err, conn.Close())
-	}
-
-	return err
-}
-
-// Context returns the context used by the client for all of its operations.
-func (c *Client) Context() context.Context {
-	return c.ctx
 }

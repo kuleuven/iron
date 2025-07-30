@@ -593,6 +593,14 @@ func (c *conn) API() *api.API {
 	}
 }
 
+type dummyCloser struct {
+	*conn
+}
+
+func (d *dummyCloser) Close() error {
+	return nil
+}
+
 func (c *conn) handleCollStat(response any, responseBuf []byte) error {
 	// Send special code
 	replyBuffer := make([]byte, 4)

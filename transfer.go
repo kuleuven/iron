@@ -20,8 +20,7 @@ import (
 
 type Options struct {
 	Exclusive   bool     // Do not overwrite existing files
-	MinThreads  int      // Minimum number of parallel streams.
-	MaxThreads  int      // Maximum number of parallel streams, defaults to maximum number of connections
+	Threads     int      // Number of parallel streams, defaults to number of available connections
 	SyncModTime bool     // Sync modification time
 	Progress    Progress // Optional progress tracking callbacks
 }
@@ -41,39 +40,24 @@ type Progress interface {
 }
 
 // Upload uploads a local file to the iRODS server using parallel transfers.
-// The number of threads used will be the number of available connections, up
-// to the maximum number of threads specified. If this number is lower than the
-// specified minimum number of threads, the minimum number of threads will be used,
-// and the copy process will partially block until all connections are available.
 func (c *Client) Upload(ctx context.Context, local, remote string, opts Options) error {
+	pool, err := c.defaultPool.Pool(opts.Threads)
+	if err != nil {
+		return err
+	}
+
+	return pool.Upload(ctx, local, remote, opts)
+}
+
+// Upload uploads a local file to the iRODS server using parallel transfers.
+// The number of threads in Options is ignored.
+func (p *Pool) Upload(ctx context.Context, local, remote string, opts Options) error {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
 	if opts.Exclusive {
 		mode |= api.O_EXCL
 	}
 
-	w, err := c.OpenDataObject(ctx, remote, mode)
-	if code, ok := api.ErrorCode(err); ok && code == msg.HIERARCHY_ERROR {
-		if err = c.RenameDataObject(ctx, remote, remote+".bad"); err == nil {
-			w, err = c.OpenDataObject(ctx, remote, mode|api.O_EXCL)
-		}
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if err := c.upload(ctx, w, local, opts); err != nil {
-		err = multierr.Append(err, w.Close())
-		err = multierr.Append(err, c.DeleteDataObject(ctx, remote, true))
-
-		return err
-	}
-
-	return w.Close()
-}
-
-func (c *Client) upload(_ context.Context, w api.File, local string, opts Options) error {
 	r, err := os.Open(local)
 	if err != nil {
 		return err
@@ -81,6 +65,37 @@ func (c *Client) upload(_ context.Context, w api.File, local string, opts Option
 
 	defer r.Close()
 
+	conn, err := p.Connect()
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	mainConn := conn.API()
+
+	w, err := mainConn.OpenDataObject(ctx, remote, mode)
+	if code, ok := api.ErrorCode(err); ok && code == msg.HIERARCHY_ERROR {
+		if err = mainConn.RenameDataObject(ctx, remote, remote+".bad"); err == nil {
+			w, err = mainConn.OpenDataObject(ctx, remote, mode|api.O_EXCL)
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if err := p.upload(ctx, w, r, opts); err != nil {
+		err = multierr.Append(err, w.Close())
+		err = multierr.Append(err, mainConn.DeleteDataObject(ctx, remote, true))
+
+		return err
+	}
+
+	return w.Close()
+}
+
+func (p *Pool) upload(_ context.Context, w api.File, r *os.File, opts Options) error {
 	stat, err := r.Stat()
 	if err != nil {
 		return err
@@ -94,53 +109,37 @@ func (c *Client) upload(_ context.Context, w api.File, local string, opts Option
 		return w.Touch(stat.ModTime())
 	}
 
-	maxThreads := c.option.MaxConns
-
-	if opts.MaxThreads > 0 {
-		maxThreads = min(opts.MaxThreads, c.option.MaxConns)
-	}
-
-	if maxThreads <= 1 {
+	if p.maxConns <= 1 {
 		return finish(transfer.Copy(w, r, stat.Size(), opts.Progress))
 	}
-
-	// Acquire all available connections
-	pool, err := c.ConnectAvailable(maxThreads - 1)
-	if err != nil {
-		return err
-	}
-
-	defer closeConnections(pool) //nolint:errcheck
 
 	ww := &transfer.ReopenRangeWriter{
 		WriteSeekCloser: w,
 		Reopen: func() (transfer.WriteSeekCloser, error) {
-			var conn api.Conn
-
-			if len(pool) > 0 {
-				conn = pool[0]
-				pool = pool[1:]
-			}
-
-			return w.Reopen(conn, api.O_WRONLY)
+			return w.Reopen(nil, api.O_WRONLY)
 		},
 	}
 
 	defer ww.Close()
 
-	threads := max(opts.MinThreads, len(pool)+1)
-
-	if c.option.AllowConcurrentUse {
-		threads = len(pool) + 1
-	}
-
-	return finish(transfer.CopyN(ww, &transfer.ReaderAtRangeReader{ReaderAt: r}, stat.Size(), threads, opts.Progress))
+	return finish(transfer.CopyN(ww, &transfer.ReaderAtRangeReader{ReaderAt: r}, stat.Size(), p.maxConns, opts.Progress))
 }
 
 // Download downloads a remote file from the iRODS server using parallel transfers.
-// The number of threads must be lower or equal to the number of connections the client can make.
-// Do not use in combination with AllowConcurrentUse.
+// The number of threads in Options is ignored.
 func (c *Client) Download(ctx context.Context, local, remote string, opts Options) error {
+	pool, err := c.defaultPool.Pool(opts.Threads)
+	if err != nil {
+		return err
+	}
+
+	return pool.Download(ctx, local, remote, opts)
+}
+
+// Download downloads a remote file from the iRODS server using parallel transfers.
+// The number of threads used will be the number of available connections, up
+// to the maximum number of threads specified.
+func (p *Pool) Download(ctx context.Context, local, remote string, opts Options) error {
 	mode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
 	if opts.Exclusive {
@@ -154,12 +153,33 @@ func (c *Client) Download(ctx context.Context, local, remote string, opts Option
 
 	defer w.Close()
 
-	if err := c.download(ctx, w, remote, opts); err != nil {
-		return multierr.Append(err, os.Remove(local))
+	conn, err := p.Connect()
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	mainConn := conn.API()
+
+	r, err := mainConn.OpenDataObject(ctx, remote, api.O_RDONLY)
+	if err != nil {
+		return err
+	}
+
+	if err := p.download(ctx, w, r, opts); err != nil {
+		err = multierr.Append(err, r.Close())
+		err = multierr.Append(err, os.Remove(local))
+
+		return err
+	}
+
+	if err := r.Close(); err != nil {
+		return err
 	}
 
 	if opts.SyncModTime {
-		obj, err := c.GetDataObject(ctx, remote)
+		obj, err := mainConn.GetDataObject(ctx, remote)
 		if err != nil {
 			return err
 		}
@@ -170,60 +190,26 @@ func (c *Client) Download(ctx context.Context, local, remote string, opts Option
 	return nil
 }
 
-func (c *Client) download(ctx context.Context, file *os.File, remote string, opts Options) error {
-	r, err := c.OpenDataObject(ctx, remote, api.O_RDONLY)
-	if err != nil {
-		return err
-	}
-
-	defer r.Close()
-
+func (p *Pool) download(_ context.Context, w *os.File, r api.File, opts Options) error {
 	size, err := findSize(r)
 	if err != nil {
 		return err
 	}
 
-	maxThreads := c.option.MaxConns
-
-	if opts.MaxThreads > 0 {
-		maxThreads = min(opts.MaxThreads, c.option.MaxConns)
+	if p.maxConns <= 1 {
+		return transfer.Copy(w, r, size, opts.Progress)
 	}
-
-	if maxThreads <= 1 {
-		return transfer.Copy(file, r, size, opts.Progress)
-	}
-
-	// Acquire all available connections
-	pool, err := c.ConnectAvailable(maxThreads - 1)
-	if err != nil {
-		return err
-	}
-
-	defer closeConnections(pool) //nolint:errcheck
 
 	rr := &transfer.ReopenRangeReader{
 		ReadSeekCloser: r,
 		Reopen: func() (io.ReadSeekCloser, error) {
-			var conn api.Conn
-
-			if len(pool) > 0 {
-				conn = pool[0]
-				pool = pool[1:]
-			}
-
-			return r.Reopen(conn, api.O_RDONLY)
+			return r.Reopen(nil, api.O_RDONLY)
 		},
 	}
 
 	defer rr.Close()
 
-	threads := max(opts.MinThreads, len(pool)+1)
-
-	if c.option.AllowConcurrentUse {
-		threads = len(pool) + 1
-	}
-
-	return transfer.CopyN(&transfer.WriterAtRangeWriter{WriterAt: file}, rr, size, threads, opts.Progress)
+	return transfer.CopyN(&transfer.WriterAtRangeWriter{WriterAt: w}, rr, size, p.maxConns, opts.Progress)
 }
 
 func findSize(r io.Seeker) (int64, error) {
