@@ -159,8 +159,8 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 		defer pw.Close()
 
 		err := wg.Wait()
-		err = multierr.Append(err, ww.Close())
 
+		err = multierr.Append(err, ww.Close())
 		if err == nil && worker.options.SyncModTime {
 			err = w.Touch(stat.ModTime())
 		}
