@@ -358,7 +358,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
-		transfer.CopyBufferDelay = 100 * time.Millisecond
+		transfer.CopyBufferDelay = 500 * time.Millisecond
 
 		return client.Upload(context.Background(), f.Name(), "test", transfer.Options{
 			//	SyncModTime: true,
