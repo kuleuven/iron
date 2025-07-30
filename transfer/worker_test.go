@@ -233,3 +233,46 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		t.Errorf("expected 'test', got '%s'", string(contents))
 	}
 }
+
+func TestClientVerify(t *testing.T) {
+	testConn := &api.MockConn{}
+
+	testAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	kv := msg.SSKeyVal{}
+	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+
+	testConn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{
+		Path:    "/test/file1",
+		KeyVals: kv,
+	}, msg.Checksum{
+		Checksum: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+	})
+
+	f, err := os.CreateTemp(t.TempDir(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Remove(f.Name())
+
+	_, err = f.Write(bytes.Repeat([]byte("test"), 100))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Verify(context.Background(), testAPI, f.Name(), "/test/file1"); err != nil {
+		t.Error(err)
+	}
+}
