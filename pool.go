@@ -98,7 +98,7 @@ func (p *Pool) Pool(size int) (*Pool, error) {
 	child := newChildPool(p, size)
 
 	// We need to shrink the parent pool
-	for len(p.all) >= p.maxConns {
+	for len(p.all) > p.maxConns {
 		if len(p.available) > 0 {
 			conn := p.available[0]
 			p.available = p.available[1:]
@@ -340,14 +340,15 @@ func (p *Pool) discardOldConnections() {
 
 	now := time.Now()
 
-	for i, conn := range p.available {
+	for _, conn := range p.available {
 		if now.Sub(conn.connectedAt) <= p.discardConnectionAge {
 			continue
 		}
 
+		i := slices.Index(p.available, conn)
 		j := slices.Index(p.all, conn)
 
-		if j == -1 {
+		if i == -1 || j == -1 {
 			continue
 		}
 
@@ -363,22 +364,29 @@ func (p *Pool) discardOldConnections() {
 // to the parent pool later.
 func (p *Pool) Close() error {
 	p.lock.Lock()
-	defer p.lock.Unlock()
 
 	if p.closed {
+		defer p.lock.Unlock()
+
 		return p.closeErr
 	}
 
-	p.closed = true
-
 	// Ensure all children are closed
-	for _, child := range p.children {
+	children := p.children
+	p.lock.Unlock()
+
+	for _, child := range children {
 		p.closeErr = multierr.Append(p.closeErr, child.Close())
 	}
 
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.closed = true
+
 	// If there is a parent pool, return connections to it
 	if p.parent != nil {
-		p.parent.lock.Lock()
+		p.parent.lock.Lock() // Slow lock
 		defer p.parent.lock.Unlock()
 
 		p.parent.all = append(p.parent.all, p.all...)

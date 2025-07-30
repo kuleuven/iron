@@ -101,7 +101,9 @@ var responses = []any{
 }
 
 func TestWalk(t *testing.T) {
-	testConn.NextResponses = responses
+	testAPI := newAPI()
+
+	testAPI.AddResponses(responses)
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		return err
@@ -112,7 +114,9 @@ func TestWalk(t *testing.T) {
 }
 
 func TestWalkL(t *testing.T) {
-	testConn.NextResponses = responses
+	testAPI := newAPI()
+
+	testAPI.AddResponses(responses)
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		return err
@@ -123,7 +127,9 @@ func TestWalkL(t *testing.T) {
 }
 
 func TestWalkLS(t *testing.T) {
-	testConn.NextResponses = responses
+	testAPI := newAPI()
+
+	testAPI.AddResponses(responses)
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		return err
@@ -134,7 +140,9 @@ func TestWalkLS(t *testing.T) {
 }
 
 func TestWalkBF(t *testing.T) {
-	testConn.NextResponses = responses
+	testAPI := newAPI()
+
+	testAPI.AddResponses(responses)
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		return err
@@ -145,10 +153,13 @@ func TestWalkBF(t *testing.T) {
 }
 
 func TestWalkSkip(t *testing.T) {
-	testConn.NextResponses = responses[:8]
-	testConn.NextResponses = append(testConn.NextResponses,
+	testAPI := newAPI()
+
+	testAPI.AddResponses(responses[:8])
+	testAPI.AddResponses([]any{
 		msg.QueryResponse{AttributeCount: 3},
-		msg.QueryResponse{AttributeCount: 4})
+		msg.QueryResponse{AttributeCount: 4},
+	})
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		if path == "/test" {
@@ -167,7 +178,9 @@ func TestWalkSkip(t *testing.T) {
 }
 
 func TestWalkSkipAll(t *testing.T) {
-	testConn.NextResponses = responses[:6]
+	testAPI := newAPI()
+
+	testAPI.AddResponses(responses[:6])
 
 	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
 		return SkipAll

@@ -11,7 +11,9 @@ import (
 )
 
 func TestCreateCollection(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.CreateCollection(context.Background(), "test"); err != nil {
 		t.Fatal(err)
@@ -19,7 +21,9 @@ func TestCreateCollection(t *testing.T) {
 }
 
 func TestCreateCollectionAll(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.CreateCollectionAll(context.Background(), "test"); err != nil {
 		t.Fatal(err)
@@ -27,7 +31,9 @@ func TestCreateCollectionAll(t *testing.T) {
 }
 
 func TestCreateCollectionAllAdmin(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		&msg.IRODSError{
 			Code: -818000,
 		},
@@ -36,7 +42,7 @@ func TestCreateCollectionAllAdmin(t *testing.T) {
 		},
 		msg.EmptyResponse{},
 		msg.EmptyResponse{},
-	}
+	})
 
 	if err := testAPI.AsAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder"); err != nil {
 		t.Fatal(err)
@@ -44,14 +50,16 @@ func TestCreateCollectionAllAdmin(t *testing.T) {
 }
 
 func TestCreateCollectionAllAdminFailure(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		&msg.IRODSError{
 			Code: -818000,
 		},
 		&msg.IRODSError{
 			Code: -1,
 		},
-	}
+	})
 
 	if err, ok := testAPI.AsAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder").(*msg.IRODSError); !ok || err.Code != -818000 {
 		t.Fatal(err)
@@ -59,7 +67,9 @@ func TestCreateCollectionAllAdminFailure(t *testing.T) {
 }
 
 func TestDeleteCollection(t *testing.T) {
-	testConn.NextResponse = msg.CollectionOperationStat{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.CollectionOperationStat{})
 
 	if err := testAPI.DeleteCollection(context.Background(), "test", true); err != nil {
 		t.Fatal(err)
@@ -67,7 +77,9 @@ func TestDeleteCollection(t *testing.T) {
 }
 
 func TestDeleteCollectionAll(t *testing.T) {
-	testConn.NextResponse = msg.CollectionOperationStat{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.CollectionOperationStat{})
 
 	if err := testAPI.DeleteCollectionAll(context.Background(), "test", true); err != nil {
 		t.Fatal(err)
@@ -75,7 +87,9 @@ func TestDeleteCollectionAll(t *testing.T) {
 }
 
 func TestRenameCollection(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.RenameCollection(context.Background(), "test", "test2"); err != nil {
 		t.Fatal(err)
@@ -83,7 +97,9 @@ func TestRenameCollection(t *testing.T) {
 }
 
 func TestDeleteDataObject(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.DeleteDataObject(context.Background(), "test", true); err != nil {
 		t.Fatal(err)
@@ -91,7 +107,9 @@ func TestDeleteDataObject(t *testing.T) {
 }
 
 func TestReplicateDataObject(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.WithNumThreads(1).ReplicateDataObject(context.Background(), "test", "otherResource"); err != nil {
 		t.Fatal(err)
@@ -99,7 +117,9 @@ func TestReplicateDataObject(t *testing.T) {
 }
 
 func TestTrimDataObject(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.TrimDataObject(context.Background(), "test", "otherResource"); err != nil {
 		t.Fatal(err)
@@ -107,7 +127,9 @@ func TestTrimDataObject(t *testing.T) {
 }
 
 func TestTrimDataObjectReplica(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.TrimDataObjectReplica(context.Background(), "test", 0); err != nil {
 		t.Fatal(err)
@@ -115,7 +137,9 @@ func TestTrimDataObjectReplica(t *testing.T) {
 }
 
 func TestRenameDataObject(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.RenameDataObject(context.Background(), "test", "test2"); err != nil {
 		t.Fatal(err)
@@ -123,7 +147,9 @@ func TestRenameDataObject(t *testing.T) {
 }
 
 func TestCopyDataObject(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.CopyDataObject(context.Background(), "test", "test2"); err != nil {
 		t.Fatal(err)
@@ -131,9 +157,11 @@ func TestCopyDataObject(t *testing.T) {
 }
 
 func TestChecksum(t *testing.T) {
-	testConn.NextResponse = msg.Checksum{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.Checksum{
 		Checksum: "sha2:aabbaabbaabbaabbaabb",
-	}
+	})
 
 	if _, err := testAPI.Checksum(context.Background(), "test", false); err != nil {
 		t.Fatal(err)
@@ -141,17 +169,22 @@ func TestChecksum(t *testing.T) {
 }
 
 func TestOpenDataObject(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.FileDescriptor(1),
 		msg.SeekResponse{
 			Offset: 100,
 		},
-		msg.ReadResponse(11),
-		msg.EmptyResponse{},
-		msg.EmptyResponse{},
-	}
+	})
 
-	testConn.NextBin = []byte("testcontent")
+	testAPI.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           15,
+	}, msg.ReadResponse(11), nil, []byte("testcontent"))
+
+	testAPI.AddResponse(msg.EmptyResponse{})
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_APPEND)
 	if err != nil {
@@ -172,7 +205,9 @@ func TestOpenDataObject(t *testing.T) {
 }
 
 func TestTouchDataObject(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.FileDescriptor(1),
 		msg.GetDescriptorInfoResponse{
 			DataObjectInfo: map[string]any{
@@ -182,9 +217,7 @@ func TestTouchDataObject(t *testing.T) {
 		},
 		msg.EmptyResponse{},
 		msg.EmptyResponse{},
-	}
-
-	testConn.NextBin = []byte("testcontent")
+	})
 
 	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
@@ -211,15 +244,15 @@ func TestTouchDataObject(t *testing.T) {
 }
 
 func TestOpenDataObjectSize(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.FileDescriptor(1),
 		msg.SeekResponse{
 			Offset: 100,
 		},
 		msg.EmptyResponse{},
-	}
-
-	testConn.NextBin = []byte("testcontent")
+	})
 
 	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_APPEND)
 	if err != nil {
@@ -241,7 +274,9 @@ func TestOpenDataObjectSize(t *testing.T) {
 }
 
 func TestOpenDataObjectSize2(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.FileDescriptor(1),
 		msg.SeekResponse{
 			Offset: 100,
@@ -250,9 +285,7 @@ func TestOpenDataObjectSize2(t *testing.T) {
 			Offset: 0,
 		},
 		msg.EmptyResponse{},
-	}
-
-	testConn.NextBin = []byte("testcontent")
+	})
 
 	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
 	if err != nil {
@@ -274,7 +307,9 @@ func TestOpenDataObjectSize2(t *testing.T) {
 }
 
 func TestTruncateDataObject(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.FileDescriptor(1),
 		msg.GetDescriptorInfoResponse{
 			DataObjectInfo: map[string]any{
@@ -284,9 +319,7 @@ func TestTruncateDataObject(t *testing.T) {
 		},
 		msg.EmptyResponse{},
 		msg.EmptyResponse{},
-	}
-
-	testConn.NextBin = []byte("testcontent")
+	})
 
 	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
 	if err != nil {
@@ -304,7 +337,9 @@ func TestTruncateDataObject(t *testing.T) {
 }
 
 func TestCreateDataObjectTruncate(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.FileDescriptor(1),
 		msg.GetDescriptorInfoResponse{
 			DataObjectInfo: map[string]any{
@@ -320,21 +355,21 @@ func TestCreateDataObjectTruncate(t *testing.T) {
 		},
 		msg.EmptyResponse{},
 		msg.EmptyResponse{},
-	}
+	})
 
-	testConn2 := &mockConn{}
+	testAPI2 := &MockConn{}
 
-	testConn2.NextResponses = []any{
+	testAPI2.AddResponses([]any{
 		msg.FileDescriptor(2),
 		msg.EmptyResponse{},
-	}
+	})
 
 	file, err := testAPI.CreateDataObject(context.Background(), "test", os.O_CREATE|os.O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file2, err := file.Reopen(testConn2, os.O_WRONLY)
+	file2, err := file.Reopen(testAPI2, os.O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,13 +399,16 @@ func TestCreateDataObjectTruncate(t *testing.T) {
 }
 
 func TestModifyAccess(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
+		msg.EmptyResponse{},
+		msg.EmptyResponse{},
+	})
 
 	if err := testAPI.ModifyAccess(context.Background(), "/test", "test", "own", false); err != nil {
 		t.Fatal(err)
 	}
-
-	testConn.NextResponse = msg.EmptyResponse{}
 
 	if err := testAPI.ModifyAccess(context.Background(), "/test", "test#remoteZone", "own", false); err != nil {
 		t.Fatal(err)
@@ -378,13 +416,16 @@ func TestModifyAccess(t *testing.T) {
 }
 
 func TestSetCollectionInheritance(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
+		msg.EmptyResponse{},
+		msg.EmptyResponse{},
+	})
 
 	if err := testAPI.SetCollectionInheritance(context.Background(), "/test", true, true); err != nil {
 		t.Fatal(err)
 	}
-
-	testConn.NextResponse = msg.EmptyResponse{}
 
 	if err := testAPI.SetCollectionInheritance(context.Background(), "/test", false, false); err != nil {
 		t.Fatal(err)
@@ -392,7 +433,9 @@ func TestSetCollectionInheritance(t *testing.T) {
 }
 
 func TestAddMetadata(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.AddMetadata(context.Background(), "/test", CollectionType, Metadata{
 		Name:  "test",
@@ -403,7 +446,9 @@ func TestAddMetadata(t *testing.T) {
 }
 
 func TestRemoveMetadata(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.RemoveMetadata(context.Background(), "/test", CollectionType, Metadata{
 		Name:  "test",
@@ -414,7 +459,9 @@ func TestRemoveMetadata(t *testing.T) {
 }
 
 func TestSetMetadata(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	if err := testAPI.SetMetadata(context.Background(), "/test", CollectionType, Metadata{
 		Name:  "test",
@@ -425,7 +472,9 @@ func TestSetMetadata(t *testing.T) {
 }
 
 func TestModifyMetadata(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
 
 	add := []Metadata{
 		{

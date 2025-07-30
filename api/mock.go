@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,85 +10,123 @@ import (
 	"github.com/kuleuven/iron/msg"
 )
 
-// mock an API for testing purposes
-var testAPI = &API{
-	Username: "testuser",
-	Zone:     "testzone",
-	Connect: func(context.Context) (Conn, error) {
-		return testConn, nil
-	},
-	DefaultResource: "demoResc",
+type MockConn struct {
+	Dialog []Dialog
 }
 
-var testConn = &mockConn{}
-
-type mockConn struct {
-	NextResponse  any
-	NextResponses []any
-	NextBin       []byte
-	LastRequest   any
+type Dialog struct {
+	msg.APINumber
+	Request, Response       any
+	RequestBuf, ResponseBuf []byte
 }
 
-func (c *mockConn) ClientSignature() string {
+func (c *MockConn) Add(apiNumber msg.APINumber, request, response any) {
+	c.Dialog = append(c.Dialog, Dialog{
+		APINumber: apiNumber,
+		Request:   request,
+		Response:  response,
+	})
+}
+
+func (c *MockConn) AddBuffer(apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) {
+	c.Dialog = append(c.Dialog, Dialog{
+		APINumber:   apiNumber,
+		Request:     request,
+		Response:    response,
+		RequestBuf:  requestBuf,
+		ResponseBuf: responseBuf,
+	})
+}
+
+func (c *MockConn) AddResponse(response any) {
+	c.Dialog = append(c.Dialog, Dialog{
+		APINumber: -1,
+		Response:  response,
+	})
+}
+
+func (c *MockConn) AddResponses(responses []any) {
+	for _, response := range responses {
+		c.AddResponse(response)
+	}
+}
+
+func (c *MockConn) ClientSignature() string {
 	return "testsignature"
 }
 
-func (c *mockConn) NativePassword() string {
+func (c *MockConn) NativePassword() string {
 	return "testpassword"
 }
 
-func (c *mockConn) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
+func (c *MockConn) Request(ctx context.Context, apiNumber msg.APINumber, request, response any) error {
 	return c.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
 }
 
-func (c *mockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, _, responseBuf []byte) error {
+func (c *MockConn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, request, response any, requestBuf, responseBuf []byte) error {
+	if len(c.Dialog) == 0 {
+		return errors.New("no dialog found")
+	}
+
+	dialog := c.Dialog[0]
+	c.Dialog = c.Dialog[1:]
+
+	if dialog.APINumber == -1 {
+		return setResponse(dialog, response, responseBuf)
+	}
+
+	if apiNumber != dialog.APINumber {
+		return fmt.Errorf("unexpected API number: expected %d, got %d", dialog.APINumber, apiNumber)
+	}
+
+	requestMsg, err := msg.Marshal(request, msg.XML, "RODS_API_REQ")
+	if err != nil {
+		return err
+	}
+
+	expectedMsg, err := msg.Marshal(dialog.Request, msg.XML, "RODS_API_REQ")
+	if err != nil {
+		return err
+	}
+
+	if !bytes.Equal(requestMsg.Body.Message, expectedMsg.Body.Message) {
+		return fmt.Errorf("[%d] unexpected request body: expected %s (%d), got %s (%d)", apiNumber, expectedMsg.Body.Message, len(expectedMsg.Body.Message), requestMsg.Body.Message, len(requestMsg.Body.Message))
+	}
+
+	if !reflect.DeepEqual(requestMsg, expectedMsg) {
+		return fmt.Errorf("[%d] unexpected request: expected %v, got %v", apiNumber, expectedMsg, requestMsg)
+	}
+
+	if !bytes.Equal(requestBuf, dialog.RequestBuf) {
+		return fmt.Errorf("[%d] unexpected request buffer: expected %s, got %s", apiNumber, dialog.RequestBuf, requestBuf)
+	}
+
+	return setResponse(dialog, response, responseBuf)
+}
+
+func setResponse(dialog Dialog, response any, responseBuf []byte) error {
+	if err, ok := dialog.Response.(error); ok {
+		return err
+	}
+
 	val := reflect.ValueOf(response)
 
-	// Marshal argument must be a pointer
 	if val.Kind() != reflect.Ptr {
 		return fmt.Errorf("%w: expected ptr, got %T", msg.ErrUnrecognizedType, response)
 	}
 
-	// Save the last request
-	c.LastRequest = request
+	val.Elem().Set(reflect.ValueOf(dialog.Response))
 
-	// Respond the value of NextResponse
-	switch {
-	case c.NextResponse != nil:
-		if err, ok := c.NextResponse.(error); ok {
-			c.NextResponse = nil
-
-			return err
-		}
-
-		val.Elem().Set(reflect.ValueOf(c.NextResponse))
-
-		c.NextResponse = nil
-	case len(c.NextResponses) > 0:
-		if err, ok := c.NextResponses[0].(error); ok {
-			c.NextResponses = c.NextResponses[1:]
-
-			return err
-		}
-
-		val.Elem().Set(reflect.ValueOf(c.NextResponses[0]))
-
-		c.NextResponses = c.NextResponses[1:]
-	default:
-		return errors.New("no response found")
-	}
-
-	n := copy(responseBuf, c.NextBin)
-	c.NextBin = c.NextBin[n:]
+	copy(responseBuf, dialog.ResponseBuf)
 
 	return nil
 }
 
-func (c *mockConn) Close() error {
+func (c *MockConn) Close() error {
 	return nil
 }
 
-func (c *mockConn) RegisterCloseHandler(handler func() error) context.CancelFunc {
+func (c *MockConn) RegisterCloseHandler(handler func() error) context.CancelFunc {
 	return func() {
 		// do nothing
 	}

@@ -10,7 +10,9 @@ import (
 )
 
 func TestGetCollection(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 6,
 		TotalRowCount:  1,
@@ -23,7 +25,7 @@ func TestGetCollection(t *testing.T) {
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
 		},
-	}
+	})
 
 	obj, err := testAPI.GetCollection(context.Background(), "/test/coll_name")
 	if err != nil {
@@ -60,7 +62,9 @@ func TestGetCollection(t *testing.T) {
 }
 
 func TestGetDataObject(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 14,
 		TotalRowCount:  2,
@@ -81,7 +85,7 @@ func TestGetDataObject(t *testing.T) {
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
-	}
+	})
 
 	obj, err := testAPI.GetDataObject(context.Background(), "/test/test")
 	if err != nil {
@@ -118,7 +122,9 @@ func TestGetDataObject(t *testing.T) {
 }
 
 func TestGetResource(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 11,
 		TotalRowCount:  1,
@@ -136,7 +142,7 @@ func TestGetResource(t *testing.T) {
 			{AttributeIndex: 311, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 312, ResultLen: 1, Values: []string{"10000"}},
 		},
-	}
+	})
 
 	_, err := testAPI.GetResource(context.Background(), "/test")
 	if err != nil {
@@ -145,7 +151,9 @@ func TestGetResource(t *testing.T) {
 }
 
 func TestGetUser(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 6,
 		TotalRowCount:  1,
@@ -158,7 +166,7 @@ func TestGetUser(t *testing.T) {
 			{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
-	}
+	})
 
 	_, err := testAPI.GetUser(context.Background(), "/test")
 	if err != nil {
@@ -167,7 +175,9 @@ func TestGetUser(t *testing.T) {
 }
 
 func TestListUsers(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 6,
 		TotalRowCount:  1,
@@ -180,7 +190,7 @@ func TestListUsers(t *testing.T) {
 			{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
-	}
+	})
 
 	list, err := testAPI.ListUsers(context.Background())
 	if err != nil {
@@ -193,7 +203,9 @@ func TestListUsers(t *testing.T) {
 }
 
 func TestListResources(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 11,
 		TotalRowCount:  1,
@@ -211,7 +223,7 @@ func TestListResources(t *testing.T) {
 			{AttributeIndex: 311, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 312, ResultLen: 1, Values: []string{"10000"}},
 		},
-	}
+	})
 
 	list, err := testAPI.ListResources(context.Background())
 	if err != nil {
@@ -224,7 +236,9 @@ func TestListResources(t *testing.T) {
 }
 
 func TestListSubCollections(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 7,
 		TotalRowCount:  1,
@@ -238,7 +252,7 @@ func TestListSubCollections(t *testing.T) {
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
 		},
-	}
+	})
 
 	_, err := testAPI.ListSubCollections(context.Background(), "/test")
 	if err != nil {
@@ -247,7 +261,9 @@ func TestListSubCollections(t *testing.T) {
 }
 
 func TestListDataObjects(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 16,
 		TotalRowCount:  2,
@@ -270,7 +286,7 @@ func TestListDataObjects(t *testing.T) {
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
-	}
+	})
 
 	_, err := testAPI.ListDataObjectsInCollection(context.Background(), "/test")
 	if err != nil {
@@ -279,7 +295,9 @@ func TestListDataObjects(t *testing.T) {
 }
 
 func TestListMetadataDataObject(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 3,
 		TotalRowCount:  2,
@@ -289,7 +307,7 @@ func TestListMetadataDataObject(t *testing.T) {
 			{AttributeIndex: 601, ResultLen: 2, Values: []string{"value", "1"}},
 			{AttributeIndex: 602, ResultLen: 2, Values: []string{"unit", ""}},
 		},
-	}
+	})
 
 	meta, err := testAPI.ListMetadata(context.Background(), "/test/object", DataObjectType)
 	if err != nil {
@@ -302,7 +320,9 @@ func TestListMetadataDataObject(t *testing.T) {
 }
 
 func TestListMetadataCollection(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 3,
 		TotalRowCount:  2,
@@ -312,7 +332,7 @@ func TestListMetadataCollection(t *testing.T) {
 			{AttributeIndex: 611, ResultLen: 2, Values: []string{"value", "1"}},
 			{AttributeIndex: 612, ResultLen: 2, Values: []string{"unit", ""}},
 		},
-	}
+	})
 
 	meta, err := testAPI.ListMetadata(context.Background(), "/test", CollectionType)
 	if err != nil {
@@ -325,7 +345,9 @@ func TestListMetadataCollection(t *testing.T) {
 }
 
 func TestListMetadataResource(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 3,
 		TotalRowCount:  2,
@@ -335,7 +357,7 @@ func TestListMetadataResource(t *testing.T) {
 			{AttributeIndex: 631, ResultLen: 2, Values: []string{"value", "1"}},
 			{AttributeIndex: 632, ResultLen: 2, Values: []string{"unit", ""}},
 		},
-	}
+	})
 
 	meta, err := testAPI.ListMetadata(context.Background(), "test", ResourceType)
 	if err != nil {
@@ -348,7 +370,9 @@ func TestListMetadataResource(t *testing.T) {
 }
 
 func TestListMetadataUser(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 3,
 		TotalRowCount:  2,
@@ -358,7 +382,7 @@ func TestListMetadataUser(t *testing.T) {
 			{AttributeIndex: 641, ResultLen: 2, Values: []string{"value", "1"}},
 			{AttributeIndex: 642, ResultLen: 2, Values: []string{"unit", ""}},
 		},
-	}
+	})
 
 	meta, err := testAPI.ListMetadata(context.Background(), "test", UserType)
 	if err != nil {
@@ -371,7 +395,9 @@ func TestListMetadataUser(t *testing.T) {
 }
 
 func TestListAccessCollection(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.QueryResponse{
 			RowCount:       2,
 			AttributeCount: 2,
@@ -396,7 +422,7 @@ func TestListAccessCollection(t *testing.T) {
 				{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 			},
 		},
-	}
+	})
 
 	_, err := testAPI.ListAccess(context.Background(), "/test/test", CollectionType)
 	if err != nil {
@@ -405,7 +431,9 @@ func TestListAccessCollection(t *testing.T) {
 }
 
 func TestListAccessDataObject(t *testing.T) {
-	testConn.NextResponses = []any{
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
 		msg.QueryResponse{
 			RowCount:       2,
 			AttributeCount: 2,
@@ -430,7 +458,7 @@ func TestListAccessDataObject(t *testing.T) {
 				{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 			},
 		},
-	}
+	})
 
 	_, err := testAPI.ListAccess(context.Background(), "/test/test", DataObjectType)
 	if err != nil {

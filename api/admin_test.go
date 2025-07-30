@@ -9,7 +9,13 @@ import (
 )
 
 func TestStatPhysicalReplica(t *testing.T) {
-	testConn.NextResponse = msg.FileStatResponse{}
+	testAPI := newAPI()
+
+	testAPI.Add(msg.FILE_STAT_AN, msg.FileStatRequest{
+		Path:              "/test",
+		ResourceHierarchy: "demoResc",
+		ObjectPath:        "test",
+	}, msg.FileStatResponse{})
 
 	if _, err := testAPI.StatPhysicalReplica(context.Background(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != ErrRequiresAdmin {
 		t.Error(err)
@@ -21,7 +27,20 @@ func TestStatPhysicalReplica(t *testing.T) {
 }
 
 func TestModifyReplicaAttribute(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	kv := msg.SSKeyVal{}
+
+	kv.Add("dataComments", "v")
+	kv.Add("irodsAdmin", "")
+
+	testAPI.Add(msg.MOD_DATA_OBJ_META_AN, msg.ModDataObjMetaRequest{
+		DataObj: msg.DataObjectInfo{
+			ObjPath: "test",
+			ReplNum: 0,
+		},
+		KeyVals: kv,
+	}, msg.EmptyResponse{})
 
 	if err := testAPI.ModifyReplicaAttribute(context.Background(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != ErrRequiresAdmin {
 		t.Error(err)
@@ -33,7 +52,19 @@ func TestModifyReplicaAttribute(t *testing.T) {
 }
 
 func TestRegisterReplica(t *testing.T) {
-	testConn.NextResponse = msg.EmptyResponse{}
+	testAPI := newAPI()
+
+	kv := msg.SSKeyVal{}
+
+	kv.Add(msg.DATA_TYPE_KW, "generic")
+	kv.Add(msg.FILE_PATH_KW, "/test")
+	kv.Add(msg.DEST_RESC_NAME_KW, "test")
+	kv.Add(msg.REG_REPL_KW, "")
+
+	testAPI.Add(msg.PHY_PATH_REG_AN, msg.DataObjectRequest{
+		Path:    "test",
+		KeyVals: kv,
+	}, msg.EmptyResponse{})
 
 	if err := testAPI.RegisterReplica(context.Background(), "test", "test", "/test"); err != ErrRequiresAdmin {
 		t.Error(err)
@@ -45,10 +76,13 @@ func TestRegisterReplica(t *testing.T) {
 }
 
 func TestAdminCalls(t *testing.T) {
-	testConn.NextResponses = slices.Repeat([]any{msg.EmptyResponse{}}, 10)
+	testAPI := newAPI()
+
+	testAPI.AddResponses(slices.Repeat([]any{msg.EmptyResponse{}}, 10))
 
 	for _, expected := range []error{ErrRequiresAdmin, nil} {
-		api := testAPI
+		api := testAPI.API
+
 		if expected == nil {
 			api = api.AsAdmin()
 		}
@@ -75,7 +109,9 @@ func TestAdminCalls(t *testing.T) {
 }
 
 func TestExecuteRule(t *testing.T) {
-	testConn.NextResponse = msg.MsParamArray{}
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.MsParamArray{})
 
 	if _, err := testAPI.ExecuteExternalRule(context.Background(), "test", nil, ""); err != ErrRequiresAdmin {
 		t.Error(err)

@@ -187,7 +187,6 @@ func runDialog(conn net.Conn, dialog []Dialog) error {
 	for _, d := range dialog {
 		intInfo, err := msg.Read(conn, d.Request, nil, msg.XML, "RODS_API_REQ")
 		if err != nil {
-			fmt.Print(err)
 			return err
 		}
 
@@ -197,7 +196,6 @@ func runDialog(conn net.Conn, dialog []Dialog) error {
 
 		err = msg.Write(conn, d.Response, nil, msg.XML, "RODS_API_REPLY", 0)
 		if err != nil {
-			fmt.Print(err)
 			return err
 		}
 	}
@@ -360,11 +358,11 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
-		transfer.CopyNDelayStart = true
+		transfer.CopyBufferDelay = 100 * time.Millisecond
 
-		return client.Upload(context.Background(), f.Name(), "test", Options{
+		return client.Upload(context.Background(), f.Name(), "test", transfer.Options{
 			//	SyncModTime: true,
-			Threads: 2,
+			MaxThreads: 2,
 		})
 	})
 
@@ -417,11 +415,6 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 					msg.SeekResponse{},
 				},
 				{
-					msg.DATA_OBJ_READ_AN,
-					&msg.OpenedDataObjectRequest{},
-					msg.EmptyResponse{},
-				},
-				{
 					msg.DATA_OBJ_CLOSE_AN,
 					&msg.OpenedDataObjectRequest{},
 					msg.EmptyResponse{},
@@ -439,7 +432,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 
 		env.ApplyDefaults()
 
-		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 2})
+		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 1})
 		if err != nil {
 			return err
 		}
@@ -460,9 +453,9 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
 
-		return client.Download(context.Background(), f.Name(), "test", Options{
+		return client.Download(context.Background(), f.Name(), "test", transfer.Options{
 			//	SyncModTime: true,
-			Threads: 1,
+			MaxThreads: 1,
 		})
 	})
 

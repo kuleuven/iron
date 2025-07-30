@@ -2,112 +2,8 @@ package transfer
 
 import (
 	"io"
-
-	"golang.org/x/sync/errgroup"
+	"time"
 )
-
-func Copy(w io.Writer, r io.Reader, size int64, progress Progress) error {
-	worker := New(progress, nil)
-
-	worker.Copy(w, r, size)
-
-	return worker.Wait()
-}
-
-func CopyN(w RangeWriter, r RangeReader, size int64, threads int, progress Progress) error {
-	worker := New(progress, nil)
-
-	worker.CopyN(w, r, size, threads)
-
-	return worker.Wait()
-}
-
-type Worker struct {
-	progress     Progress
-	errorHandler func(error) error
-	wg           errgroup.Group
-}
-
-func New(progess Progress, errorHandler func(error) error) *Worker {
-	if progess == nil {
-		progess = NullProgress{}
-	}
-
-	if errorHandler == nil {
-		errorHandler = func(err error) error {
-			return err
-		}
-	}
-
-	return &Worker{
-		progress:     progess,
-		errorHandler: errorHandler,
-	}
-}
-
-func (worker *Worker) Copy(w io.Writer, r io.Reader, size int64) {
-	worker.progress.AddTotalFiles(1)
-	worker.progress.AddTotalBytes(size)
-
-	worker.wg.Go(func() error {
-		if err := copyBuffer(w, r, worker.progress); err != nil {
-			return worker.errorHandler(err)
-		}
-
-		worker.progress.AddTransferredFiles(1)
-
-		return nil
-	})
-}
-
-// CopyNDelayStart is a flag to delay the start of the copy threads
-// until all Range Readers have been prepared. It can be used in tests
-// for deterministic behaviour.
-var CopyNDelayStart bool
-
-func (worker *Worker) CopyN(w RangeWriter, r RangeReader, size int64, threads int) {
-	worker.progress.AddTotalFiles(1)
-	worker.progress.AddTotalBytes(size)
-
-	rangeSize := calculateRangeSize(size, threads)
-
-	var wg errgroup.Group
-
-	start := make(chan struct{})
-
-	if !CopyNDelayStart {
-		close(start)
-	}
-
-	for offset := int64(0); offset < size; offset += rangeSize {
-		rr := r.Range(offset, rangeSize)
-		ww := w.Range(offset, rangeSize)
-
-		wg.Go(func() error {
-			<-start
-
-			return copyBuffer(ww, rr, worker.progress)
-		})
-	}
-
-	if CopyNDelayStart {
-		close(start)
-	}
-
-	worker.wg.Go(func() error {
-		if err := wg.Wait(); err != nil {
-			return worker.errorHandler(err)
-		}
-
-		worker.progress.AddTransferredFiles(1)
-
-		return nil
-	})
-}
-
-func (worker *Worker) Wait() error {
-	return worker.wg.Wait()
-}
 
 var BufferSize int64 = 8 * 1024 * 1024
 
@@ -132,9 +28,11 @@ func calculateRangeSize(size int64, threads int) int64 {
 	return rangeSize
 }
 
-func copyBuffer(w io.Writer, r io.Reader, progress Progress) error {
-	pw := &progressWriter{
-		Progress: progress,
+var CopyBufferDelay time.Duration
+
+func copyBuffer(w io.Writer, r io.Reader, pw *progress) error {
+	if CopyBufferDelay > 0 {
+		time.Sleep(CopyBufferDelay)
 	}
 
 	buffer := make([]byte, BufferSize)
@@ -142,14 +40,4 @@ func copyBuffer(w io.Writer, r io.Reader, progress Progress) error {
 	_, err := io.CopyBuffer(io.MultiWriter(w, pw), r, buffer)
 
 	return err
-}
-
-type progressWriter struct {
-	Progress Progress
-}
-
-func (p *progressWriter) Write(b []byte) (int, error) {
-	p.Progress.AddTransferredBytes(int64(len(b)))
-
-	return len(b), nil
 }

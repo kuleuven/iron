@@ -24,14 +24,13 @@ func TestQuery(t *testing.T) {
 		},
 	}
 
-	testConn.NextResponses = []any{
-		resp,
-		resp,
-	}
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{resp, resp})
 
 	resp.ContinueIndex = 0
 
-	testConn.NextResponses = append(testConn.NextResponses, resp)
+	testAPI.AddResponse(resp)
 
 	results := testAPI.AsAdmin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).With(Equal(msg.ICAT_COLUMN_COLL_ID, 1)).Limit(2).Execute(context.Background())
 
@@ -84,7 +83,9 @@ func TestParseTime(t *testing.T) {
 }
 
 func TestQueryRow(t *testing.T) {
-	testConn.NextResponse = msg.QueryResponse{
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 6,
 		TotalRowCount:  1,
@@ -97,7 +98,7 @@ func TestQueryRow(t *testing.T) {
 			{AttributeIndex: 998, ResultLen: 1, Values: []string{"5.5"}},
 			{AttributeIndex: 999, ResultLen: 1, Values: []string{"0"}},
 		},
-	}
+	})
 
 	results := testAPI.QueryRow(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Execute(context.Background())
 

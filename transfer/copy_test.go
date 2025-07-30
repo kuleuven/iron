@@ -2,337 +2,214 @@ package transfer
 
 import (
 	"bytes"
-	"errors"
-	"io"
-	"strings"
-	"sync"
+	"context"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/msg"
 )
 
-// Mock implementations for testing
+func TestClientUpload(t *testing.T) { //nolint:funlen
+	testConn1 := &api.MockConn{}
+	testConn2 := &api.MockConn{}
 
-type mockProgress struct {
-	totalFiles       int
-	transferredFiles int
-	totalBytes       int64
-	transferredBytes int64
-	mu               sync.Mutex
-}
+	var n int
 
-func (m *mockProgress) AddTotalFiles(n int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	testAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			n++
 
-	m.totalFiles += n
-}
+			if n%2 == 1 {
+				return testConn1, nil
+			}
 
-func (m *mockProgress) AddTransferredFiles(n int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.transferredFiles += n
-}
-
-func (m *mockProgress) AddTotalBytes(n int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.totalBytes += n
-}
-
-func (m *mockProgress) AddTransferredBytes(n int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.transferredBytes += n
-}
-
-func (m *mockProgress) GetStats() (int, int, int64, int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.totalFiles, m.transferredFiles, m.totalBytes, m.transferredBytes
-}
-
-type mockRangeReader struct {
-	data []byte
-}
-
-func (m *mockRangeReader) Range(offset, length int64) io.Reader {
-	if offset >= int64(len(m.data)) {
-		return strings.NewReader("")
+			return testConn2, nil
+		},
+		DefaultResource: "demoResc",
 	}
 
-	end := offset + length
-	if end > int64(len(m.data)) {
-		end = int64(len(m.data))
-	}
+	kv := msg.SSKeyVal{}
+	kv.Add(msg.DATA_TYPE_KW, "generic")
+	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:       "test",
+		CreateMode: 420,
+		OpenFlags:  577,
+		KeyVals:    kv,
+	}, msg.FileDescriptor(1))
+	testConn1.Add(msg.GET_FILE_DESCRIPTOR_INFO_APN, msg.GetDescriptorInfoRequest{
+		FileDescriptor: 1,
+	}, msg.GetDescriptorInfoResponse{
+		DataObjectInfo: map[string]any{
+			"replica_number":     1,
+			"resource_hierarchy": "blub",
+		},
+		ReplicaToken: "testToken",
+	})
+	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
 
-	return strings.NewReader(string(m.data[offset:end]))
-}
+	testConn1.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+	}, msg.EmptyResponse{})
 
-type mockRangeWriter struct {
-	data   []byte
-	writes []writeOp
-	mu     sync.Mutex
-}
+	kv = msg.SSKeyVal{}
+	kv.Add(msg.RESC_HIER_STR_KW, "blub")
+	kv.Add(msg.REPLICA_TOKEN_KW, "testToken")
+	testConn2.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:      "test",
+		OpenFlags: 1,
+		KeyVals:   kv,
+	}, msg.FileDescriptor(2))
+	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Offset:         200,
+	}, msg.SeekResponse{Offset: 200})
+	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn2.Add(msg.REPLICA_CLOSE_APN, msg.CloseDataObjectReplicaRequest{
+		FileDescriptor: 2,
+	}, msg.EmptyResponse{})
 
-type writeOp struct {
-	offset int64
-	data   []byte
-}
-
-func newMockRangeWriter(size int64) *mockRangeWriter {
-	return &mockRangeWriter{
-		data: make([]byte, size),
-	}
-}
-
-func (m *mockRangeWriter) Range(offset, length int64) io.Writer {
-	return &mockSectionWriter{
-		parent: m,
-		offset: offset,
-		length: length,
-	}
-}
-
-func (m *mockRangeWriter) recordWrite(offset int64, data []byte) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.writes = append(m.writes, writeOp{offset: offset, data: append([]byte(nil), data...)})
-
-	copy(m.data[offset:], data)
-}
-
-func (m *mockRangeWriter) GetData() []byte {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return append([]byte(nil), m.data...)
-}
-
-type mockSectionWriter struct {
-	parent *mockRangeWriter
-	offset int64
-	length int64
-	pos    int64
-}
-
-func (w *mockSectionWriter) Write(b []byte) (int, error) {
-	if w.pos >= w.length {
-		return 0, io.EOF
-	}
-
-	available := w.length - w.pos
-	if int64(len(b)) > available {
-		b = b[:available]
-	}
-
-	w.parent.recordWrite(w.offset+w.pos, b)
-	w.pos += int64(len(b))
-
-	return len(b), nil
-}
-
-// Tests for Worker and Copy functions
-
-func TestCopy(t *testing.T) {
-	data := "Hello, World! This is test data for copying."
-	reader := strings.NewReader(data)
-	writer := &bytes.Buffer{}
-	progress := &mockProgress{}
-
-	err := Copy(writer, reader, int64(len(data)), progress)
+	f, err := os.CreateTemp(t.TempDir(), "test")
 	if err != nil {
-		t.Fatalf("Copy failed: %v", err)
+		t.Fatal(err)
 	}
 
-	if writer.String() != data {
-		t.Errorf("Expected %q, got %q", data, writer.String())
-	}
+	defer os.Remove(f.Name())
 
-	totalFiles, transferredFiles, totalBytes, transferredBytes := progress.GetStats()
-	if totalFiles != 1 {
-		t.Errorf("Expected totalFiles=1, got %d", totalFiles)
-	}
-
-	if transferredFiles != 1 {
-		t.Errorf("Expected transferredFiles=1, got %d", transferredFiles)
-	}
-
-	if totalBytes != int64(len(data)) {
-		t.Errorf("Expected totalBytes=%d, got %d", len(data), totalBytes)
-	}
-
-	if transferredBytes != int64(len(data)) {
-		t.Errorf("Expected transferredBytes=%d, got %d", len(data), transferredBytes)
-	}
-}
-
-func TestCopyWithNilProgress(t *testing.T) {
-	data := "Test data"
-	reader := strings.NewReader(data)
-	writer := &bytes.Buffer{}
-
-	err := Copy(writer, reader, int64(len(data)), nil)
+	_, err = f.Write(bytes.Repeat([]byte("test"), 100))
 	if err != nil {
-		t.Fatalf("Copy with nil progress failed: %v", err)
+		t.Fatal(err)
 	}
 
-	if writer.String() != data {
-		t.Errorf("Expected %q, got %q", data, writer.String())
-	}
-}
-
-func TestCopyWithErrorReader(t *testing.T) {
-	expectedErr := errors.New("read error")
-	reader := errorReader{err: expectedErr}
-	writer := &bytes.Buffer{}
-	progress := &mockProgress{}
-
-	err := Copy(writer, reader, 100, progress)
-	if err == nil {
-		t.Fatal("Expected error, got nil")
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
 	}
 
-	if err != expectedErr {
-		t.Errorf("Expected error %v, got %v", expectedErr, err)
+	BufferSize = 100
+	MinimumRangeSize = 200
+	CopyBufferDelay = 100 * time.Millisecond
+
+	worker := New(testAPI, testAPI, Options{
+		MaxThreads: 2,
+	})
+
+	worker.Upload(context.Background(), f.Name(), "test")
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
 	}
 }
 
-func TestCopyN(t *testing.T) {
-	data := strings.Repeat("Hello, World! ", 1000) // Create larger data for multi-threading
-	reader := &mockRangeReader{data: []byte(data)}
-	writer := newMockRangeWriter(int64(len(data)))
-	progress := &mockProgress{}
+/*
 
-	err := CopyN(writer, reader, int64(len(data)), 4, progress)
+func TestClientDownload(t *testing.T) { //nolint:funlen
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("CopyN failed: %v", err)
+		t.Fatal(err)
 	}
 
-	result := writer.GetData()
-	if string(result) != data {
-		t.Errorf("Data mismatch. Expected length %d, got %d", len(data), len(result))
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("expected TCP address, got %T", listener.Addr())
 	}
 
-	totalFiles, transferredFiles, totalBytes, transferredBytes := progress.GetStats()
-	if totalFiles != 1 {
-		t.Errorf("Expected totalFiles=1, got %d", totalFiles)
-	}
+	var wg errgroup.Group
 
-	if transferredFiles != 1 {
-		t.Errorf("Expected transferredFiles=1, got %d", transferredFiles)
-	}
-
-	if totalBytes != int64(len(data)) {
-		t.Errorf("Expected totalBytes=%d, got %d", len(data), totalBytes)
-	}
-
-	if transferredBytes != int64(len(data)) {
-		t.Errorf("Expected transferredBytes=%d, got %d", len(data), transferredBytes)
-	}
-}
-
-func TestWorkerNew(t *testing.T) {
-	progress := &mockProgress{}
-	errorHandler := func(err error) error {
-		return errors.New("handled: " + err.Error())
-	}
-
-	worker := New(progress, errorHandler)
-	if worker.progress != progress {
-		t.Error("Progress not set correctly")
-	}
-
-	if worker.errorHandler == nil {
-		t.Error("Error handler not set correctly")
-	}
-}
-
-func TestWorkerNewWithNils(t *testing.T) {
-	worker := New(nil, nil)
-
-	// Should use NullProgress when progress is nil
-	if worker.progress == nil {
-		t.Error("Expected NullProgress, got nil")
-	}
-
-	// Should have default error handler
-	if worker.errorHandler == nil {
-		t.Error("Expected default error handler, got nil")
-	}
-
-	// Test default error handler
-	testErr := errors.New("test error")
-	if worker.errorHandler(testErr) != testErr {
-		t.Error("Default error handler should return the same error")
-	}
-}
-
-func TestWorkerWithErrorHandler(t *testing.T) {
-	progress := &mockProgress{}
-	handledErr := errors.New("handled error")
-	errorHandler := func(err error) error {
-		return handledErr
-	}
-
-	worker := New(progress, errorHandler)
-
-	// Test with an error reader
-	originalErr := errors.New("read error")
-	reader := errorReader{err: originalErr}
-	writer := &bytes.Buffer{}
-
-	worker.Copy(writer, reader, 100)
-
-	err := worker.Wait()
-	if err != handledErr {
-		t.Errorf("Expected handled error %v, got %v", handledErr, err)
-	}
-}
-
-// Tests for utility functions
-
-func TestCalculateRangeSize(t *testing.T) {
-	tests := []struct {
-		size     int64
-		threads  int
-		expected int64
-	}{
-		{100 * 1024 * 1024, 4, 32 * 1024 * 1024},     // 100MB / 4 threads
-		{10 * 1024 * 1024, 4, 32 * 1024 * 1024},      // Small size, should use minimum
-		{200 * 1024 * 1024, 2, 13 * 8 * 1024 * 1024}, // 200MB / 2 threads, aligned
-	}
-
-	for _, test := range tests {
-		result := calculateRangeSize(test.size, test.threads)
-		if result != test.expected {
-			t.Errorf("calculateRangeSize(%d, %d) = %d, expected %d",
-				test.size, test.threads, result, test.expected)
+	wg.Go(func() error {
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
 		}
+
+		wg.Go(func() error {
+			return runDialog(conn, []Dialog{
+				{
+					msg.AUTH_REQUEST_AN,
+					&msg.AuthRequest{},
+					msg.AuthChallenge{
+						Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+					},
+				},
+				{
+					msg.AUTH_RESPONSE_AN,
+					&msg.AuthChallengeResponse{},
+					msg.AuthResponse{},
+				},
+				{
+					msg.DATA_OBJ_OPEN_AN,
+					&msg.DataObjectRequest{},
+					msg.FileDescriptor(1),
+				},
+				{
+					msg.DATA_OBJ_LSEEK_AN,
+					&msg.OpenedDataObjectRequest{},
+					msg.SeekResponse{},
+				},
+				{
+					msg.DATA_OBJ_CLOSE_AN,
+					&msg.OpenedDataObjectRequest{},
+					msg.EmptyResponse{},
+				},
+			})
+		})
+
+		return nil
+	})
+
+	wg.Go(func() error {
+		defer listener.Close()
+
+		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation"}
+
+		env.ApplyDefaults()
+
+		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 1})
+		if err != nil {
+			return err
+		}
+
+		defer client.Close()
+
+		f, err := os.CreateTemp(t.TempDir(), "test")
+		if err != nil {
+			return err
+		}
+
+		defer os.Remove(f.Name())
+
+		if err = f.Close(); err != nil {
+			return err
+		}
+
+		transfer.BufferSize = 100
+		transfer.MinimumRangeSize = 200
+
+		return client.Download(context.Background(), f.Name(), "test", transfer.Options{
+			//	SyncModTime: true,
+			MaxThreads: 1,
+		})
+	})
+
+	if err := wg.Wait(); err != nil {
+		t.Fatal(err)
 	}
 }
-
-func TestProgressWriter(t *testing.T) {
-	progress := &mockProgress{}
-	pw := &progressWriter{Progress: progress}
-
-	data := []byte("test data")
-
-	n, err := pw.Write(data)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	if n != len(data) {
-		t.Errorf("Expected %d bytes written, got %d", len(data), n)
-	}
-
-	_, _, _, transferredBytes := progress.GetStats() //nolint:dogsled
-
-	if transferredBytes != int64(len(data)) {
-		t.Errorf("Expected %d transferred bytes, got %d", len(data), transferredBytes)
-	}
-}
+*/
