@@ -105,7 +105,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 	BufferSize = 100
 	MinimumRangeSize = 200
-	CopyBufferDelay = 100 * time.Millisecond
+	CopyBufferDelay = 500 * time.Millisecond
 
 	worker := New(testAPI, testAPI, Options{
 		MaxThreads: 2,
