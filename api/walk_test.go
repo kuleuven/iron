@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"testing"
 
 	"github.com/kuleuven/iron/msg"
@@ -105,7 +104,7 @@ func TestWalk(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata)
 	if err != nil {
@@ -118,7 +117,7 @@ func TestWalkL(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, LexographicalOrder)
 	if err != nil {
@@ -131,7 +130,7 @@ func TestWalkLS(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, LexographicalOrder, NoSkip)
 	if err != nil {
@@ -144,7 +143,7 @@ func TestWalkBF(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, BreadthFirst)
 	if err != nil {
@@ -161,7 +160,7 @@ func TestWalkSkip(t *testing.T) {
 		msg.QueryResponse{AttributeCount: 4},
 	})
 
-	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		if path == "/test" {
 			return SkipSubDirs
 		}
@@ -182,9 +181,39 @@ func TestWalkSkipAll(t *testing.T) {
 
 	testAPI.AddResponses(responses[:6])
 
-	err := testAPI.Walk(context.Background(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return SkipAll
 	}, FetchAccess, FetchMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetRecord(t *testing.T) {
+	testAPI := newAPI()
+
+	testAPI.AddResponses([]any{
+		msg.QueryResponse{},
+		msg.QueryResponse{
+			RowCount:       1,
+			AttributeCount: 6,
+			TotalRowCount:  1,
+			ContinueIndex:  0,
+			SQLResult: []msg.SQLResult{
+				{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
+				{AttributeIndex: 503, ResultLen: 1, Values: []string{"/test.coll"}},
+				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
+				{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
+				{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+			},
+		},
+		msg.QueryResponse{},
+		msg.QueryResponse{},
+		msg.QueryResponse{},
+	})
+
+	_, err := testAPI.GetRecord(t.Context(), "/test/coll", FetchAccess, FetchMetadata)
 	if err != nil {
 		t.Fatal(err)
 	}

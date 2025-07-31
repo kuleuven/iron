@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -27,7 +26,7 @@ func TestGetCollection(t *testing.T) {
 		},
 	})
 
-	obj, err := testAPI.GetCollection(context.Background(), "/test/coll_name")
+	obj, err := testAPI.GetCollection(t.Context(), "/test/coll_name")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +86,7 @@ func TestGetDataObject(t *testing.T) {
 		},
 	})
 
-	obj, err := testAPI.GetDataObject(context.Background(), "/test/test")
+	obj, err := testAPI.GetDataObject(t.Context(), "/test/test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +143,7 @@ func TestGetResource(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.GetResource(context.Background(), "/test")
+	_, err := testAPI.GetResource(t.Context(), "/test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +167,7 @@ func TestGetUser(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.GetUser(context.Background(), "/test")
+	_, err := testAPI.GetUser(t.Context(), "/test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +191,7 @@ func TestListUsers(t *testing.T) {
 		},
 	})
 
-	list, err := testAPI.ListUsers(context.Background())
+	list, err := testAPI.ListUsers(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +224,7 @@ func TestListResources(t *testing.T) {
 		},
 	})
 
-	list, err := testAPI.ListResources(context.Background())
+	list, err := testAPI.ListResources(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +253,7 @@ func TestListSubCollections(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.ListSubCollections(context.Background(), "/test")
+	_, err := testAPI.ListSubCollections(t.Context(), "/test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +287,7 @@ func TestListDataObjects(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.ListDataObjectsInCollection(context.Background(), "/test")
+	_, err := testAPI.ListDataObjectsInCollection(t.Context(), "/test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +308,7 @@ func TestListMetadataDataObject(t *testing.T) {
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(context.Background(), "/test/object", DataObjectType)
+	meta, err := testAPI.ListMetadata(t.Context(), "/test/object", DataObjectType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +333,7 @@ func TestListMetadataCollection(t *testing.T) {
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(context.Background(), "/test", CollectionType)
+	meta, err := testAPI.ListMetadata(t.Context(), "/test", CollectionType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +358,7 @@ func TestListMetadataResource(t *testing.T) {
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(context.Background(), "test", ResourceType)
+	meta, err := testAPI.ListMetadata(t.Context(), "test", ResourceType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,7 +383,7 @@ func TestListMetadataUser(t *testing.T) {
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(context.Background(), "test", UserType)
+	meta, err := testAPI.ListMetadata(t.Context(), "test", UserType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +423,7 @@ func TestListAccessCollection(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.ListAccess(context.Background(), "/test/test", CollectionType)
+	_, err := testAPI.ListAccess(t.Context(), "/test/test", CollectionType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +459,7 @@ func TestListAccessDataObject(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.ListAccess(context.Background(), "/test/test", DataObjectType)
+	_, err := testAPI.ListAccess(t.Context(), "/test/test", DataObjectType)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package iron
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
@@ -69,7 +68,7 @@ func connPipe() (net.Conn, net.Conn) {
 const releaseVer = "rods4.3.2"
 
 func TestConnNative(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	msg.Write(server, msg.ClientServerNegotiation{
@@ -114,7 +113,7 @@ func TestConnNative(t *testing.T) {
 }
 
 func TestConnNativeNew(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	msg.Write(server, msg.ClientServerNegotiation{
@@ -220,7 +219,7 @@ func pamResponses(server net.Conn) {
 }
 
 func TestConnPamPassword(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	go pamResponses(server)
@@ -247,7 +246,7 @@ func TestConnPamPassword(t *testing.T) {
 }
 
 func TestConnPamPasswordTLS(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	go pamResponses(server)
@@ -295,7 +294,7 @@ func TestConnPamPasswordTLS(t *testing.T) {
 }
 
 func TestConnPamPasswordTLS2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	go pamResponses(server)
@@ -372,7 +371,7 @@ func TestDialer(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	_, err = Dial(context.Background(), env, "test")
+	_, err = Dial(t.Context(), env, "test")
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
@@ -386,7 +385,7 @@ func TestTLSRequired1(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(context.Background(), nil, env, "test")
+	_, err := NewConn(t.Context(), nil, env, "test")
 	if err != ErrTLSRequired {
 		t.Fatalf("expected ErrTLSRequired, got %v", err)
 	}
@@ -400,14 +399,14 @@ func TestTLSRequired2(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(context.Background(), nil, env, "test")
+	_, err := NewConn(t.Context(), nil, env, "test")
 	if err != ErrTLSRequired {
 		t.Fatalf("expected ErrTLSRequired, got %v", err)
 	}
 }
 
 func TestOldVersion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	msg.Write(server, msg.ClientServerNegotiation{
@@ -437,7 +436,7 @@ func TestOldVersion(t *testing.T) {
 }
 
 func TestRequest(t *testing.T) { //nolint:funlen
-	ctx := context.Background()
+	ctx := t.Context()
 	transport, server := connPipe()
 
 	msg.Write(server, msg.Version{

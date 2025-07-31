@@ -2,327 +2,167 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 
+	"github.com/c-bata/go-prompt"
 	"github.com/kuleuven/iron"
-	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/cmd/iron/shell"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-func New(ctx context.Context) *App {
+func New(ctx context.Context, options ...Option) *App {
 	home := os.Getenv("HOME")
 
 	if home == "" {
 		home = "."
 	}
 
-	return &App{
-		ctx:     ctx,
-		envfile: home + "/.irods/irods_environment.json",
+	app := &App{
+		Context: ctx,
+		name:    "iron",
+		loadEnv: FileLoader(home + "/.irods/irods_environment.json"),
 	}
+
+	for _, option := range options {
+		option(app)
+	}
+
+	return app
 }
 
 type App struct {
 	*iron.Client
-	ctx     context.Context //nolint:containedctx
-	envfile string
-	admin   bool
-	debug   int
-	native  bool
+
+	name    string
+	loadEnv Loader
+
+	Context context.Context //nolint:containedctx
+
+	Admin   bool
+	Debug   int
+	Native  bool
+	Workdir string
 }
 
 func (a *App) Command() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "iron",
+		Use:   a.name,
 		Short: "Golang client for iRODS",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if a.debug > 0 {
-				logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.debug-1))
+			if a.Debug > 0 {
+				logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
 			}
 
-			var env iron.Env
-
-			err := env.LoadFromFile(a.envfile)
-			if err != nil {
-				return err
+			if a.Client != nil || SkipInit(cmd) {
+				return nil
 			}
 
-			env.ApplyDefaults()
-
-			a.Client, err = iron.New(a.ctx, env, iron.Option{
-				ClientName:        "iron",
-				Admin:             a.admin,
-				UseNativeProtocol: a.native,
-			})
-
-			return err
+			return a.Init(cmd, args)
 		},
 	}
 
-	rootCmd.PersistentFlags().CountVarP(&a.debug, "debug", "v", "Enable debug output")
-	rootCmd.PersistentFlags().BoolVarP(&a.admin, "admin", "a", false, "Enable admin access")
-	rootCmd.PersistentFlags().BoolVar(&a.native, "native", false, "Use native protocol")
+	rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
+	rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
+	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
+	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", "", "Working directory")
 
-	rootCmd.AddCommand(a.mkdir(), a.rmdir(), a.mvdir(), a.rm(), a.mv(), a.cp(), a.create(), a.put(), a.get(), a.chmod(), a.inherit(), a.listAccess())
+	rootCmd.AddCommand(
+		a.mkdir(),
+		a.rmdir(),
+		a.rm(),
+		a.mv(),
+		a.cp(),
+		a.create(),
+		a.put(),
+		a.get(),
+		a.upload(),
+		a.download(),
+		a.chmod(),
+		a.inherit(),
+		a.list(),
+		a.tree(),
+		a.stat(),
+		a.checksum(),
+	)
+
+	sh := shell.New(rootCmd, nil, prompt.OptionLivePrefix(a.prefix))
+	run := sh.Run
+
+	sh.Use = "shell <zone>"
+	sh.Args = cobra.MaximumNArgs(1)
+	sh.Run = func(cmd *cobra.Command, args []string) {
+		rootCmd.ResetFlags()
+
+		rootCmd.AddCommand(a.pwd(), a.cd(), a.local())
+
+		run(cmd, args)
+	}
+
+	rootCmd.AddCommand(sh)
 
 	return rootCmd
 }
 
-func (a *App) mkdir() *cobra.Command {
-	var recursive bool
-
-	cmd := &cobra.Command{
-		Use:   "mkdir <dir>",
-		Short: "Create a collection",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if recursive {
-				return a.CreateCollectionAll(a.ctx, args[0])
-			}
-
-			return a.CreateCollection(a.ctx, args[0])
-		},
-	}
-
-	cmd.Flags().BoolVarP(&recursive, "parents", "p", false, "Create parents if necessary")
-
-	return cmd
+func (a *App) prefix() (string, bool) {
+	return fmt.Sprintf("%s > %s > ", a.name, a.Workdir), true
 }
 
-func (a *App) rmdir() *cobra.Command {
-	var skip, recursive bool
+func (a *App) Init(cmd *cobra.Command, args []string) error {
+	var zone string
 
-	cmd := &cobra.Command{
-		Use:   "rmdir <dir>",
-		Short: "Remove a collection",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if recursive {
-				return a.DeleteCollectionAll(a.ctx, args[0], skip)
-			}
+	// Get zone from arguments
+	for i, argType := range ArgTypes(cmd) {
+		if i >= len(args) {
+			continue
+		}
 
-			return a.DeleteCollection(a.ctx, args[0], skip)
-		},
+		if z := GetZone(args[i], argType); zone == "" || z != "" && zone == z {
+			zone = z
+		} else if z != "" {
+			return errors.New("multiple zones found in arguments")
+		}
 	}
 
-	cmd.Flags().BoolVarP(&skip, "skip-trash", "S", false, "Do not move to trash")
-	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Remove files in collection recursively")
+	if z := GetZone(a.Workdir, CollectionPath); zone == "" || z != "" && zone == z {
+		zone = z
+	} else if z != "" {
+		return errors.New("multiple zones found in arguments")
+	}
 
-	return cmd
+	// Load zone and start client
+	env, dialer, err := a.loadEnv(a.Context, zone)
+	if err != nil {
+		return err
+	}
+
+	a.Client, err = iron.New(a.Context, env, iron.Option{
+		ClientName:        a.name,
+		Admin:             a.Admin,
+		UseNativeProtocol: a.Native,
+		MaxConns:          16,
+		DialFunc:          dialer,
+	})
+
+	if a.Workdir == "" {
+		a.Workdir = fmt.Sprintf("/%s", env.Zone)
+	}
+
+	return err
 }
 
-func (a *App) mvdir() *cobra.Command {
-	return &cobra.Command{
-		Use:   "mvdir <from> <to>",
-		Short: "Move a collection",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.RenameCollection(a.ctx, args[0], args[1])
-		},
-	}
-}
-
-func (a *App) rm() *cobra.Command {
-	var skip bool
-
-	cmd := &cobra.Command{
-		Use:   "rm <path>",
-		Short: "Remove a data object",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.DeleteDataObject(a.ctx, args[0], skip)
-		},
+func SkipInit(cmd *cobra.Command) bool {
+	if cmd.Use == "__complete [command-line]" || cmd.Use == "help" {
+		return true
 	}
 
-	cmd.Flags().BoolVarP(&skip, "skip-trash", "S", false, "Do not move to trash")
-
-	return cmd
-}
-
-func (a *App) mv() *cobra.Command {
-	return &cobra.Command{
-		Use:   "mv <from> <to>",
-		Short: "Move a data object",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.RenameDataObject(a.ctx, args[0], args[1])
-		},
-	}
-}
-
-func (a *App) cp() *cobra.Command {
-	return &cobra.Command{
-		Use:   "cp <from> <to>",
-		Short: "Copy a data object",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.CopyDataObject(a.ctx, args[0], args[1])
-		},
-	}
-}
-
-func (a *App) create() *cobra.Command {
-	return &cobra.Command{
-		Use:   "create <path>",
-		Short: "Create a data object",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := api.O_CREAT | api.O_WRONLY | api.O_EXCL
-
-			h, err := a.CreateDataObject(a.ctx, args[0], mode)
-			if err != nil {
-				return err
-			}
-
-			return h.Close()
-		},
-	}
-}
-
-func (a *App) put() *cobra.Command {
-	var exclusive bool
-
-	cmd := &cobra.Command{
-		Use:   "put <local> <remote>",
-		Short: "Upload a file",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
-
-			if exclusive {
-				mode |= api.O_EXCL
-			}
-
-			r, err := os.Open(args[0])
-			if err != nil {
-				return err
-			}
-
-			defer r.Close()
-
-			w, err := a.OpenDataObject(a.ctx, args[1], mode)
-			if err != nil {
-				return err
-			}
-
-			defer w.Close()
-
-			buffer := make([]byte, 32*1024*1024)
-
-			_, err = io.CopyBuffer(w, r, buffer)
-
-			return err
-		},
+	if parent := cmd.Parent(); parent != nil && parent.Use == "completion" {
+		return true
 	}
 
-	cmd.Flags().BoolVar(&exclusive, "exclusive", false, "Do not overwrite existing files")
-
-	return cmd
-}
-
-func (a *App) get() *cobra.Command {
-	var exclusive bool
-
-	cmd := &cobra.Command{
-		Use:   "get <remote> <local>",
-		Short: "Download a file",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-
-			if exclusive {
-				mode |= os.O_EXCL
-			}
-
-			w, err := os.OpenFile(args[1], mode, 0o600)
-			if err != nil {
-				return err
-			}
-
-			defer w.Close()
-
-			r, err := a.OpenDataObject(a.ctx, args[0], api.O_RDONLY)
-			if err != nil {
-				return err
-			}
-
-			defer r.Close()
-
-			buffer := make([]byte, 32*1024*1024)
-
-			_, err = io.CopyBuffer(w, r, buffer)
-
-			return err
-		},
-	}
-
-	cmd.Flags().BoolVar(&exclusive, "exclusive", false, "Do not overwrite existing files")
-
-	return cmd
-}
-
-func (a *App) chmod() *cobra.Command {
-	var recursive bool
-
-	cmd := &cobra.Command{
-		Use:   "chmod <permission> <user> <path>",
-		Short: "Change permissions",
-		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.ModifyAccess(a.ctx, args[2], args[1], args[0], recursive)
-		},
-	}
-
-	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Change permissions recursively")
-
-	return cmd
-}
-
-func (a *App) inherit() *cobra.Command {
-	var recursive, inherit bool
-
-	cmd := &cobra.Command{
-		Use:   "inherit <path>",
-		Short: "Change permission inheritance",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.SetCollectionInheritance(a.ctx, args[0], inherit, recursive)
-		},
-	}
-
-	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Change inheritance recursively")
-	cmd.Flags().BoolVar(&inherit, "enable", true, "Enable inheritance")
-
-	return cmd
-}
-
-func (a *App) listAccess() *cobra.Command {
-	var typ string
-
-	cmd := &cobra.Command{
-		Use:   "lsAccess <path>",
-		Short: "Query a data object",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			out, err := a.ListAccess(a.ctx, args[0], api.ObjectType(typ))
-			if err != nil {
-				return err
-			}
-
-			for _, access := range out {
-				fmt.Printf("%v %s\n", access.User, access.Permission)
-			}
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVarP(&typ, "type", "t", "data", "Object type")
-
-	return cmd
+	return false
 }
 
 func (a *App) Close() error {

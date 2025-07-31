@@ -158,7 +158,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		Output:     os.Stdout,
 	})
 
-	worker.UploadDir(context.Background(), dir, "/test")
+	worker.UploadDir(t.Context(), dir, "/test")
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -222,7 +222,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 
 	dir := t.TempDir()
 
-	worker.DownloadDir(context.Background(), dir, "/test")
+	worker.DownloadDir(t.Context(), dir, "/test")
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -273,7 +273,7 @@ func TestClientVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Verify(context.Background(), testAPI, f.Name(), "/test/file1"); err != nil {
+	if err := Verify(t.Context(), testAPI, f.Name(), "/test/file1"); err != nil {
 		t.Error(err)
 	}
 }

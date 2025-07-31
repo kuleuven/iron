@@ -1,0 +1,12 @@
+//go:build windows
+// +build windows
+
+package cli
+
+import (
+	"os"
+)
+
+func uid(_ os.FileInfo) int {
+	return 0
+}

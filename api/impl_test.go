@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"io"
 	"os"
 	"testing"
@@ -15,7 +14,7 @@ func TestCreateCollection(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.CreateCollection(context.Background(), "test"); err != nil {
+	if err := testAPI.CreateCollection(t.Context(), "test"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -25,7 +24,7 @@ func TestCreateCollectionAll(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.CreateCollectionAll(context.Background(), "test"); err != nil {
+	if err := testAPI.CreateCollectionAll(t.Context(), "test"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -44,7 +43,7 @@ func TestCreateCollectionAllAdmin(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	if err := testAPI.AsAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder"); err != nil {
+	if err := testAPI.AsAdmin().CreateCollectionAll(t.Context(), "/test/home/test/path/to/folder"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -61,7 +60,7 @@ func TestCreateCollectionAllAdminFailure(t *testing.T) {
 		},
 	})
 
-	if err, ok := testAPI.AsAdmin().CreateCollectionAll(context.Background(), "/test/home/test/path/to/folder").(*msg.IRODSError); !ok || err.Code != -818000 {
+	if err, ok := testAPI.AsAdmin().CreateCollectionAll(t.Context(), "/test/home/test/path/to/folder").(*msg.IRODSError); !ok || err.Code != -818000 {
 		t.Fatal(err)
 	}
 }
@@ -71,7 +70,7 @@ func TestDeleteCollection(t *testing.T) {
 
 	testAPI.AddResponse(msg.CollectionOperationStat{})
 
-	if err := testAPI.DeleteCollection(context.Background(), "test", true); err != nil {
+	if err := testAPI.DeleteCollection(t.Context(), "test", true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -81,7 +80,7 @@ func TestDeleteCollectionAll(t *testing.T) {
 
 	testAPI.AddResponse(msg.CollectionOperationStat{})
 
-	if err := testAPI.DeleteCollectionAll(context.Background(), "test", true); err != nil {
+	if err := testAPI.DeleteCollectionAll(t.Context(), "test", true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -91,7 +90,7 @@ func TestRenameCollection(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.RenameCollection(context.Background(), "test", "test2"); err != nil {
+	if err := testAPI.RenameCollection(t.Context(), "test", "test2"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -101,7 +100,7 @@ func TestDeleteDataObject(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.DeleteDataObject(context.Background(), "test", true); err != nil {
+	if err := testAPI.DeleteDataObject(t.Context(), "test", true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -111,7 +110,7 @@ func TestReplicateDataObject(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.WithNumThreads(1).ReplicateDataObject(context.Background(), "test", "otherResource"); err != nil {
+	if err := testAPI.WithNumThreads(1).ReplicateDataObject(t.Context(), "test", "otherResource"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -121,7 +120,7 @@ func TestTrimDataObject(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.TrimDataObject(context.Background(), "test", "otherResource"); err != nil {
+	if err := testAPI.TrimDataObject(t.Context(), "test", "otherResource"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -131,7 +130,7 @@ func TestTrimDataObjectReplica(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.TrimDataObjectReplica(context.Background(), "test", 0); err != nil {
+	if err := testAPI.TrimDataObjectReplica(t.Context(), "test", 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -141,7 +140,7 @@ func TestRenameDataObject(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.RenameDataObject(context.Background(), "test", "test2"); err != nil {
+	if err := testAPI.RenameDataObject(t.Context(), "test", "test2"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -151,7 +150,7 @@ func TestCopyDataObject(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.CopyDataObject(context.Background(), "test", "test2"); err != nil {
+	if err := testAPI.CopyDataObject(t.Context(), "test", "test2"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -163,7 +162,7 @@ func TestChecksum(t *testing.T) {
 		Checksum: "sha2:aabbaabbaabbaabbaabb",
 	})
 
-	if _, err := testAPI.Checksum(context.Background(), "test", false); err != nil {
+	if _, err := testAPI.Checksum(t.Context(), "test", false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -186,7 +185,7 @@ func TestOpenDataObject(t *testing.T) {
 	testAPI.AddResponse(msg.EmptyResponse{})
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_APPEND)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY|os.O_APPEND)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +218,7 @@ func TestTouchDataObject(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_TRUNC)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +253,7 @@ func TestOpenDataObjectSize(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY|os.O_APPEND)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY|os.O_APPEND)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +286,7 @@ func TestOpenDataObjectSize2(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +320,7 @@ func TestTruncateDataObject(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(context.Background(), "test", os.O_WRONLY)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +363,7 @@ func TestCreateDataObjectTruncate(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.CreateDataObject(context.Background(), "test", os.O_CREATE|os.O_WRONLY)
+	file, err := testAPI.CreateDataObject(t.Context(), "test", os.O_CREATE|os.O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,11 +405,11 @@ func TestModifyAccess(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	if err := testAPI.ModifyAccess(context.Background(), "/test", "test", "own", false); err != nil {
+	if err := testAPI.ModifyAccess(t.Context(), "/test", "test", "own", false); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := testAPI.ModifyAccess(context.Background(), "/test", "test#remoteZone", "own", false); err != nil {
+	if err := testAPI.ModifyAccess(t.Context(), "/test", "test#remoteZone", "own", false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -423,11 +422,11 @@ func TestSetCollectionInheritance(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	if err := testAPI.SetCollectionInheritance(context.Background(), "/test", true, true); err != nil {
+	if err := testAPI.SetCollectionInheritance(t.Context(), "/test", true, true); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := testAPI.SetCollectionInheritance(context.Background(), "/test", false, false); err != nil {
+	if err := testAPI.SetCollectionInheritance(t.Context(), "/test", false, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -437,7 +436,7 @@ func TestAddMetadata(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.AddMetadata(context.Background(), "/test", CollectionType, Metadata{
+	if err := testAPI.AddMetadata(t.Context(), "/test", CollectionType, Metadata{
 		Name:  "test",
 		Value: "test",
 	}); err != nil {
@@ -450,7 +449,7 @@ func TestRemoveMetadata(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.RemoveMetadata(context.Background(), "/test", CollectionType, Metadata{
+	if err := testAPI.RemoveMetadata(t.Context(), "/test", CollectionType, Metadata{
 		Name:  "test",
 		Value: "test",
 	}); err != nil {
@@ -463,7 +462,7 @@ func TestSetMetadata(t *testing.T) {
 
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	if err := testAPI.SetMetadata(context.Background(), "/test", CollectionType, Metadata{
+	if err := testAPI.SetMetadata(t.Context(), "/test", CollectionType, Metadata{
 		Name:  "test",
 		Value: "test",
 	}); err != nil {
@@ -490,7 +489,7 @@ func TestModifyMetadata(t *testing.T) {
 		},
 	}
 
-	if err := testAPI.ModifyMetadata(context.Background(), "/test", CollectionType, add, remove); err != nil {
+	if err := testAPI.ModifyMetadata(t.Context(), "/test", CollectionType, add, remove); err != nil {
 		t.Fatal(err)
 	}
 }

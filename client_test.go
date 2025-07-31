@@ -2,7 +2,6 @@ package iron
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -44,7 +43,7 @@ func TestClient(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	client, err := New(context.Background(), env, Option{
+	client, err := New(t.Context(), env, Option{
 		ClientName:                "test",
 		DeferConnectionToFirstUse: true,
 		EnvCallback:               func() (Env, time.Time, error) { return env, time.Time{}, nil },
@@ -117,7 +116,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 
 		env.ApplyDefaults()
 
-		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 1})
+		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 1})
 		if err != nil {
 			return err
 		}
@@ -335,7 +334,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 		env.ApplyDefaults()
 
-		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 2})
+		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 2})
 		if err != nil {
 			return err
 		}
@@ -362,7 +361,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		transfer.MinimumRangeSize = 200
 		transfer.CopyBufferDelay = 5 * time.Second
 
-		return client.Upload(context.Background(), f.Name(), "test", transfer.Options{
+		return client.Upload(t.Context(), f.Name(), "test", transfer.Options{
 			//	SyncModTime: true,
 			MaxThreads: 2,
 		})
@@ -434,7 +433,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 
 		env.ApplyDefaults()
 
-		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 1})
+		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 1})
 		if err != nil {
 			return err
 		}
@@ -455,7 +454,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
 
-		return client.Download(context.Background(), f.Name(), "test", transfer.Options{
+		return client.Download(t.Context(), f.Name(), "test", transfer.Options{
 			//	SyncModTime: true,
 			MaxThreads: 1,
 		})
@@ -519,7 +518,7 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 
 		env.ApplyDefaults()
 
-		client, err := New(context.Background(), env, Option{ClientName: "test", MaxConns: 2})
+		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 2})
 		if err != nil {
 			return err
 		}
@@ -542,7 +541,7 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 			return err
 		}
 
-		return client.Verify(context.Background(), f.Name(), "test")
+		return client.Verify(t.Context(), f.Name(), "test")
 	})
 
 	if err := wg.Wait(); err != nil {

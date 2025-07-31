@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ func TestQuery(t *testing.T) {
 
 	testAPI.AddResponse(resp)
 
-	results := testAPI.AsAdmin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).With(Equal(msg.ICAT_COLUMN_COLL_ID, 1)).Limit(2).Execute(context.Background())
+	results := testAPI.AsAdmin().Query(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).With(Equal(msg.ICAT_COLUMN_COLL_ID, 1)).Limit(2).Execute(t.Context())
 
 	var items int
 
@@ -100,7 +99,7 @@ func TestQueryRow(t *testing.T) {
 		},
 	})
 
-	results := testAPI.QueryRow(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Execute(context.Background())
+	results := testAPI.QueryRow(msg.ICAT_COLUMN_COLL_ID, msg.ICAT_COLUMN_COLL_NAME, msg.ICAT_COLUMN_COLL_CREATE_TIME, msg.ICAT_COLUMN_DATA_REPL_NUM, 998, 999).Where(msg.ICAT_COLUMN_COLL_ID, "= '1'").Execute(t.Context())
 
 	var (
 		collID   int64

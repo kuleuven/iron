@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/kuleuven/iron/msg"
-	"github.com/sirupsen/logrus"
 )
 
 type Record interface {
@@ -158,8 +157,6 @@ func callBatches(callback func(ctx context.Context, fn WalkFunc, parents []Colle
 }
 
 func (api *API) walkBatch(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
-	logrus.Infof("calling walkCollections on %v", parents)
-
 	subcols, err := api.walkCollections(ctx, fn, parents, opts...)
 	if err != nil {
 		return err
@@ -584,4 +581,47 @@ func collectionIDPathMap(collections []Collection) map[int64]string {
 	}
 
 	return paths
+}
+
+// GetRecord retrieves a Record for the given path. The Record is a combination of
+// os.FileInfo and iRODS metadata. The metadata is only retrieved if the
+// FetchMetadata or FetchAccess WalkOptions are given.
+func (api *API) GetRecord(ctx context.Context, path string, options ...WalkOption) (Record, error) {
+	var (
+		fi  os.FileInfo
+		err error
+	)
+
+	objectType := DataObjectType
+
+	fi, err = api.GetDataObject(ctx, path)
+	if errors.Is(err, ErrNoRowFound) {
+		fi, err = api.GetCollection(ctx, path)
+
+		objectType = CollectionType
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	r := &record{
+		FileInfo: fi,
+	}
+
+	if slices.Contains(options, FetchMetadata) {
+		r.metadata, err = api.ListMetadata(ctx, path, objectType)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if slices.Contains(options, FetchAccess) {
+		r.access, err = api.ListAccess(ctx, path, objectType)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return r, nil
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"slices"
 	"testing"
 
@@ -17,11 +16,11 @@ func TestStatPhysicalReplica(t *testing.T) {
 		ObjectPath:        "test",
 	}, msg.FileStatResponse{})
 
-	if _, err := testAPI.StatPhysicalReplica(context.Background(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != ErrRequiresAdmin {
+	if _, err := testAPI.StatPhysicalReplica(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if _, err := testAPI.AsAdmin().StatPhysicalReplica(context.Background(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != nil {
+	if _, err := testAPI.AsAdmin().StatPhysicalReplica(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != nil {
 		t.Error(err)
 	}
 }
@@ -42,11 +41,11 @@ func TestModifyReplicaAttribute(t *testing.T) {
 		KeyVals: kv,
 	}, msg.EmptyResponse{})
 
-	if err := testAPI.ModifyReplicaAttribute(context.Background(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != ErrRequiresAdmin {
+	if err := testAPI.ModifyReplicaAttribute(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if err := testAPI.AsAdmin().ModifyReplicaAttribute(context.Background(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != nil {
+	if err := testAPI.AsAdmin().ModifyReplicaAttribute(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != nil {
 		t.Error(err)
 	}
 }
@@ -66,11 +65,11 @@ func TestRegisterReplica(t *testing.T) {
 		KeyVals: kv,
 	}, msg.EmptyResponse{})
 
-	if err := testAPI.RegisterReplica(context.Background(), "test", "test", "/test"); err != ErrRequiresAdmin {
+	if err := testAPI.RegisterReplica(t.Context(), "test", "test", "/test"); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if err := testAPI.AsAdmin().RegisterReplica(context.Background(), "test", "test", "/test"); err != nil {
+	if err := testAPI.AsAdmin().RegisterReplica(t.Context(), "test", "test", "/test"); err != nil {
 		t.Error(err)
 	}
 }
@@ -88,16 +87,16 @@ func TestAdminCalls(t *testing.T) {
 		}
 
 		list := []error{
-			api.CreateUser(context.Background(), "test", "rodsuser"),
-			api.CreateGroup(context.Background(), "test"),
-			api.ChangeUserPassword(context.Background(), "test", "test"),
-			api.ChangeUserType(context.Background(), "test", "rodsuser"),
-			api.RemoveUser(context.Background(), "test"),
-			api.RemoveGroup(context.Background(), "test"),
-			api.AddGroupMember(context.Background(), "test", "test1"),
-			api.RemoveGroupMember(context.Background(), "test", "test1"),
-			api.SetUserQuota(context.Background(), "test", "demooResc", "100"),
-			api.SetGroupQuota(context.Background(), "test", "demooResc", "100"),
+			api.CreateUser(t.Context(), "test", "rodsuser"),
+			api.CreateGroup(t.Context(), "test"),
+			api.ChangeUserPassword(t.Context(), "test", "test"),
+			api.ChangeUserType(t.Context(), "test", "rodsuser"),
+			api.RemoveUser(t.Context(), "test"),
+			api.RemoveGroup(t.Context(), "test"),
+			api.AddGroupMember(t.Context(), "test", "test1"),
+			api.RemoveGroupMember(t.Context(), "test", "test1"),
+			api.SetUserQuota(t.Context(), "test", "demooResc", "100"),
+			api.SetGroupQuota(t.Context(), "test", "demooResc", "100"),
 		}
 
 		for _, err := range list {
@@ -113,11 +112,11 @@ func TestExecuteRule(t *testing.T) {
 
 	testAPI.AddResponse(msg.MsParamArray{})
 
-	if _, err := testAPI.ExecuteExternalRule(context.Background(), "test", nil, ""); err != ErrRequiresAdmin {
+	if _, err := testAPI.ExecuteExternalRule(t.Context(), "test", nil, ""); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if _, err := testAPI.AsAdmin().ExecuteExternalRule(context.Background(), "test", nil, ""); err != nil {
+	if _, err := testAPI.AsAdmin().ExecuteExternalRule(t.Context(), "test", nil, ""); err != nil {
 		t.Error(err)
 	}
 }
