@@ -74,7 +74,9 @@ func (api *API) DeleteCollectionAll(ctx context.Context, name string, skipTrash 
 
 	api.setFlags(&request.KeyVals)
 
-	return api.ElevateRequest(ctx, msg.RM_COLL_AN, request, &msg.CollectionOperationStat{}, name+"/")
+	parent, _ := Split(name)
+
+	return api.ElevateRequest(ctx, msg.RM_COLL_AN, request, &msg.CollectionOperationStat{}, name+"/", parent)
 }
 
 // RenameCollection renames a collection.
