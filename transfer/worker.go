@@ -324,6 +324,10 @@ type pathRecord struct {
 	record api.Record
 }
 
+type upload struct {
+	local, remote string
+}
+
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
@@ -334,14 +338,14 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 		return
 	}
 
-	queue := make(chan func(), worker.options.MaxQueued)
+	queue := make(chan upload, worker.options.MaxQueued)
 
 	ch := make(chan *pathRecord)
 
 	// Execute the uploads
 	worker.wg.Go(func() error {
-		for fn := range queue {
-			fn()
+		for u := range queue {
+			worker.Upload(ctx, u.local, u.remote)
 		}
 
 		return nil
@@ -379,7 +383,7 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	}
 }
 
-func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <-chan *pathRecord, queue chan<- func()) error {
+func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <-chan *pathRecord, queue chan<- upload) error {
 	var (
 		remoteRecord *pathRecord // Keeps a record of the last remote path. We'll iterate the remote paths simultaneously
 		ok           bool
@@ -425,7 +429,7 @@ func toIrodsPath(base, path string) string {
 	return base + "/" + strings.Join(strings.Split(path, string(os.PathSeparator)), "/")
 }
 
-func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo, irodsPath string, remoteInfo api.Record, queue chan<- func()) error {
+func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo, irodsPath string, remoteInfo api.Record, queue chan<- upload) error {
 	if info.IsDir() {
 		if remoteInfo != nil {
 			return nil
@@ -467,25 +471,26 @@ func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo,
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case queue <- func() {
-		// This will block until upload can start
-		worker.Upload(ctx, path, irodsPath)
-	}:
+	case queue <- upload{path, irodsPath}:
 	}
 
 	return nil
+}
+
+type download struct {
+	local, remote string
 }
 
 // DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
-	queue := make(chan func(), worker.options.MaxQueued)
+	queue := make(chan download, worker.options.MaxQueued)
 
 	// Execute the downloads
 	worker.wg.Go(func() error {
-		for fn := range queue {
-			fn()
+		for d := range queue {
+			worker.Download(ctx, d.local, d.remote)
 		}
 
 		return nil
@@ -520,7 +525,7 @@ func toLocalPath(base, path string) string {
 	return base + strings.Join(strings.Split(path, "/"), string(os.PathSeparator))
 }
 
-func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo api.Record, path string, info os.FileInfo, queue chan<- func()) error {
+func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo api.Record, path string, info os.FileInfo, queue chan<- download) error {
 	if remoteInfo.IsDir() {
 		if info != nil {
 			return nil
@@ -560,10 +565,7 @@ func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case queue <- func() {
-		// This will block until download can start
-		worker.Download(ctx, path, irodsPath)
-	}:
+	case queue <- download{path, irodsPath}:
 	}
 
 	return nil
