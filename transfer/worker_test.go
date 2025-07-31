@@ -153,7 +153,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	MinimumRangeSize = 200
 	CopyBufferDelay = 500 * time.Millisecond
 
-	pb := ProgressBar()
+	pb := ProgressBar(os.Stdout)
 
 	defer pb.Close()
 

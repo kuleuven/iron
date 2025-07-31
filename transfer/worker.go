@@ -69,6 +69,7 @@ type Progress struct {
 	Label       string
 	Size        int64
 	Transferred int64
+	Increment   int
 	StartedAt   time.Time
 	FinishedAt  time.Time
 }
@@ -83,8 +84,9 @@ func (p *progressWriter) Write(buf []byte) (int, error) {
 	p.Lock()
 	defer p.Unlock()
 
-	if n := int64(len(buf)); n > 0 {
-		p.progress.Transferred += n
+	if n := len(buf); n > 0 {
+		p.progress.Transferred += int64(n)
+		p.progress.Increment = n
 
 		p.fire()
 	}
@@ -97,6 +99,7 @@ func (p *progressWriter) Close() error {
 	defer p.Unlock()
 
 	p.progress.FinishedAt = time.Now()
+	p.progress.Increment = 0
 
 	p.fire()
 

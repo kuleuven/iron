@@ -3,19 +3,21 @@ package transfer
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 )
 
-func ProgressBar() *PB {
+func ProgressBar(w io.Writer) *PB {
 	pb := &PB{
 		actual:       map[string]Progress{},
 		done:         make(chan struct{}),
 		wait:         make(chan struct{}),
 		started:      time.Now(),
 		outputBuffer: &bytes.Buffer{},
+		w:            w,
 	}
 
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -39,13 +41,15 @@ func ProgressBar() *PB {
 }
 
 type PB struct {
-	actual        map[string]Progress
-	done          chan struct{}
-	wait          chan struct{}
-	started       time.Time
-	bytesDone     int64
-	scanCompleted bool
-	outputBuffer  *bytes.Buffer
+	actual           map[string]Progress
+	done             chan struct{}
+	wait             chan struct{}
+	started          time.Time
+	bytesTransferred int64
+	bytesTotal       int64
+	scanCompleted    bool
+	outputBuffer     *bytes.Buffer
+	w                io.Writer
 	sync.Mutex
 }
 
@@ -53,21 +57,36 @@ func (pb *PB) Handler(progress Progress) {
 	pb.Lock()
 	defer pb.Unlock()
 
-	if progress.FinishedAt.IsZero() {
+	switch {
+	case progress.Transferred == 0:
+		// Registration
+		if prev, ok := pb.actual[progress.Label]; ok {
+			pb.bytesTotal += progress.Size - prev.Size
+		} else {
+			pb.bytesTotal += progress.Size
+		}
+
+		pb.actual[progress.Label] = progress
+	case progress.FinishedAt.IsZero():
+		// Transfer ongoing
 		pb.actual[progress.Label] = progress
 
-		return
-	}
+		pb.bytesTransferred += int64(progress.Increment)
+	default:
+		// Transfer complete
+		delete(pb.actual, progress.Label)
 
-	delete(pb.actual, progress.Label)
-
-	pb.bytesDone += progress.Transferred
-
-	if pb.outputBuffer.Len() == 0 {
-		fmt.Fprintf(pb.outputBuffer, "\r%s\033[K\n", progress.Label)
-	} else {
 		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Label)
 	}
+}
+
+func (pb *PB) Write(buf []byte) (int, error) {
+	pb.Lock()
+	defer pb.Unlock()
+
+	pb.outputBuffer.Write(buf)
+
+	return len(buf), nil
 }
 
 func (pb *PB) ScanCompleted() {
@@ -81,25 +100,21 @@ func (pb *PB) print(t time.Time) {
 	pb.Lock()
 	defer pb.Unlock()
 
-	fmt.Printf("%s\r%s\033[K", pb.outputBuffer.String(), pb.bar(t))
+	if pb.outputBuffer.Len() > 0 {
+		fmt.Fprintf(pb.w, "\r\033[K%s%s", pb.outputBuffer.String(), pb.bar(t))
 
-	pb.outputBuffer.Reset()
+		pb.outputBuffer.Reset()
+	} else {
+		fmt.Fprintf(pb.w, "\r%s\033[K", pb.bar(t))
+	}
 }
 
 func (pb *PB) bar(t time.Time) string {
 	elapsed := t.Sub(pb.started)
 
-	bytesTransferred := pb.bytesDone
-	bytesTotal := pb.bytesDone
-
-	for _, p := range pb.actual {
-		bytesTransferred += p.Transferred
-		bytesTotal += p.Size
-	}
-
-	percent := float64(bytesTransferred) / float64(bytesTotal) * 100
-	speed := float64(bytesTransferred) / elapsed.Seconds()
-	eta := time.Duration(float64(bytesTotal-bytesTransferred)/speed) * time.Second
+	percent := float64(pb.bytesTransferred) / float64(pb.bytesTotal) * 100
+	speed := float64(pb.bytesTransferred) / elapsed.Seconds()
+	eta := time.Duration(float64(pb.bytesTotal-pb.bytesTransferred)/speed) * time.Second
 
 	if speed == 0 {
 		eta = 0
@@ -108,8 +123,8 @@ func (pb *PB) bar(t time.Time) string {
 	if !pb.scanCompleted {
 		return fmt.Sprintf("--.--%% |%s| %s/%s | %s/s",
 			wheel(t),
-			humanize.Bytes(uint64(bytesTransferred)),
-			humanize.Bytes(uint64(bytesTotal)),
+			humanize.Bytes(uint64(pb.bytesTransferred)),
+			humanize.Bytes(uint64(pb.bytesTotal)),
 			humanize.Bytes(uint64(speed)),
 		)
 	}
@@ -117,8 +132,8 @@ func (pb *PB) bar(t time.Time) string {
 	return fmt.Sprintf("%.2f%% |%s| %s/%s | %s/s [%s]",
 		percent,
 		bar(percent),
-		humanize.Bytes(uint64(bytesTransferred)),
-		humanize.Bytes(uint64(bytesTotal)),
+		humanize.Bytes(uint64(pb.bytesTransferred)),
+		humanize.Bytes(uint64(pb.bytesTotal)),
 		humanize.Bytes(uint64(speed)),
 		eta,
 	)
@@ -156,7 +171,7 @@ func (pb *PB) printDone() {
 	pb.Lock()
 	defer pb.Unlock()
 
-	fmt.Printf("%s\r\033[K", pb.outputBuffer.String())
+	fmt.Fprintf(pb.w, "\r\033[K%s", pb.outputBuffer.String())
 
 	pb.outputBuffer.Reset()
 }
