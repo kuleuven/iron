@@ -49,6 +49,7 @@ type PB struct {
 	bytesTotal       int64
 	scanCompleted    bool
 	outputBuffer     *bytes.Buffer
+	errors           int
 	w                io.Writer
 	sync.Mutex
 }
@@ -76,8 +77,24 @@ func (pb *PB) Handler(progress Progress) {
 		// Transfer complete
 		delete(pb.actual, progress.Label)
 
+		if progress.Transferred < progress.Size {
+			// Assume error, don't print
+			return
+		}
+
 		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Label)
 	}
+}
+
+func (pb *PB) ErrorHandler(path, _ string, err error) error {
+	pb.Lock()
+	defer pb.Unlock()
+
+	pb.errors++
+
+	fmt.Fprintf(pb.outputBuffer, "\x1B[31m%s FAILED: %s\x1B[0m\n", path, err.Error())
+
+	return nil
 }
 
 func (pb *PB) Write(buf []byte) (int, error) {
@@ -122,7 +139,7 @@ func (pb *PB) bar(t time.Time) string {
 
 	if !pb.scanCompleted {
 		return fmt.Sprintf("--.--%% |%s| %s/%s | %s/s",
-			wheel(t),
+			wheel(elapsed),
 			humanize.Bytes(uint64(pb.bytesTransferred)),
 			humanize.Bytes(uint64(pb.bytesTotal)),
 			humanize.Bytes(uint64(speed)),
@@ -139,12 +156,14 @@ func (pb *PB) bar(t time.Time) string {
 	)
 }
 
-func wheel(t time.Time) string {
+func wheel(elapsed time.Duration) string {
+	seconds := int(elapsed.Seconds() * 2)
+
 	b := bytes.NewBuffer(make([]byte, 0, 20))
 
-	for i := range 20 {
-		if i == t.Second()%20 {
-			fmt.Fprint(b, "#")
+	for i := range 18 {
+		if i == seconds%18 {
+			fmt.Fprint(b, "<#>")
 		} else {
 			fmt.Fprint(b, " ")
 		}
@@ -176,7 +195,13 @@ func (pb *PB) printDone() {
 	pb.outputBuffer.Reset()
 }
 
-func (pb *PB) Close() {
+func (pb *PB) Close() error {
 	close(pb.done)
 	<-pb.wait
+
+	if pb.errors > 0 {
+		return fmt.Errorf("%d errors", pb.errors)
+	}
+
+	return nil
 }

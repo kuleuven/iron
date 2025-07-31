@@ -30,10 +30,14 @@ type Options struct {
 	// VerifyChecksums indicates whether checksums should be verified
 	// to compare an existing file when syncing (UploadDir, DownloadDir)
 	VerifyChecksums bool
-	// Error handler
-	ErrorHandler func(err error) error
-	// Progress handler
+	// Output will, if set, display a progress bar and occurring errors
+	// If ErrorHandler or ProgressHandler is set, this option is ignored
+	Output io.Writer
+	// Progress handler, can be used to track the progress of the transfers
 	ProgressHandler func(progress Progress)
+	// Error handler, called when an error occurs
+	// If this callback is not set or returns an error, the worker will stop and Wait() will return the error
+	ErrorHandler func(local, remote string, err error) error
 }
 
 type Worker struct {
@@ -45,12 +49,36 @@ type Worker struct {
 
 	// Internal waitgroup
 	wg errgroup.Group
+
+	// Hooks for Wait() function
+	onwait func()
+	closer func() error
 }
 
 func New(indexPool, transferPool *api.API, options Options) *Worker {
+	var (
+		onwait func()
+		closer func() error
+	)
+
+	if options.Output != nil && options.ProgressHandler == nil && options.ErrorHandler == nil {
+		p := ProgressBar(options.Output)
+
+		options.ProgressHandler = p.Handler
+		options.ErrorHandler = p.ErrorHandler
+		onwait = p.ScanCompleted
+		closer = p.Close
+	}
+
 	if options.ErrorHandler == nil {
-		options.ErrorHandler = func(err error) error {
-			return err
+		options.ErrorHandler = func(local, _ string, err error) error {
+			return fmt.Errorf("%s: %w", local, err)
+		}
+	}
+
+	if options.ProgressHandler == nil {
+		options.ProgressHandler = func(progress Progress) {
+			// Ignore
 		}
 	}
 
@@ -62,6 +90,8 @@ func New(indexPool, transferPool *api.API, options Options) *Worker {
 		IndexPool:    indexPool,
 		TransferPool: transferPool,
 		options:      options,
+		onwait:       onwait,
+		closer:       closer,
 	}
 }
 
@@ -80,41 +110,45 @@ type progressWriter struct {
 	sync.Mutex
 }
 
-func (p *progressWriter) Write(buf []byte) (int, error) {
-	p.Lock()
-	defer p.Unlock()
+func (pw *progressWriter) Write(buf []byte) (int, error) {
+	pw.Lock()
+	defer pw.Unlock()
 
 	if n := len(buf); n > 0 {
-		p.progress.Transferred += int64(n)
-		p.progress.Increment = n
+		pw.progress.Transferred += int64(n)
+		pw.progress.Increment = n
 
-		p.fire()
+		pw.handler(pw.progress)
 	}
 
 	return len(buf), nil
 }
 
-func (p *progressWriter) Close() error {
-	p.Lock()
-	defer p.Unlock()
+func (pw *progressWriter) Close() error {
+	pw.Lock()
+	defer pw.Unlock()
 
-	p.progress.FinishedAt = time.Now()
-	p.progress.Increment = 0
+	pw.progress.FinishedAt = time.Now()
+	pw.progress.Increment = 0
 
-	p.fire()
+	pw.handler(pw.progress)
 
 	return nil
 }
 
-func (p *progressWriter) fire() {
-	if p.handler != nil {
-		p.handler(p.progress)
-	}
-}
-
 // Wait for all transfers to finish
 func (worker *Worker) Wait() error {
-	return worker.wg.Wait()
+	if worker.onwait != nil {
+		worker.onwait()
+	}
+
+	err := worker.wg.Wait()
+
+	if worker.closer != nil {
+		err = multierr.Append(err, worker.closer())
+	}
+
+	return err
 }
 
 // Upload schedules the upload of a local file to the iRODS server using parallel transfers.
@@ -129,14 +163,14 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 
 	r, err := os.Open(local)
 	if err != nil {
-		worker.Error(err)
+		worker.Error(local, remote, err)
 
 		return
 	}
 
 	stat, err := r.Stat()
 	if err != nil {
-		worker.Error(multierr.Append(err, r.Close()))
+		worker.Error(local, remote, multierr.Append(err, r.Close()))
 
 		return
 	}
@@ -149,7 +183,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 	}
 
 	if err != nil {
-		worker.Error(multierr.Append(err, r.Close()))
+		worker.Error(local, remote, multierr.Append(err, r.Close()))
 
 		return
 	}
@@ -164,7 +198,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 		handler: worker.options.ProgressHandler,
 	}
 
-	pw.fire()
+	pw.handler(pw.progress)
 
 	rr := &ReaderAtRangeReader{ReaderAt: r}
 
@@ -204,7 +238,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 			fmt.Print(err)
 			err = multierr.Append(err, worker.IndexPool.DeleteDataObject(ctx, remote, true))
 
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(local, remote, err)
 		}
 
 		return nil
@@ -223,21 +257,21 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
 	if err != nil {
-		worker.Error(err)
+		worker.Error(local, remote, err)
 
 		return
 	}
 
 	size, err := findSize(r)
 	if err != nil {
-		worker.Error(multierr.Append(err, r.Close()))
+		worker.Error(local, remote, multierr.Append(err, r.Close()))
 
 		return
 	}
 
 	w, err := os.OpenFile(local, mode, 0o600)
 	if err != nil {
-		worker.Error(multierr.Append(err, r.Close()))
+		worker.Error(local, remote, multierr.Append(err, r.Close()))
 
 		return
 	}
@@ -252,7 +286,7 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 		handler: worker.options.ProgressHandler,
 	}
 
-	pw.fire()
+	pw.handler(pw.progress)
 
 	ww := &WriterAtRangeWriter{WriterAt: w}
 
@@ -287,7 +321,7 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 		if err != nil {
 			err = multierr.Append(err, os.Remove(local))
 
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(local, remote, err)
 		}
 
 		if !worker.options.SyncModTime {
@@ -296,12 +330,12 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 
 		obj, err := worker.IndexPool.GetDataObject(ctx, remote)
 		if err != nil {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(local, remote, err)
 		}
 
 		err = os.Chtimes(local, time.Time{}, obj.ModTime())
 		if err != nil {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(local, remote, err)
 		}
 
 		return nil
@@ -336,7 +370,7 @@ type upload struct {
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	if err := worker.IndexPool.CreateCollectionAll(ctx, remote); err != nil {
-		worker.Error(err)
+		worker.Error(local, remote, err)
 
 		return
 	}
@@ -382,7 +416,9 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	defer close(queue)
 
 	if err := worker.uploadWalk(ctx, local, remote, ch, queue); err != nil {
-		worker.Error(err)
+		worker.wg.Go(func() error {
+			return err
+		})
 	}
 }
 
@@ -397,16 +433,16 @@ func (worker *Worker) uploadWalk(ctx context.Context, local, remote string, ch <
 			return ctx.Err()
 		}
 
-		if err != nil {
-			return worker.options.ErrorHandler(err)
-		}
-
-		relpath, err := filepath.Rel(local, path)
-		if err != nil {
-			return worker.options.ErrorHandler(err)
+		relpath, relErr := filepath.Rel(local, path)
+		if relErr != nil {
+			return relErr
 		}
 
 		irodsPath := toIrodsPath(remote, relpath)
+
+		if err != nil {
+			return worker.options.ErrorHandler(path, irodsPath, err)
+		}
 
 		// Iterate until we find the remote path
 		for remoteRecord == nil || remoteRecord.path < irodsPath {
@@ -439,7 +475,7 @@ func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo,
 		}
 
 		if err := worker.IndexPool.CreateCollection(ctx, irodsPath); err != nil {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(path, irodsPath, err)
 		}
 
 		return nil
@@ -457,7 +493,7 @@ func (worker *Worker) upload(ctx context.Context, path string, info os.FileInfo,
 		if err == nil {
 			return nil
 		} else if !errors.Is(err, ErrChecksumMismatch) {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(path, irodsPath, err)
 		}
 	case remoteInfo.ModTime().Truncate(time.Second).Equal(info.ModTime().Truncate(time.Second)):
 		return nil
@@ -502,21 +538,23 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 	defer close(queue)
 
 	err := worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
-		if err != nil {
-			return worker.options.ErrorHandler(err)
-		}
-
 		path := toLocalPath(local, strings.TrimPrefix(irodsPath, remote))
+
+		if err != nil {
+			return worker.options.ErrorHandler(path, irodsPath, err)
+		}
 
 		fi, err := os.Stat(path)
 		if !os.IsNotExist(err) && err != nil {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(path, irodsPath, err)
 		}
 
 		return worker.download(ctx, irodsPath, record, path, fi, queue)
 	})
 	if err != nil {
-		worker.Error(err)
+		worker.wg.Go(func() error {
+			return err
+		})
 	}
 }
 
@@ -535,7 +573,7 @@ func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo
 		}
 
 		if err := os.MkdirAll(path, 0o755); err != nil {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(path, irodsPath, err)
 		}
 
 		return nil
@@ -552,7 +590,7 @@ func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo
 		if err := Verify(ctx, worker.IndexPool, path, irodsPath); err == nil {
 			return nil
 		} else if !errors.Is(err, ErrChecksumMismatch) {
-			return worker.options.ErrorHandler(err)
+			return worker.options.ErrorHandler(path, irodsPath, err)
 		}
 	case remoteInfo.ModTime().Truncate(time.Second).Equal(info.ModTime().Truncate(time.Second)):
 		return nil
@@ -575,8 +613,8 @@ func (worker *Worker) download(ctx context.Context, irodsPath string, remoteInfo
 }
 
 // Error schedules an error
-func (worker *Worker) Error(err error) {
+func (worker *Worker) Error(local, remote string, err error) {
 	worker.wg.Go(func() error {
-		return worker.options.ErrorHandler(err)
+		return worker.options.ErrorHandler(local, remote, err)
 	})
 }

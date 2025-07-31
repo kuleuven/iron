@@ -141,7 +141,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 		}
 
 		if len(conns) != 0 {
-			return fmt.Errorf("expected 1 connection, got %d", len(conns))
+			return fmt.Errorf("expected 0 connection, got %d", len(conns))
 		}
 
 		done := make(chan struct{})
@@ -156,6 +156,8 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 
 			return conn1.Close()
 		})
+
+		time.Sleep(time.Second)
 
 		conn.Close()
 
