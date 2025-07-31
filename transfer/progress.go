@@ -77,7 +77,7 @@ func (pb *PB) Handler(progress Progress) {
 		// Transfer complete
 		delete(pb.actual, progress.Label)
 
-		if progress.Transferred < progress.Size {
+		if progress.Transferred < progress.Size || progress.Label == "" {
 			// Assume error, don't print
 			return
 		}
