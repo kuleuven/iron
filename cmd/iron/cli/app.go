@@ -154,11 +154,11 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 }
 
 func SkipInit(cmd *cobra.Command) bool {
-	if cmd.Use == "__complete [command-line]" || cmd.Use == "help" {
+	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" {
 		return true
 	}
 
-	if parent := cmd.Parent(); parent != nil && parent.Use == "completion" {
+	if parent := cmd.Parent(); parent != nil && SkipInit(parent) {
 		return true
 	}
 
