@@ -243,7 +243,7 @@ func (a *App) get() *cobra.Command {
 
 			opts.Output = os.Stdout
 
-			return a.Download(a.Context, a.Path(args[0]), args[1], opts)
+			return a.Download(a.Context, args[1], a.Path(args[0]), opts)
 		},
 	}
 

@@ -2,6 +2,8 @@
 
 Replacement for <https://github.com/cyverse/go-irodsclient> that provides a clean, simple and stable interface to iRODS.
 
+It is both a golang library as well as a command line client.
+
 [![Quality Gate Status](https://sonarqube.icts.kuleuven.be/api/project_badges/measure?project=coz%3Airon%3Amain&metric=alert_status&token=sqb_f14f2e85edf4f52db70a1b133fb98a805ebe8372)](https://sonarqube.icts.kuleuven.be/dashboard?id=coz%3Airon%3Amain)
 
 ## Implementation choices
@@ -10,10 +12,73 @@ Replacement for <https://github.com/cyverse/go-irodsclient> that provides a clea
 * Simplified communication code: types of messages are defined in `msg/types.go`, and are marshaled using the right format (xml, json or binary) by `msg.Marshal`. The binary part (`Bs`) of messages is not marshaled by `msg.Marshal`/`msg.Unmarshal` but directly read or written to the provided buffers in `msg.Read`/`msg.Write`.
 * Clients can choose between `iron.Conn` (one single connection) and `iron.Client` (a pool of connections) to use the provided API.
 * The `Truncate` and `Touch` methods are only available on open file handles, to help identifying the right replica to adjust. Because irods only supports those operations when the file is closed, the operations are actually done on the replica when the file is closed.
-* An example client has been included in `cmd/iron/main.go`, but it is currently only useful to test the client and not meant for real usage by users.
 * This client also attempts to support the native protocol, but this should be considered experimental.
 
-## Usage
+## CLI usage
+
+The CLI expects a `~.irods/irods_environment.json` file being present, with native or pam_password authentication. The password should either be given in this file under the `pam_password` key, or the irods authentication file `.irods/.irodsA` must be present.
+
+```shell
+$ go install github.com/kuleuven/iron/cmd/iron@latest
+$ iron
+Golang client for iRODS
+
+Usage:
+  iron [command]
+
+Available Commands:
+  checksum    Compute or get the checksum of a file
+  chmod       Change permissions
+  completion  Generate the autocompletion script for the specified shell
+  cp          Copy a data object
+  create      Create a data object
+  download    Sync a collection to a local directory
+  get         Download a file
+  help        Help about any command
+  inherit     Change permission inheritance
+  ls          List a collection
+  mkdir       Create a collection
+  mv          Move a data object or collection
+  put         Upload a file
+  rm          Remove a data object or collection
+  rmdir       Remove a collection
+  shell       Start an interactive shell.
+  stat        Get information about an object or collection
+  tree        Print the full tree structure beneath a collection
+  upload      Sync a local directory to a collection
+
+Flags:
+      --admin            Enable admin access
+  -v, --debug count      Enable debug output
+  -h, --help             help for iron
+      --native           Use native protocol
+      --workdir string   Working directory
+
+Use "iron [command] --help" for more information about a command.
+$ iron shell                                                                         16:49:40
+iron > /set > ls
+rods  0 B  Jul 07 18:31    home/
+rods  0 B  Nov 11  2022    projects/
+iron > /set > ls home/
+rods          0 B  Jul 07 09:50     coz/
+rods          0 B  Aug 08  2024     public/
+set_demo      0 B  Feb 02 09:38  +  set_demo/
+set_pilot013  0 B  Jan 01 19:02     set_pilot013/
+iron > /set > cd home/coz/
+iron > /set/home/coz > ls
+peter  0 B     Jul 07 11:11     peter/
+iron > /set/home/coz > local pwd
+/home/peter
+iron > /set/home/coz > local cd sub
+iron > /set/home/coz > local pwd
+/home/peter/sub
+iron > /set/home/coz > download peter localdir
+iron > /set/home/coz > exit
+$ ls /home/peter/sub/localdir
+peter.txt
+```
+
+## Library usage
 
 ```go
 import (   
