@@ -154,13 +154,7 @@ func (worker *Worker) Wait() error {
 // Upload schedules the upload of a local file to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) Upload(ctx context.Context, local, remote string) { //nolint:funlen
-	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
-
-	if worker.options.Exclusive {
-		mode |= api.O_EXCL
-	}
-
+func (worker *Worker) Upload(ctx context.Context, local, remote string) {
 	r, err := os.Open(local)
 	if err != nil {
 		worker.Error(local, remote, err)
@@ -175,6 +169,49 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 		return
 	}
 
+	worker.FromReader(ctx, &fileReader{
+		name: local,
+		stat: stat,
+		File: r,
+	}, remote)
+}
+
+type Reader interface {
+	Name() string
+	Size() int64
+	ModTime() time.Time
+	io.ReaderAt
+	io.Closer
+}
+
+type fileReader struct {
+	name string
+	stat os.FileInfo
+	*os.File
+}
+
+func (r fileReader) Name() string {
+	return r.name
+}
+
+func (r fileReader) Size() int64 {
+	return r.stat.Size()
+}
+
+func (r fileReader) ModTime() time.Time {
+	return r.stat.ModTime()
+}
+
+// FromReader schedules the upload of a reader to the iRODS server using parallel transfers.
+// The remote file refers to an iRODS path.
+// The call blocks until the transfer of all chunks has started.
+func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) { //nolint:funlen
+	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
+
+	if worker.options.Exclusive {
+		mode |= api.O_EXCL
+	}
+
 	w, err := worker.TransferPool.OpenDataObject(ctx, remote, mode)
 	if code, ok := api.ErrorCode(err); ok && code == msg.HIERARCHY_ERROR {
 		if err = worker.IndexPool.RenameDataObject(ctx, remote, remote+".bad"); err == nil {
@@ -183,7 +220,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 	}
 
 	if err != nil {
-		worker.Error(local, remote, multierr.Append(err, r.Close()))
+		worker.Error(r.Name(), remote, multierr.Append(err, r.Close()))
 
 		return
 	}
@@ -191,8 +228,8 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 	// Schedule the upload
 	pw := &progressWriter{
 		progress: Progress{
-			Label:     local,
-			Size:      stat.Size(),
+			Label:     r.Name(),
+			Size:      r.Size(),
 			StartedAt: time.Now(),
 		},
 		handler: worker.options.ProgressHandler,
@@ -211,9 +248,9 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 
 	var wg errgroup.Group
 
-	rangeSize := calculateRangeSize(stat.Size(), worker.options.MaxThreads)
+	rangeSize := calculateRangeSize(r.Size(), worker.options.MaxThreads)
 
-	for offset := int64(0); offset < stat.Size(); offset += rangeSize {
+	for offset := int64(0); offset < r.Size(); offset += rangeSize {
 		dst := ww.Range(offset, rangeSize)
 		src := rr.Range(offset, rangeSize)
 
@@ -223,22 +260,22 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 	}
 
 	worker.wg.Go(func() error {
-		defer r.Close()
 		defer pw.Close()
 
 		err := wg.Wait()
 
 		err = multierr.Append(err, ww.Close())
 		if err == nil && worker.options.SyncModTime {
-			err = w.Touch(stat.ModTime())
+			err = w.Touch(r.ModTime())
 		}
 
 		err = multierr.Append(err, w.Close())
+
+		err = multierr.Append(err, r.Close())
 		if err != nil {
-			fmt.Print(err)
 			err = multierr.Append(err, worker.IndexPool.DeleteDataObject(ctx, remote, true))
 
-			return worker.options.ErrorHandler(local, remote, err)
+			return worker.options.ErrorHandler(r.Name(), remote, err)
 		}
 
 		return nil
@@ -248,30 +285,71 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) { //noli
 // Download schedules the download of a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) Download(ctx context.Context, local, remote string) { //nolint:funlen
+func (worker *Worker) Download(ctx context.Context, local, remote string) {
 	mode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
 	if worker.options.Exclusive {
 		mode |= os.O_EXCL
 	}
 
-	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
+	w, err := os.OpenFile(local, mode, 0o600)
 	if err != nil {
 		worker.Error(local, remote, err)
 
 		return
 	}
 
-	size, err := findSize(r)
+	worker.ToWriter(ctx, &fileWriter{
+		name: local,
+		File: w,
+	}, remote)
+}
+
+type Writer interface {
+	Name() string
+	io.WriterAt
+	io.Closer
+	Remove() error
+	Touch(mtime time.Time) error
+}
+
+type fileWriter struct {
+	name string
+	*os.File
+}
+
+func (w fileWriter) Name() string {
+	return w.name
+}
+
+func (w fileWriter) Remove() error {
+	return os.Remove(w.name)
+}
+
+func (w fileWriter) Touch(mtime time.Time) error {
+	return os.Chtimes(w.name, time.Time{}, mtime)
+}
+
+// Download schedules the download of a remote file from the iRODS server using parallel transfers.
+// The remote file refers to an iRODS path.
+// The call blocks until the transfer of all chunks has started.
+func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { //nolint:funlen
+	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
 	if err != nil {
-		worker.Error(local, remote, multierr.Append(err, r.Close()))
+		err = multierr.Append(err, w.Close())
+		err = multierr.Append(err, w.Remove())
+
+		worker.Error(w.Name(), remote, err)
 
 		return
 	}
 
-	w, err := os.OpenFile(local, mode, 0o600)
+	size, err := findSize(r)
 	if err != nil {
-		worker.Error(local, remote, multierr.Append(err, r.Close()))
+		err = multierr.Append(err, w.Close())
+		err = multierr.Append(err, w.Remove())
+
+		worker.Error(w.Name(), remote, err)
 
 		return
 	}
@@ -279,7 +357,7 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 	// Schedule the download
 	pw := &progressWriter{
 		progress: Progress{
-			Label:     local,
+			Label:     w.Name(),
 			Size:      size,
 			StartedAt: time.Now(),
 		},
@@ -311,17 +389,17 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 	}
 
 	worker.wg.Go(func() error {
-		defer w.Close()
 		defer pw.Close()
 
 		err := wg.Wait()
 		err = multierr.Append(err, rr.Close())
-
 		err = multierr.Append(err, r.Close())
-		if err != nil {
-			err = multierr.Append(err, os.Remove(local))
 
-			return worker.options.ErrorHandler(local, remote, err)
+		err = multierr.Append(err, w.Close())
+		if err != nil {
+			err = multierr.Append(err, w.Remove())
+
+			return worker.options.ErrorHandler(w.Name(), remote, err)
 		}
 
 		if !worker.options.SyncModTime {
@@ -330,12 +408,12 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) { //no
 
 		obj, err := worker.IndexPool.GetDataObject(ctx, remote)
 		if err != nil {
-			return worker.options.ErrorHandler(local, remote, err)
+			return worker.options.ErrorHandler(w.Name(), remote, err)
 		}
 
-		err = os.Chtimes(local, time.Time{}, obj.ModTime())
+		err = w.Touch(obj.ModTime())
 		if err != nil {
-			return worker.options.ErrorHandler(local, remote, err)
+			return worker.options.ErrorHandler(w.Name(), remote, err)
 		}
 
 		return nil
