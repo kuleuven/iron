@@ -113,6 +113,13 @@ func (pb *PB) ScanCompleted() {
 	pb.scanCompleted = true
 }
 
+func (pb *PB) Elapsed() time.Duration {
+	pb.Lock()
+	defer pb.Unlock()
+
+	return time.Since(pb.started)
+}
+
 func (pb *PB) print(t time.Time) {
 	pb.Lock()
 	defer pb.Unlock()

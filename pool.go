@@ -15,9 +15,6 @@ import (
 // Pool returns a subset of connections that can be used
 // for dedicated API calls. The connections remain in the pool
 // until the pool is Closed.
-// Note that there is no renewal of connections in case of errors,
-// and that DiscardConnectionAge is ignored, in contrast to the
-// regular client.
 type Pool struct {
 	client *Client
 
@@ -79,6 +76,14 @@ func newChildPool(parent *Pool, size int) *Pool {
 	child.maxConns = size
 
 	return child
+}
+
+// Pool returns a subset of connections that can be used
+// for dedicated API calls. The connections remain in the pool
+// until the pool is Closed.
+// The call will block until the requested number of connections are available.
+func (c *Client) Pool(size int) (*Pool, error) {
+	return c.defaultPool.Pool(size)
 }
 
 // Pool returns a subpool of connections
