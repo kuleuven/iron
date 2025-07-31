@@ -55,7 +55,7 @@ Flags:
       --workdir string   Working directory
 
 Use "iron [command] --help" for more information about a command.
-$ iron shell                                                                         16:49:40
+$ iron shell
 iron > /set > ls
 rods  0 B  Jul 07 18:31    home/
 rods  0 B  Nov 11  2022    projects/
@@ -67,12 +67,15 @@ set_pilot013  0 B  Jan 01 19:02     set_pilot013/
 iron > /set > cd home/coz/
 iron > /set/home/coz > ls
 peter  0 B     Jul 07 11:11     peter/
+iron > /set/home/coz > ls peter
+peter  0 B     Jul 07 11:11     peter.txt
 iron > /set/home/coz > local pwd
 /home/peter
 iron > /set/home/coz > local cd sub
 iron > /set/home/coz > local pwd
 /home/peter/sub
 iron > /set/home/coz > download peter localdir
+localdir/peter.txt
 iron > /set/home/coz > exit
 $ ls /home/peter/sub/localdir
 peter.txt
