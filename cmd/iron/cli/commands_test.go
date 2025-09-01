@@ -195,6 +195,27 @@ func TestRm(t *testing.T) {
 	}
 }
 
+func TestTouch(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponse(msg.FileDescriptor(1))
+	app.AddResponse(msg.GetDescriptorInfoResponse{
+		DataObjectInfo: map[string]any{
+			"replica_number":     1,
+			"resource_hierarchy": "string",
+		},
+	})
+	app.AddResponse(msg.EmptyResponse{})
+	app.AddResponse(msg.EmptyResponse{})
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"touch", "/testzone/obj1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestChecksum(t *testing.T) {
 	app := testApp(t)
 
