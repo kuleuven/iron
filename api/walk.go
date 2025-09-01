@@ -88,6 +88,18 @@ var ErrSkipNotAllowed = errors.New("skip not allowed")
 func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...WalkOption) error {
 	collection, err := api.GetCollection(ctx, path)
 	if err != nil {
+		// If the collection does not exist, check if it is a data object
+		if code, ok := ErrorCode(err); ok && code == msg.CAT_NO_ROWS_FOUND {
+			if record, err := api.GetRecord(ctx, path, opts...); err == nil && !record.IsDir() {
+				err = walkFn(path, record, nil)
+				if err == SkipAll {
+					return nil
+				}
+
+				return err
+			}
+		}
+
 		return walkFn(path, nil, err)
 	}
 
