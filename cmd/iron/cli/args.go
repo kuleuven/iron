@@ -14,8 +14,8 @@ const (
 	Unknown ArgType = iota
 	ObjectPath
 	CollectionPath
-	Path
-	TargetPath
+	Path       // object or collection
+	TargetPath // object or collection
 	LocalFile
 	LocalDirectory
 	Zone

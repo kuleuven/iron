@@ -136,7 +136,7 @@ func (a *App) rm() *cobra.Command {
 func (a *App) mv() *cobra.Command {
 	return &cobra.Command{
 		Use:               "mv <path> <target path>",
-		Short:             "Move a data object or collection",
+		Short:             "Move a data object or a collection",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -203,56 +203,6 @@ func (a *App) create() *cobra.Command {
 	}
 }
 
-func (a *App) put() *cobra.Command {
-	var opts transfer.Options
-
-	cmd := &cobra.Command{
-		Use:               "put <local file> [target path]",
-		Short:             "Upload a file",
-		Args:              cobra.RangeArgs(1, 2),
-		ValidArgsFunction: a.CompleteArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				args = append(args, Name(args[0]))
-			}
-
-			opts.Output = os.Stdout
-
-			return a.Upload(a.Context, args[0], a.Path(args[1]), opts)
-		},
-	}
-
-	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
-	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
-
-	return cmd
-}
-
-func (a *App) get() *cobra.Command {
-	var opts transfer.Options
-
-	cmd := &cobra.Command{
-		Use:               "get <object path> [local file]",
-		Short:             "Download a file",
-		Args:              cobra.RangeArgs(1, 2),
-		ValidArgsFunction: a.CompleteArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				args = append(args, Name(args[0]))
-			}
-
-			opts.Output = os.Stdout
-
-			return a.Download(a.Context, args[1], a.Path(args[0]), opts)
-		},
-	}
-
-	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
-	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
-
-	return cmd
-}
-
 func (a *App) checksum() *cobra.Command {
 	return &cobra.Command{
 		Use:               "checksum <object path>",
@@ -273,66 +223,115 @@ func (a *App) checksum() *cobra.Command {
 }
 
 func (a *App) upload() *cobra.Command {
-	var (
-		threads  int
-		checksum bool
-	)
+	opts := transfer.Options{
+		SyncModTime: true,
+		MaxQueued:   10000,
+		Output:      os.Stdout,
+	}
+
+	examples := []string{
+		"iron upload /local/file.txt /path/to/collection/file.txt",
+		"iron upload /local/file.txt /path/to/collection/",
+		"iron upload /local/folder /path/to/collection",
+		"iron upload /local/folder /path/to/collection/",
+	}
 
 	cmd := &cobra.Command{
-		Use:               "upload <local directory> <collection path>",
-		Short:             "Sync a local directory to a collection",
-		Args:              cobra.ExactArgs(2),
+		Use:               "upload <local file> [target path]",
+		Aliases:           []string{"put"},
+		Short:             "Upload a local file or directory to the destination path",
+		Example:           strings.Join(examples, "\n"),
+		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				args = append(args, a.Workdir+"/")
+			}
+
+			if strings.HasSuffix(args[1], "/") {
+				args[1] += Name(args[0])
+			}
+
 			target := a.Path(args[1])
 
-			opts := transfer.Options{
-				MaxThreads:      threads,
-				VerifyChecksums: checksum,
-				SyncModTime:     true,
-				MaxQueued:       10000,
-				Output:          os.Stdout,
+			fi, err := os.Stat(args[0])
+			if err != nil {
+				return err
+			}
+
+			if !fi.IsDir() {
+				opts.SyncModTime = false
+
+				return a.Upload(a.Context, args[0], target, opts)
 			}
 
 			return a.UploadDir(a.Context, args[0], target, opts)
 		},
 	}
 
-	cmd.Flags().IntVar(&threads, "threads", 5, "Number of upload threads to use")
-	cmd.Flags().BoolVar(&checksum, "checksum", false, "Verify checksums instead of size and modtime")
+	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
+	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
+	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 
 	return cmd
 }
 
 func (a *App) download() *cobra.Command {
-	var (
-		threads  int
-		checksum bool
-	)
+	opts := transfer.Options{
+		SyncModTime: true,
+		MaxQueued:   10000,
+		Output:      os.Stdout,
+	}
+
+	examples := []string{
+		"iron download /path/to/collection/file.txt /local/file.txt",
+		"iron download /path/to/collection/file.txt /local/folder/",
+		"iron download /path/to/collection /local/folder",
+		"iron download /path/to/collection /local/folder/",
+	}
 
 	cmd := &cobra.Command{
-		Use:               "download <collection path> <local directory>",
-		Short:             "Sync a collection to a local directory",
-		Args:              cobra.ExactArgs(2),
+		Use:               "download <path> [local file]",
+		Aliases:           []string{"get"},
+		Short:             "Download a data object or a collection to the local path",
+		Example:           strings.Join(examples, "\n"),
+		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				dir, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+
+				args = append(args, dir+"/")
+			}
+
 			source := a.Path(args[0])
 			target := args[1]
 
-			opts := transfer.Options{
-				MaxThreads:      threads,
-				VerifyChecksums: checksum,
-				SyncModTime:     true,
-				MaxQueued:       10000,
-				Output:          os.Stdout,
+			if strings.HasSuffix(target, "/") {
+				target += Name(source)
+			}
+
+			record, err := a.GetRecord(a.Context, source)
+			if err != nil {
+				return err
+			}
+
+			if !record.IsDir() {
+				opts.SyncModTime = false
+
+				return a.Download(a.Context, target, source, opts)
 			}
 
 			return a.DownloadDir(a.Context, target, source, opts)
 		},
 	}
 
-	cmd.Flags().IntVar(&threads, "threads", 5, "Number of download threads to use")
-	cmd.Flags().BoolVar(&checksum, "checksum", false, "Verify checksums instead of size and modtime")
+	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
+	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
+	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 
 	return cmd
 }
@@ -408,7 +407,7 @@ func (a *App) list() *cobra.Command {
 					return err
 				}
 
-				if path == dir {
+				if path == dir && record.IsDir() {
 					return api.SkipSubDirs
 				}
 

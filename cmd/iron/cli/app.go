@@ -76,8 +76,6 @@ func (a *App) Command() *cobra.Command {
 		a.mv(),
 		a.cp(),
 		a.create(),
-		a.put(),
-		a.get(),
 		a.upload(),
 		a.download(),
 		a.chmod(),
