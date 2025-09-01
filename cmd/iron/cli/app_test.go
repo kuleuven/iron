@@ -86,7 +86,7 @@ func TestNew(t *testing.T) {
 
 	defer os.Remove(envfile)
 
-	app := New(t.Context(), WithLoader(FileLoader(envfile)))
+	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithWorkdirFromFile(envfile))
 
 	cmd := app.Command()
 
