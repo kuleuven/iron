@@ -195,6 +195,19 @@ func TestRm(t *testing.T) {
 	}
 }
 
+func TestCopy(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponse(msg.EmptyResponse{})
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"cp", "/testzone/coll/file", "/testzone/coll2/"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTouch(t *testing.T) {
 	app := testApp(t)
 
