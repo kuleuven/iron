@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/transfer"
@@ -187,7 +188,7 @@ func (a *App) cp() *cobra.Command {
 func (a *App) create() *cobra.Command {
 	return &cobra.Command{
 		Use:               "create <target path>",
-		Short:             "Create a data object",
+		Short:             "Create a data object without content",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -201,6 +202,37 @@ func (a *App) create() *cobra.Command {
 			return h.Close()
 		},
 	}
+}
+
+func (a *App) touch() *cobra.Command {
+	var t int64
+
+	cmd := &cobra.Command{
+		Use:               "touch <target path>",
+		Short:             "Touch a data object",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mode := api.O_CREAT | api.O_RDWR
+
+			h, err := a.OpenDataObject(a.Context, a.Path(args[0]), mode)
+			if err != nil {
+				return err
+			}
+
+			if err := h.Touch(time.Unix(t, 0)); err != nil {
+				defer h.Close()
+
+				return err
+			}
+
+			return h.Close()
+		},
+	}
+
+	cmd.Flags().Int64Var(&t, "time", time.Now().Unix(), "Unix timestamp")
+
+	return cmd
 }
 
 func (a *App) checksum() *cobra.Command {

@@ -67,7 +67,7 @@ func (a *App) Command() *cobra.Command {
 	rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
 	rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
 	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
-	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", "", "Working directory")
+	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
 
 	rootCmd.AddCommand(
 		a.mkdir(),
@@ -76,6 +76,7 @@ func (a *App) Command() *cobra.Command {
 		a.mv(),
 		a.cp(),
 		a.create(),
+		a.touch(),
 		a.upload(),
 		a.download(),
 		a.chmod(),

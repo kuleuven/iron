@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -34,6 +36,33 @@ func FileLoader(file string) Loader {
 
 		return env, iron.DefaultDialFunc, err
 	}
+}
+
+// FileWorkdir returns the working directory as stored in an irods environment file.
+// The file is expected to have been created with the iRODS `icd` command.
+func FileWorkdir(file string) (string, error) {
+	pidFile := fmt.Sprintf("%s.%d", file, os.Getppid())
+
+	if _, err := os.Stat(pidFile); err == nil {
+		file = pidFile
+	}
+
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+
+	defer f.Close()
+
+	var c struct {
+		WorkingDirectory string `json:"irods_cwd"`
+	}
+
+	if json.NewDecoder(f).Decode(&c) != nil {
+		return "", err
+	}
+
+	return c.WorkingDirectory, nil
 }
 
 // ReadAuthFile reads the contents of a file and decodes it according to the
@@ -80,5 +109,19 @@ func WithLoader(loader Loader) Option {
 func WithName(name string) Option {
 	return func(a *App) {
 		a.name = name
+	}
+}
+
+func WithWorkdirFromFile(file string) Option {
+	return func(a *App) {
+		if wd, err := FileWorkdir(file); err == nil {
+			a.Workdir = wd
+		}
+	}
+}
+
+func WithDefaultWorkdir(workdir string) Option {
+	return func(a *App) {
+		a.Workdir = workdir
 	}
 }
