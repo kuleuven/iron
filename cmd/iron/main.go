@@ -19,8 +19,9 @@ func main() {
 
 	app := cli.New(
 		context.Background(),
+		cli.WithPasswordStore(cli.FilePasswordStore(config)),
 		cli.WithLoader(cli.FileLoader(config)),
-		cli.WithWorkdirFromFile(config),
+		cli.WithDefaultWorkdirFromFile(config),
 	)
 
 	defer app.Close()

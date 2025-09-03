@@ -13,6 +13,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func (a *App) authenticate() *cobra.Command {
+	return &cobra.Command{
+		Use:          "authenticate <zone>",
+		Short:        "Authenticate against the irods server.",
+		Args:         cobra.MaximumNArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			conn, err := a.Connect()
+			if err != nil {
+				return err
+			}
+
+			password := conn.NativePassword()
+
+			err = conn.Close()
+			if err != nil {
+				return err
+			}
+
+			return a.passwordStore(a.Context, password)
+		},
+	}
+}
+
 func (a *App) mkdir() *cobra.Command {
 	var recursive bool
 
@@ -262,10 +286,10 @@ func (a *App) upload() *cobra.Command {
 	}
 
 	examples := []string{
-		"iron upload /local/file.txt /path/to/collection/file.txt",
-		"iron upload /local/file.txt /path/to/collection/",
-		"iron upload /local/folder /path/to/collection",
-		"iron upload /local/folder /path/to/collection/",
+		a.name + " upload /local/file.txt /path/to/collection/file.txt",
+		a.name + " upload /local/file.txt /path/to/collection/",
+		a.name + " upload /local/folder /path/to/collection",
+		a.name + " upload /local/folder /path/to/collection/",
 	}
 
 	cmd := &cobra.Command{
@@ -316,10 +340,10 @@ func (a *App) download() *cobra.Command {
 	}
 
 	examples := []string{
-		"iron download /path/to/collection/file.txt /local/file.txt",
-		"iron download /path/to/collection/file.txt /local/folder/",
-		"iron download /path/to/collection /local/folder",
-		"iron download /path/to/collection /local/folder/",
+		a.name + " download /path/to/collection/file.txt /local/file.txt",
+		a.name + " download /path/to/collection/file.txt /local/folder/",
+		a.name + " download /path/to/collection /local/folder",
+		a.name + " download /path/to/collection /local/folder/",
 	}
 
 	cmd := &cobra.Command{
@@ -546,6 +570,10 @@ func (a *App) cd() *cobra.Command {
 			}
 
 			a.Workdir = a.Path(args[0])
+
+			if a.workdirStore != nil {
+				return a.workdirStore(a.Context, a.Workdir)
+			}
 
 			return nil
 		},

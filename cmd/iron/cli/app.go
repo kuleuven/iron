@@ -36,8 +36,10 @@ func New(ctx context.Context, options ...Option) *App {
 type App struct {
 	*iron.Client
 
-	name    string
-	loadEnv Loader
+	name          string
+	loadEnv       Loader
+	passwordStore PasswordStore
+	workdirStore  WorkdirStore
 
 	Context context.Context //nolint:containedctx
 
@@ -47,7 +49,7 @@ type App struct {
 	Workdir string
 }
 
-func (a *App) Command() *cobra.Command {
+func (a *App) Command() *cobra.Command { //nolint:funlen
 	rootCmd := &cobra.Command{
 		Use:   a.name,
 		Short: "Golang client for iRODS",
@@ -95,12 +97,24 @@ func (a *App) Command() *cobra.Command {
 	sh.Run = func(cmd *cobra.Command, args []string) {
 		rootCmd.ResetFlags()
 
-		rootCmd.AddCommand(a.pwd(), a.cd(), a.local())
+		if a.workdirStore == nil {
+			rootCmd.AddCommand(a.pwd(), a.cd())
+		}
+
+		rootCmd.AddCommand(a.local())
 
 		run(cmd, args)
 	}
 
 	rootCmd.AddCommand(sh)
+
+	if a.passwordStore != nil {
+		rootCmd.AddCommand(a.authenticate())
+	}
+
+	if a.workdirStore != nil {
+		rootCmd.AddCommand(a.pwd(), a.cd())
+	}
 
 	return rootCmd
 }
@@ -135,6 +149,11 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 	env, dialer, err := a.loadEnv(a.Context, zone)
 	if err != nil {
 		return err
+	}
+
+	// If authenticating, erase password
+	if cmd.Use == "authenticate <zone>" {
+		env.Password = ""
 	}
 
 	a.Client, err = iron.New(a.Context, env, iron.Option{

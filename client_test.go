@@ -70,6 +70,51 @@ func TestClient(t *testing.T) {
 	}
 }
 
+func TestClient1(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			panic(err)
+		}
+
+		// Consume startup message
+		msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
+
+		conn.Close()
+	}()
+
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("expected TCP address, got %T", listener.Addr())
+	}
+
+	env := Env{Host: "127.0.0.1", Port: tcpAddr.Port}
+
+	env.ApplyDefaults()
+
+	client, err := New(t.Context(), env, Option{
+		ClientName:                "test",
+		DeferConnectionToFirstUse: true,
+		EnvCallback:               func() (Env, time.Time, error) { return env, time.Time{}, nil },
+		DiscardConnectionAge:      time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer client.Close()
+
+	_, err = client.Connect()
+	if err != io.EOF {
+		t.Fatalf("expected EOF, got %v", err)
+	}
+}
+
 func TestClientNative(t *testing.T) { //nolint:funlen
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -112,7 +157,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation"}
+		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "password"}
 
 		env.ApplyDefaults()
 
@@ -330,7 +375,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation"}
+		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "test"}
 
 		env.ApplyDefaults()
 
@@ -429,7 +474,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation"}
+		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "test"}
 
 		env.ApplyDefaults()
 
@@ -514,7 +559,7 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation"}
+		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "testverify"}
 
 		env.ApplyDefaults()
 

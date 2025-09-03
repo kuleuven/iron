@@ -44,7 +44,7 @@ func writeConfig(t *testing.T, env iron.Env) (string, error) {
 	return f.Name(), os.WriteFile(filepath.Join(filepath.Dir(f.Name()), ".irodsA"), scrambledPassword, 0o600)
 }
 
-func TestNew(t *testing.T) {
+func TestNew(t *testing.T) { //nolint:funlen
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,12 @@ func TestNew(t *testing.T) {
 
 	defer os.Remove(envfile)
 
-	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithWorkdirFromFile(envfile))
+	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile), WithPasswordStore(FilePasswordStore(envfile)))
 
 	cmd := app.Command()
 
@@ -97,6 +102,14 @@ func TestNew(t *testing.T) {
 	defer app.Close()
 
 	if err := cmd.PersistentPreRunE(cmd, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.cd().RunE(cmd, []string{"authenticate"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.cd().RunE(cmd, []string{"test"}); err != nil {
 		t.Fatal(err)
 	}
 }

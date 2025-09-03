@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/hashicorp/go-rootcerts"
@@ -23,6 +24,7 @@ import (
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/scramble"
 	"go.uber.org/multierr"
+	"golang.org/x/term"
 
 	"github.com/sirupsen/logrus"
 )
@@ -427,7 +429,54 @@ func (c *conn) handshakeTLS() error {
 
 var ErrNotImplemented = fmt.Errorf("not implemented")
 
-func (c *conn) authenticateNew(ctx context.Context) error {
+func (c *conn) authenticate(ctx context.Context) error {
+	switch c.env.AuthScheme {
+	case pam:
+		if err := c.askPassword(); err != nil {
+			return err
+		}
+
+		if err := c.authenticatePAMDeprecated(ctx); err != nil {
+			return err
+		}
+	case native:
+		if err := c.askPassword(); err != nil {
+			return err
+		}
+
+		c.nativePassword = c.env.Password
+
+	default:
+		return fmt.Errorf("%w: authentication scheme %s", ErrNotImplemented, c.env.AuthScheme)
+	}
+
+	if c.env.UseModernAuth {
+		return c.authenticateNative(ctx)
+	}
+
+	return c.authenticateNativeDeprecated(ctx)
+}
+
+func (c *conn) askPassword() error {
+	if c.env.Password != "" {
+		return nil
+	}
+
+	fmt.Print("Password: ")
+
+	password, err := term.ReadPassword(int(syscall.Stdin)) //nolint:unconvert
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+
+	c.env.Password = string(password)
+
+	return nil
+}
+
+func (c *conn) authenticateNative(ctx context.Context) error {
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:        "native",
@@ -462,22 +511,7 @@ func (c *conn) authenticateNew(ctx context.Context) error {
 	return c.Request(ctx, msg.AUTH_PLUGIN, request, &response)
 }
 
-func (c *conn) authenticate(ctx context.Context) error {
-	switch c.env.AuthScheme {
-	case pam:
-		if err := c.authenticatePAM(ctx); err != nil {
-			return err
-		}
-	case native:
-		c.nativePassword = c.env.Password
-
-		if c.env.UseModernAuth {
-			return c.authenticateNew(ctx)
-		}
-	default:
-		return fmt.Errorf("%w: authentication scheme %s", ErrNotImplemented, c.env.AuthScheme)
-	}
-
+func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 	// Request challenge
 	challenge := msg.AuthChallenge{}
 
@@ -504,7 +538,7 @@ func (c *conn) authenticate(ctx context.Context) error {
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
 
-func (c *conn) authenticatePAM(ctx context.Context) error {
+func (c *conn) authenticatePAMDeprecated(ctx context.Context) error {
 	request := msg.PamAuthRequest{
 		Username: c.env.ProxyUsername,
 		Password: c.env.Password,
