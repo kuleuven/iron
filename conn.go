@@ -444,6 +444,10 @@ func (c *conn) handshakeTLS() error {
 var ErrNotImplemented = fmt.Errorf("not implemented")
 
 func (c *conn) authenticate(ctx context.Context, prompt Prompt) error {
+	if prompt == nil {
+		prompt = StdPrompt
+	}
+
 	switch c.env.AuthScheme {
 	case pamPassword:
 		if err := c.askPassword(prompt); err != nil {
@@ -474,10 +478,6 @@ func (c *conn) authenticate(ctx context.Context, prompt Prompt) error {
 func (c *conn) askPassword(prompt Prompt) error {
 	if c.env.Password != "" {
 		return nil
-	}
-
-	if prompt == nil {
-		prompt = StdPrompt
 	}
 
 	var err error
@@ -547,7 +547,7 @@ func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
 
-func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error { //nolint:gocognit,funlen
+func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:              "pam_interactive",
@@ -567,54 +567,21 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error { //nol
 			return err
 		}
 
+		var err error
+
 		switch response.NextOperation {
 		case "auth_agent_auth_request":
 			request.NextOperation = "auth_agent_auth_response"
 
 		case "next":
-			if response.Message.Prompt != "" {
-				fmt.Println(response.Message.Prompt)
+			if response.Message.Prompt == "" {
+				break
 			}
 
-			if err := patchState(request.PState, response.Message.Patch, &request.PDirty, ""); err != nil {
-				return err
-			}
+			err = prompt.Print(response.Message.Prompt)
 
 		case "waiting", "waiting_pw":
-			// Retrieve entry from state
-			if value, ok, err := retrieveValue(request.PState, response.Message.Retrieve); err != nil {
-				return err
-			} else if ok {
-				request.Response = value
-
-				// Patch state as necessary
-				if err := patchState(request.PState, response.Message.Patch, &request.PDirty, value); err != nil {
-					return err
-				}
-
-				continue
-			}
-
-			// Get default value
-			var defaultValue string
-
-			if value, ok, err := retrieveValue(request.PState, response.Message.DefaultPath); err != nil {
-				return err
-			} else if ok {
-				defaultValue = value
-			}
-
-			// Prompt for value
-			value, err := promptValue(prompt, response.Message.Prompt, response.NextOperation == "waiting_pw", defaultValue)
-			if err != nil {
-				return err
-			}
-
-			request.Response = value
-
-			if err := patchState(request.PState, response.Message.Patch, &request.PDirty, value); err != nil {
-				return err
-			}
+			request.Response, err = getValue(request.PState, prompt, response.Message.Prompt, response.NextOperation == "waiting_pw", response.Message.Retrieve, response.Message.DefaultPath)
 
 		case "authenticated":
 			c.nativePassword = response.RequestResult
@@ -624,27 +591,52 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error { //nol
 		default:
 			return fmt.Errorf("unexpected next operation %s", response.NextOperation)
 		}
+
+		if err != nil {
+			return err
+		}
+
+		if err := patchState(request.PState, response.Message.Patch, &request.PDirty, request.Response); err != nil {
+			return err
+		}
 	}
 }
 
-func retrieveValue(state map[string]any, path string) (string, bool, error) {
-	if path == "" {
-		return "", false, nil
+func getValue(state map[string]any, prompt Prompt, message string, sensitive bool, retrievePath, defaultPath string) (string, error) {
+	if retrievePath != "" {
+		return retrieveValue(state, retrievePath)
 	}
 
+	// Get default value
+	var defaultValue string
+
+	if defaultPath != "" {
+		var err error
+
+		defaultValue, err = retrieveValue(state, defaultPath)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Prompt for value
+	return promptValue(prompt, message, sensitive, defaultValue)
+}
+
+func retrieveValue(state map[string]any, path string) (string, error) {
 	pointer, err := jsonpointer.New(path)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 
 	value, _, err := pointer.Get(state)
 	if err != nil {
-		return "", false, nil //nolint:nilerr
+		return "", nil //nolint:nilerr
 	}
 
-	s, ok := value.(string)
+	s, _ := value.(string)
 
-	return s, ok, nil
+	return s, nil
 }
 
 func patchState(state map[string]any, patch []map[string]any, dirty *bool, defaultValue string) error {
@@ -694,10 +686,6 @@ func patchState(state map[string]any, patch []map[string]any, dirty *bool, defau
 }
 
 func promptValue(prompt Prompt, message string, sensitive bool, defaultValue string) (string, error) {
-	if message == "" {
-		return defaultValue, nil
-	}
-
 	if defaultValue != "" {
 		message = fmt.Sprintf("%s [%s]", message, defaultValue)
 	}
@@ -706,10 +694,6 @@ func promptValue(prompt Prompt, message string, sensitive bool, defaultValue str
 		value string
 		err   error
 	)
-
-	if prompt == nil {
-		prompt = StdPrompt
-	}
 
 	if sensitive {
 		value, err = prompt.Password(message)
