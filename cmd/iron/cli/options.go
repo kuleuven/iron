@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -37,19 +38,25 @@ func WithLoader(loader Loader) Option {
 	}
 }
 
+type ContextKey string
+
+var ForceReauthentication ContextKey = "force_reauthentication"
+
 // FileLoader loads an irods environment from a file and returns a Loader.
 // The environment is loaded from the file, and the password is read from the
 // .irodsA file in the same directory, or the file specified by the
 // IRODS_AUTHENTICATION_FILE environment variable if set.
 func FileLoader(file string) Loader {
-	return func(_ context.Context, _ string) (iron.Env, iron.DialFunc, error) {
+	return func(ctx context.Context, _ string) (iron.Env, iron.DialFunc, error) {
 		var env iron.Env
 
 		err := env.LoadFromFile(file)
 
-		env.UseModernAuth = true
-
-		if env.Password == "" && err == nil {
+		if forceReauthentication, ok := ctx.Value(ForceReauthentication).(bool); ok && forceReauthentication {
+			// Force reauthentication
+			env.Password = ""
+		} else if env.AuthScheme != "native" || env.Password == "" {
+			// Try to read the password from the .irodsA file
 			authFile := filepath.Join(filepath.Dir(file), ".irodsA")
 
 			if f, ok := os.LookupEnv("IRODS_AUTHENTICATION_FILE"); ok {
@@ -57,6 +64,11 @@ func FileLoader(file string) Loader {
 			}
 
 			env.Password, err = ReadAuthFile(authFile)
+			if errors.Is(err, os.ErrNotExist) {
+				err = nil
+			} else if err == nil {
+				env.AuthScheme = "native"
+			}
 		}
 
 		return env, iron.DefaultDialFunc, err

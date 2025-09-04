@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -19,14 +20,15 @@ import (
 	"syscall"
 	"time"
 
+	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/go-openapi/jsonpointer"
 	"github.com/hashicorp/go-rootcerts"
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/scramble"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 	"golang.org/x/term"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Conn interface {
@@ -246,7 +248,7 @@ func (c *conn) startup(ctx context.Context) error {
 		return err
 	}
 
-	if !checkVersion(version) {
+	if !checkVersion(version, 4, 3, 2) {
 		return fmt.Errorf("%w: server version %v", ErrUnsupportedVersion, version.ReleaseVersion)
 	}
 
@@ -259,8 +261,8 @@ func (c *conn) startup(ctx context.Context) error {
 	return c.handshakeTLS()
 }
 
-// checkVersion returns true if the server version is greater than or equal to 4.3.2
-func checkVersion(version msg.Version) bool {
+// checkVersion returns true if the server version is greater than or equal to the given version
+func checkVersion(version msg.Version, major, minor, release int) bool {
 	if !strings.HasPrefix(version.ReleaseVersion, "rods") {
 		return false
 	}
@@ -271,22 +273,22 @@ func checkVersion(version msg.Version) bool {
 		return false
 	}
 
-	major, err := strconv.Atoi(parts[0])
+	myMajor, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return false
 	}
 
-	minor, err := strconv.Atoi(parts[1])
+	myMinor, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return false
 	}
 
-	release, err := strconv.Atoi(parts[2])
+	myRelease, err := strconv.Atoi(parts[2])
 	if err != nil {
 		return false
 	}
 
-	return major > 4 || (major == 4 && minor > 3) || (major == 4 && minor == 3 && release > 1)
+	return myMajor > major || (myMajor == major && myMinor > minor) || (myMajor == major && myMinor == minor && myRelease >= release)
 }
 
 var ErrSSLNegotiationFailed = fmt.Errorf("SSL negotiation failed")
@@ -431,12 +433,16 @@ var ErrNotImplemented = fmt.Errorf("not implemented")
 
 func (c *conn) authenticate(ctx context.Context) error {
 	switch c.env.AuthScheme {
-	case pam:
+	case pamPassword:
 		if err := c.askPassword(); err != nil {
 			return err
 		}
 
-		if err := c.authenticatePAMDeprecated(ctx); err != nil {
+		if err := c.authenticatePAMPassword(ctx); err != nil {
+			return err
+		}
+	case pamInteractive:
+		if err := c.authenticatePAM(ctx); err != nil {
 			return err
 		}
 	case native:
@@ -450,11 +456,7 @@ func (c *conn) authenticate(ctx context.Context) error {
 		return fmt.Errorf("%w: authentication scheme %s", ErrNotImplemented, c.env.AuthScheme)
 	}
 
-	if c.env.UseModernAuth {
-		return c.authenticateNative(ctx)
-	}
-
-	return c.authenticateNativeDeprecated(ctx)
+	return c.authenticateNative(ctx)
 }
 
 func (c *conn) askPassword() error {
@@ -477,6 +479,10 @@ func (c *conn) askPassword() error {
 }
 
 func (c *conn) authenticateNative(ctx context.Context) error {
+	if !checkVersion(*c.version, 5, 0, 0) {
+		return c.authenticateNativeDeprecated(ctx)
+	}
+
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:        "native",
@@ -491,22 +497,16 @@ func (c *conn) authenticateNative(ctx context.Context) error {
 		return err
 	}
 
+	request.NextOperation = "auth_agent_auth_response"
+
 	// In the new authentication scheme, the server sends the challenge not base64 encoded
-	challengeBytes := []byte(response.Challenge)
+	challengeBytes := []byte(response.RequestResult)
+
+	// Compute digest
+	request.Digest = scramble.GenerateAuthResponse(challengeBytes, c.nativePassword)
 
 	// Save client signature
 	c.clientSignature = hex.EncodeToString(challengeBytes[:min(16, len(challengeBytes))])
-
-	// Create challenge response
-	request = msg.AuthPluginRequest{
-		Scheme:        "native",
-		NextOperation: "auth_agent_auth_response",
-		UserName:      c.env.ProxyUsername,
-		ZoneName:      c.env.ProxyZone,
-		Digest:        scramble.GenerateAuthResponse(challengeBytes, c.nativePassword),
-	}
-
-	logrus.Debugf("Responding %s %s ", request.Digest, request.UserName)
 
 	return c.Request(ctx, msg.AUTH_PLUGIN, request, &response)
 }
@@ -538,7 +538,212 @@ func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
 
-func (c *conn) authenticatePAMDeprecated(ctx context.Context) error {
+func (c *conn) authenticatePAM(ctx context.Context) error { //nolint:gocognit,funlen
+	// Request challenge
+	request := msg.AuthPluginRequest{
+		Scheme:              "pam_interactive",
+		TTL:                 strconv.Itoa(c.env.PamTTL),
+		ForcePasswordPrompt: true,
+		RecordAuthFile:      true,
+		NextOperation:       "auth_agent_auth_request",
+		UserName:            c.env.ProxyUsername,
+		ZoneName:            c.env.ProxyZone,
+		PState:              map[string]any{},
+	}
+
+	for {
+		var response msg.AuthPluginResponse
+
+		if err := c.Request(ctx, msg.AUTH_PLUGIN, request, &response); err != nil {
+			return err
+		}
+
+		switch response.NextOperation {
+		case "auth_agent_auth_request":
+			request.NextOperation = "auth_agent_auth_response"
+
+		case "next":
+			if response.Message.Prompt != "" {
+				fmt.Println(response.Message.Prompt)
+			}
+
+			if err := patchState(request.PState, response.Message.Patch, &request.PDirty, ""); err != nil {
+				return err
+			}
+
+		case "waiting", "waiting_pw":
+			// Retrieve entry from state
+			if value, ok, err := retrieveValue(request.PState, response.Message.Retrieve); err != nil {
+				return err
+			} else if ok {
+				request.Response = value
+
+				// Patch state as necessary
+				if err := patchState(request.PState, response.Message.Patch, &request.PDirty, value); err != nil {
+					return err
+				}
+
+				continue
+			}
+
+			// Get default value
+			var defaultValue string
+
+			if value, ok, err := retrieveValue(request.PState, response.Message.DefaultPath); err != nil {
+				return err
+			} else if ok {
+				defaultValue = value
+			}
+
+			// Prompt for value
+			value, err := promptValue(response.Message.Prompt, response.NextOperation == "waiting_pw", defaultValue)
+			if err != nil {
+				return err
+			}
+
+			request.Response = value
+
+			if err := patchState(request.PState, response.Message.Patch, &request.PDirty, value); err != nil {
+				return err
+			}
+
+		case "authenticated":
+			c.nativePassword = response.RequestResult
+
+			return nil
+
+		default:
+			return fmt.Errorf("unexpected next operation %s", response.NextOperation)
+		}
+	}
+}
+
+func retrieveValue(state map[string]any, path string) (string, bool, error) {
+	if path == "" {
+		return "", false, nil
+	}
+
+	pointer, err := jsonpointer.New(path)
+	if err != nil {
+		return "", false, err
+	}
+
+	value, _, err := pointer.Get(state)
+	if err != nil {
+		return "", false, nil //nolint:nilerr
+	}
+
+	s, ok := value.(string)
+
+	return s, ok, nil
+}
+
+func patchState(state map[string]any, patch []map[string]any, dirty *bool, defaultValue string) error {
+	if len(patch) == 0 {
+		return nil
+	}
+
+	for _, p := range patch {
+		if p["op"] != "add" && p["op"] != "replace" {
+			continue
+		}
+
+		if _, ok := p["value"]; ok {
+			continue
+		}
+
+		p["value"] = defaultValue
+	}
+
+	patchPayload, err := json.Marshal(patch)
+	if err != nil || len(patchPayload) == 0 {
+		return err
+	}
+
+	decodedPatch, err := jsonpatch.DecodePatch(patchPayload)
+	if err != nil {
+		return err
+	}
+
+	statePayload, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	statePayload, err = decodedPatch.Apply(statePayload)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(statePayload, &state); err != nil {
+		return err
+	}
+
+	*dirty = true
+
+	return nil
+}
+
+func promptValue(prompt string, sensitive bool, defaultValue string) (string, error) {
+	if prompt == "" {
+		return defaultValue, nil
+	}
+
+	if defaultValue != "" {
+		prompt = fmt.Sprintf("%s [%s]", prompt, defaultValue)
+	}
+
+	// Print prompt
+	fmt.Print(prompt + ": ")
+
+	var value string
+
+	// Read value
+	if sensitive {
+		byteVal, err := term.ReadPassword(int(syscall.Stdin)) //nolint:unconvert
+		if err != nil {
+			return "", err
+		}
+
+		value = string(byteVal)
+	} else if _, err := fmt.Scanln(&value); err != nil {
+		return "", err
+	}
+
+	if value == "" {
+		value = defaultValue
+	}
+
+	return value, nil
+}
+
+func (c *conn) authenticatePAMPassword(ctx context.Context) error {
+	if !checkVersion(*c.version, 5, 0, 0) {
+		return c.authenticatePAMPasswordDeprecated(ctx)
+	}
+
+	// Request challenge
+	request := msg.AuthPluginRequest{
+		Scheme:        "pam_password",
+		TTL:           strconv.Itoa(c.env.PamTTL),
+		NextOperation: "pam_password_auth_client_request",
+		UserName:      c.env.ProxyUsername,
+		ZoneName:      c.env.ProxyZone,
+		Password:      c.env.Password,
+	}
+
+	var response msg.AuthPluginResponse
+
+	if err := c.Request(ctx, msg.AUTH_PLUGIN, request, &response); err != nil {
+		return err
+	}
+
+	c.nativePassword = response.RequestResult
+
+	return nil
+}
+
+func (c *conn) authenticatePAMPasswordDeprecated(ctx context.Context) error {
 	request := msg.PamAuthRequest{
 		Username: c.env.ProxyUsername,
 		Password: c.env.Password,

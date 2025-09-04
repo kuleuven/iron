@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+
+	"github.com/sirupsen/logrus"
 )
 
 func marshalJSON(obj any, protocol Protocol, msgType string) (*Message, error) {
@@ -11,6 +13,8 @@ func marshalJSON(obj any, protocol Protocol, msgType string) (*Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal irods message to json: %w", err)
 	}
+
+	logrus.Tracef("-> json: %s", jsonBody)
 
 	xmlObject := BinBytesBuf{
 		Length: len(jsonBody),
@@ -51,6 +55,8 @@ func unmarshalJSON(msg Message, protocol Protocol, obj any) error {
 			break
 		}
 	}
+
+	logrus.Tracef("<- json: %s", jsonBody)
 
 	return json.Unmarshal(jsonBody, obj)
 }

@@ -146,14 +146,15 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load zone and start client
-	env, dialer, err := a.loadEnv(a.Context, zone)
-	if err != nil {
-		return err
+	ctx := a.Context
+
+	if cmd.Use == "authenticate <zone>" {
+		ctx = context.WithValue(ctx, ForceReauthentication, true)
 	}
 
-	// If authenticating, erase password
-	if cmd.Use == "authenticate <zone>" {
-		env.Password = ""
+	env, dialer, err := a.loadEnv(ctx, zone)
+	if err != nil {
+		return err
 	}
 
 	a.Client, err = iron.New(a.Context, env, iron.Option{

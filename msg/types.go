@@ -1,6 +1,8 @@
 package msg
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+)
 
 type StartupPack struct {
 	XMLName         xml.Name `xml:"StartupPack_PI"`
@@ -429,24 +431,38 @@ type RError struct {
 }
 
 type AuthPluginRequest struct { // No xml.Name means this is a json struct
-	TTL                 string `json:"a_ttl"`
-	ForcePasswordPrompt bool   `json:"force_password_prompt"`
-	NextOperation       string `json:"next_operation"`
-	Scheme              string `json:"scheme"`
-	UserName            string `json:"user_name"`
-	ZoneName            string `json:"zone_name"`
-	Digest              string `json:"digest,omitempty"`
+	ForcePasswordPrompt bool           `json:"force_password_prompt"`
+	NextOperation       string         `json:"next_operation"`
+	RecordAuthFile      bool           `json:"record_auth_file"`
+	Scheme              string         `json:"scheme"`
+	TTL                 string         `json:"a_ttl"`
+	Password            string         `json:"a_pw"`
+	UserName            string         `json:"user_name"`
+	ZoneName            string         `json:"zone_name"`
+	Digest              string         `json:"digest,omitempty"`
+	PState              map[string]any `json:"pstate,omitempty"`
+	PDirty              bool           `json:"pdirty,omitempty"`
+	Response            string         `json:"resp,omitempty"`
 }
 
 type AuthPluginResponse struct { // No xml.Name means this is a json struct
-	TTL                 string `json:"a_ttl"`
-	ForcePasswordPrompt bool   `json:"force_password_prompt"`
-	NextOperation       string `json:"next_operation"`
-	Scheme              string `json:"scheme"`
-	UserName            string `json:"user_name"`
-	ZoneName            string `json:"zone_name"`
-	Challenge           string `json:"request_result,omitempty"`
-	Digest              string `json:"digest,omitempty"`
+	ForcePasswordPrompt bool           `json:"force_password_prompt"`
+	NextOperation       string         `json:"next_operation"`
+	RecordAuthFile      bool           `json:"record_auth_file"`
+	Scheme              string         `json:"scheme"`
+	TTL                 string         `json:"a_ttl"`
+	UserName            string         `json:"user_name"`
+	ZoneName            string         `json:"zone_name"`
+	Digest              string         `json:"digest,omitempty"`
+	PState              map[string]any `json:"pstate,omitempty"`
+	PDirty              bool           `json:"pdirty,omitempty"`
+	Message             struct {
+		Prompt      string           `json:"prompt,omitempty"`
+		Retrieve    string           `json:"retrieve,omitempty"`
+		DefaultPath string           `json:"default_path,omitempty"`
+		Patch       []map[string]any `json:"patch,omitempty"`
+	} `json:"msg,omitempty"`
+	RequestResult string `json:"request_result,omitempty"`
 }
 
 type Checksum struct {

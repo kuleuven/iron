@@ -26,12 +26,12 @@ type Env struct {
 	SSLServerName                 string `json:"-"` // If provided, this will be used for server verification, instead of the hostname
 	ProxyUsername                 string `json:"-"` // Authenticate with proxy credentials
 	ProxyZone                     string `json:"-"` // Authenticate with proxy credentials
-	UseModernAuth                 bool   `json:"-"` // Use modern authentication framework
 }
 
 const (
-	native = "native"
-	pam    = "pam_password"
+	native         = "native"
+	pamPassword    = "pam_password"
+	pamInteractive = "pam_interactive"
 )
 
 const (

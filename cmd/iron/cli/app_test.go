@@ -58,11 +58,11 @@ func TestNew(t *testing.T) { //nolint:funlen
 
 		msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
 		msg.Write(conn, msg.Version{
-			ReleaseVersion: "rods4.3.2",
+			ReleaseVersion: "rods5.0.1",
 		}, nil, msg.XML, "RODS_VERSION", 0)
 		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthPluginResponse{
-			Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+			RequestResult: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
 		}, nil, msg.XML, "RODS_API_REPLY", 0)
 		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
