@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -28,7 +27,6 @@ import (
 	"github.com/kuleuven/iron/scramble"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
-	"golang.org/x/term"
 )
 
 type Conn interface {
@@ -112,10 +110,17 @@ func DefaultDialFunc(ctx context.Context, env Env, clientName string) (net.Conn,
 // Dial connects to an IRODS server and creates a new connection.
 // The caller is responsible for closing the connection when it is no longer needed.
 func Dial(ctx context.Context, env Env, clientName string) (Conn, error) {
-	return dial(ctx, env, clientName, DefaultDialFunc, msg.XML)
+	return dial(ctx, env, clientName, DefaultDialFunc, StdPrompt, msg.XML)
 }
 
-func dial(ctx context.Context, env Env, clientName string, dialFunc DialFunc, protocol msg.Protocol) (*conn, error) {
+// PromptDial connects to an IRODS server and creates a new connection.
+// Prompt is used for possible interactive authentication.
+// The caller is responsible for closing the connection when it is no longer needed.
+func PromptDial(ctx context.Context, env Env, prompt Prompt, clientName string) (Conn, error) {
+	return dial(ctx, env, clientName, DefaultDialFunc, prompt, msg.XML)
+}
+
+func dial(ctx context.Context, env Env, clientName string, dialFunc DialFunc, prompt Prompt, protocol msg.Protocol) (*conn, error) {
 	if dialFunc == nil {
 		dialFunc = DefaultDialFunc
 	}
@@ -125,7 +130,7 @@ func dial(ctx context.Context, env Env, clientName string, dialFunc DialFunc, pr
 		return nil, err
 	}
 
-	return newConn(ctx, conn, env, clientName, protocol)
+	return newConn(ctx, conn, env, clientName, prompt, protocol)
 }
 
 var HandshakeTimeout = time.Minute
@@ -134,12 +139,19 @@ var HandshakeTimeout = time.Minute
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // Returns an error if the handshake fails.
 func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string) (Conn, error) {
-	return newConn(ctx, transport, env, clientName, msg.XML)
+	return newConn(ctx, transport, env, clientName, StdPrompt, msg.XML)
+}
+
+// NewPromptConn initializes a new Conn instance with the provided network connection and environment settings.
+// It performs a handshake as part of the initialization process and returns the constructed Conn instance.
+// For interactive authentication, the provided prompt will be used. Returns an error if the handshake fails.
+func NewPromptConn(ctx context.Context, transport net.Conn, env Env, prompt Prompt, clientName string) (Conn, error) {
+	return newConn(ctx, transport, env, clientName, prompt, msg.XML)
 }
 
 const requestServerNegotiationToken = "request_server_negotiation"
 
-func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, protocol msg.Protocol) (*conn, error) {
+func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, prompt Prompt, protocol msg.Protocol) (*conn, error) {
 	c := &conn{
 		transport:   transport,
 		env:         &env,
@@ -165,7 +177,7 @@ func newConn(ctx context.Context, transport net.Conn, env Env, clientName string
 
 	defer cancel()
 
-	return c, c.Handshake(ctx)
+	return c, c.Handshake(ctx, prompt)
 }
 
 var ErrTLSRequired = fmt.Errorf("TLS is required for authentication but not enabled")
@@ -196,7 +208,7 @@ func (c *conn) NativePassword() string {
 }
 
 // Handshake performs a handshake with the IRODS server.
-func (c *conn) Handshake(ctx context.Context) error {
+func (c *conn) Handshake(ctx context.Context, prompt Prompt) error {
 	if err := c.startup(ctx); err != nil {
 		// If the context is closed, the error will be a "closed network connection" error.
 		// In that case, return the context error instead
@@ -207,7 +219,7 @@ func (c *conn) Handshake(ctx context.Context) error {
 		return err
 	}
 
-	return c.authenticate(ctx)
+	return c.authenticate(ctx, prompt)
 }
 
 var ErrUnsupportedVersion = fmt.Errorf("unsupported server version")
@@ -431,10 +443,10 @@ func (c *conn) handshakeTLS() error {
 
 var ErrNotImplemented = fmt.Errorf("not implemented")
 
-func (c *conn) authenticate(ctx context.Context) error {
+func (c *conn) authenticate(ctx context.Context, prompt Prompt) error {
 	switch c.env.AuthScheme {
 	case pamPassword:
-		if err := c.askPassword(); err != nil {
+		if err := c.askPassword(prompt); err != nil {
 			return err
 		}
 
@@ -442,11 +454,11 @@ func (c *conn) authenticate(ctx context.Context) error {
 			return err
 		}
 	case pamInteractive:
-		if err := c.authenticatePAM(ctx); err != nil {
+		if err := c.authenticatePAM(ctx, prompt); err != nil {
 			return err
 		}
 	case native:
-		if err := c.askPassword(); err != nil {
+		if err := c.askPassword(prompt); err != nil {
 			return err
 		}
 
@@ -459,23 +471,20 @@ func (c *conn) authenticate(ctx context.Context) error {
 	return c.authenticateNative(ctx)
 }
 
-func (c *conn) askPassword() error {
+func (c *conn) askPassword(prompt Prompt) error {
 	if c.env.Password != "" {
 		return nil
 	}
 
-	fmt.Print("Password: ")
-
-	password, err := term.ReadPassword(int(syscall.Stdin)) //nolint:unconvert
-	if err != nil {
-		return err
+	if prompt == nil {
+		prompt = StdPrompt
 	}
 
-	fmt.Println()
+	var err error
 
-	c.env.Password = string(password)
+	c.env.Password, err = prompt.Password("Password")
 
-	return nil
+	return err
 }
 
 func (c *conn) authenticateNative(ctx context.Context) error {
@@ -538,7 +547,7 @@ func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
 
-func (c *conn) authenticatePAM(ctx context.Context) error { //nolint:gocognit,funlen
+func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error { //nolint:gocognit,funlen
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:              "pam_interactive",
@@ -596,7 +605,7 @@ func (c *conn) authenticatePAM(ctx context.Context) error { //nolint:gocognit,fu
 			}
 
 			// Prompt for value
-			value, err := promptValue(response.Message.Prompt, response.NextOperation == "waiting_pw", defaultValue)
+			value, err := promptValue(prompt, response.Message.Prompt, response.NextOperation == "waiting_pw", defaultValue)
 			if err != nil {
 				return err
 			}
@@ -684,37 +693,35 @@ func patchState(state map[string]any, patch []map[string]any, dirty *bool, defau
 	return nil
 }
 
-func promptValue(prompt string, sensitive bool, defaultValue string) (string, error) {
-	if prompt == "" {
+func promptValue(prompt Prompt, message string, sensitive bool, defaultValue string) (string, error) {
+	if message == "" {
 		return defaultValue, nil
 	}
 
 	if defaultValue != "" {
-		prompt = fmt.Sprintf("%s [%s]", prompt, defaultValue)
+		message = fmt.Sprintf("%s [%s]", message, defaultValue)
 	}
 
-	// Print prompt
-	fmt.Print(prompt + ": ")
+	var (
+		value string
+		err   error
+	)
 
-	var value string
+	if prompt == nil {
+		prompt = StdPrompt
+	}
 
-	// Read value
 	if sensitive {
-		byteVal, err := term.ReadPassword(int(syscall.Stdin)) //nolint:unconvert
-		if err != nil {
-			return "", err
-		}
-
-		value = string(byteVal)
-	} else if _, err := fmt.Scanln(&value); err != nil {
-		return "", err
+		value, err = prompt.Password(message)
+	} else {
+		value, err = prompt.Ask(message)
 	}
 
 	if value == "" {
 		value = defaultValue
 	}
 
-	return value, nil
+	return value, err
 }
 
 func (c *conn) authenticatePAMPassword(ctx context.Context) error {

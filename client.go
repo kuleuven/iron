@@ -30,13 +30,6 @@ type Option struct {
 	// Connect() will cycle through the existing connections.
 	AllowConcurrentUse bool
 
-	// EnvCallback is an optional function that returns the environment settings for the connection
-	// when a new connection is established. If not provided, the default environment settings are used.
-	// This is useful in combination with the DeferConnectionToFirstUse option, to prepare the client
-	// before the connection parameters are known. The returned time.Time is the time until which the
-	// environment settings are valid, or zero if they are valid indefinitely.
-	EnvCallback func() (Env, time.Time, error)
-
 	// Admin is a flag that indicates whether the client should act in admin mode.
 	Admin bool
 
@@ -44,15 +37,27 @@ type Option struct {
 	// This is an experimental feature and may be removed in a future version.
 	UseNativeProtocol bool
 
+	// EnvCallback is an optional function that returns the environment settings for the connection
+	// when a new connection is established. If not provided, the default environment settings are used.
+	// This is useful in combination with the DeferConnectionToFirstUse option, to prepare the client
+	// before the connection parameters are known. The returned time.Time is the time until which the
+	// environment settings are valid, or zero if they are valid indefinitely.
+	EnvCallback func() (Env, time.Time, error)
+
+	// AuthenticationPrompt is an optional function that overrides the default pompt function.
+	// It is used to prompt the user for information when authenticating with the server,
+	// if the authentication scheme is pam_interactive.
+	AuthenticationPrompt Prompt
+
+	// DialFunc is an optional function that overrides the default dial function.
+	DialFunc DialFunc
+
 	// GeneratedNativePasswordAge is the maximum age of a generated native password before it is discarded.
-	// In case pam authentication is used, this should be put to a value lower than the PAM timeout which is set on the server.
+	// In case pam authentication is used, this should be put to a value lower than the PAM timeout which is set on the server/in Env.
 	GeneratedNativePasswordAge time.Duration
 
 	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
 	DiscardConnectionAge time.Duration
-
-	// DialFunc is an optional function that overrides the default dial function.
-	DialFunc DialFunc
 }
 
 type Client struct {
@@ -219,7 +224,7 @@ func (c *Client) newConn() (*conn, error) {
 		env.Password = c.nativePassword
 	}
 
-	conn, err := dial(c.ctx, env, c.option.ClientName, c.option.DialFunc, c.protocol)
+	conn, err := dial(c.ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
 	if err != nil {
 		c.dialErr = err
 

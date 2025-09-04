@@ -437,7 +437,7 @@ func TestConnPamPasswordTLS3(t *testing.T) {
 	}
 }
 
-func pamResponsesInteractive(server net.Conn) {
+func pamResponsesInteractive(server net.Conn) { //nolint:funlen
 	assert := func(args ...any) {
 		if err := args[len(args)-1]; err != nil {
 			panic(err)
@@ -499,6 +499,31 @@ func pamResponsesInteractive(server net.Conn) {
 	}, nil, msg.XML, "RODS_API_REPLY", 0))
 	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
+		NextOperation: "waiting_pw",
+		Message: struct {
+			Prompt      string           "json:\"prompt,omitempty\""
+			Retrieve    string           "json:\"retrieve,omitempty\""
+			DefaultPath string           "json:\"default_path,omitempty\""
+			Patch       []map[string]any "json:\"patch,omitempty\""
+		}{
+			Prompt:   "Password",
+			Retrieve: "/pw",
+		},
+	}, nil, msg.XML, "RODS_API_REPLY", 0))
+	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
+	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
+		NextOperation: "waiting",
+		Message: struct {
+			Prompt      string           "json:\"prompt,omitempty\""
+			Retrieve    string           "json:\"retrieve,omitempty\""
+			DefaultPath string           "json:\"default_path,omitempty\""
+			Patch       []map[string]any "json:\"patch,omitempty\""
+		}{
+			Prompt: "Some key",
+		},
+	}, nil, msg.XML, "RODS_API_REPLY", 0))
+	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
+	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
 		NextOperation: "authenticated",
 		RequestResult: "testNativePassword",
 	}, nil, msg.XML, "RODS_API_REPLY", 0))
@@ -546,7 +571,12 @@ func TestConnPamInteractiveTLS(t *testing.T) {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	bot := &Bot{
+		"Password": "abc",
+		"Some key": "def",
+	}
+
+	conn, err := NewPromptConn(ctx, transport, env, bot, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
