@@ -61,7 +61,6 @@ type Option struct {
 }
 
 type Client struct {
-	ctx                  context.Context //nolint:containedctx
 	env                  *Env
 	option               Option
 	protocol             msg.Protocol
@@ -76,7 +75,7 @@ type Client struct {
 }
 
 // New creates a new Client instance with the provided environment settings, maximum connections, and options.
-// The context and environment settings are used for dialing new connections.
+// The environment settings are used for dialing new connections.
 // The maximum number of connections is the maximum number of connections that can be established at any given time.
 // The options are used to customize the behavior of the client.
 func New(ctx context.Context, env Env, option Option) (*Client, error) {
@@ -87,7 +86,6 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	}
 
 	c := &Client{
-		ctx:      ctx,
 		env:      &env,
 		option:   option,
 		protocol: msg.XML,
@@ -104,7 +102,7 @@ func New(ctx context.Context, env Env, option Option) (*Client, error) {
 
 	// Test first connection unless deferred
 	if !option.DeferConnectionToFirstUse {
-		conn, err := c.defaultPool.newConn()
+		conn, err := c.defaultPool.newConn(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -161,16 +159,16 @@ func (c *Client) needsEnvCallback() bool {
 // If all connections are busy, it will create a new one up to the maximum number of connections.
 // If the maximum number of connections has been reached, it will block until a connection becomes available,
 // or reuse an existing connection in case AllowConcurrentUse is enabled.
-func (c *Client) Connect() (Conn, error) {
-	return c.defaultPool.Connect()
+func (c *Client) Connect(ctx context.Context) (Conn, error) {
+	return c.defaultPool.Connect(ctx)
 }
 
 // ConnectAvailable returns a list of available connections to the iRODS server,
 // up to the specified number. If no connections are available, it will return
 // an empty list. Retrieved connections must be closed by the caller.
 // If n is negative, it will return all available connections.
-func (c *Client) ConnectAvailable(n int) ([]Conn, error) {
-	return c.defaultPool.ConnectAvailable(n)
+func (c *Client) ConnectAvailable(ctx context.Context, n int) ([]Conn, error) {
+	return c.defaultPool.ConnectAvailable(ctx, n)
 }
 
 // Close closes all connections managed by the client, ensuring that any errors
@@ -182,11 +180,11 @@ func (c *Client) Close() error {
 }
 
 // Context returns the context used by the client for all of its operations.
-func (c *Client) Context() context.Context {
-	return c.ctx
-}
+//func (c *Client) Context() context.Context {
+//	return c.ctx
+//}
 
-func (c *Client) newConn() (*conn, error) {
+func (c *Client) newConn(ctx context.Context) (*conn, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -224,7 +222,7 @@ func (c *Client) newConn() (*conn, error) {
 		env.Password = c.nativePassword
 	}
 
-	conn, err := dial(c.ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
+	conn, err := dial(ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
 	if err != nil {
 		c.dialErr = err
 

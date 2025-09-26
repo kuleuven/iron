@@ -87,23 +87,10 @@ var ErrSkipNotAllowed = errors.New("skip not allowed")
 // children.
 func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...WalkOption) error {
 	collection, err := api.GetCollection(ctx, path)
-	if err != nil {
-		// If the collection does not exist, check if it is a data object
-		if code, ok := ErrorCode(err); ok && code == msg.CAT_NO_ROWS_FOUND {
-			if record, err := api.GetRecord(ctx, path, opts...); err == nil && !record.IsDir() {
-				err = walkFn(path, record, nil)
-				if err == SkipAll {
-					return nil
-				}
-
-				return err
-			}
-		}
-
-		return walkFn(path, nil, err)
-	}
 
 	switch {
+	case err != nil:
+		// See below
 	case slices.Contains(opts, BreadthFirst):
 		return api.walkBreadthFirst(ctx, walkFn, []Collection{*collection}, opts...)
 	case slices.Contains(opts, LexographicalOrder) && slices.Contains(opts, NoSkip):
@@ -113,6 +100,20 @@ func (api *API) Walk(ctx context.Context, path string, walkFn WalkFunc, opts ...
 	default:
 		return api.walkBatches(ctx, walkFn, []Collection{*collection}, opts...)
 	}
+
+	// If the collection does not exist, check if it is a data object
+	if code, ok := ErrorCode(err); ok && code == msg.CAT_NO_ROWS_FOUND {
+		if record, err := api.GetRecord(ctx, path, opts...); err == nil && !record.IsDir() {
+			err = walkFn(path, record, nil)
+			if err == SkipAll {
+				return nil
+			}
+
+			return err
+		}
+	}
+
+	return walkFn(path, nil, err)
 }
 
 const maxBatchLength = 14000

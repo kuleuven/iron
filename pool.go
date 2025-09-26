@@ -49,7 +49,7 @@ func newPool(client *Client) *Pool {
 		Username: client.env.Username,
 		Zone:     client.env.Zone,
 		Connect: func(ctx context.Context) (api.Conn, error) {
-			return pool.Connect()
+			return pool.Connect(ctx)
 		},
 		DefaultResource: client.env.DefaultResource,
 	}
@@ -140,10 +140,10 @@ func (p *Pool) Pool(size int) (*Pool, error) {
 // If all connections are busy, it will create a new one up to the maximum number of connections.
 // If the maximum number of connections has been reached, it will block until a connection becomes available,
 // or reuse an existing connection in case AllowConcurrentUse is enabled.
-func (p *Pool) Connect() (Conn, error) {
+func (p *Pool) Connect(ctx context.Context) (Conn, error) {
 	p.lock.Lock()
 
-	if conn, err := p.tryConnect(); err != ErrNoConnectionsAvailable {
+	if conn, err := p.tryConnect(ctx); err != ErrNoConnectionsAvailable {
 		defer p.lock.Unlock()
 
 		return conn, err
@@ -176,7 +176,7 @@ func (p *Pool) Connect() (Conn, error) {
 
 	// We received a token from a returned connection that was closed
 	// In this case we are allowed to create a new connection
-	conn, err := p.newConn()
+	conn, err := p.newConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -188,14 +188,14 @@ func (p *Pool) Connect() (Conn, error) {
 // up to the specified number. If no connections are available, it will return
 // an empty list. Retrieved connections must be closed by the caller.
 // If n is negative, it will return all available connections.
-func (p *Pool) ConnectAvailable(n int) ([]Conn, error) {
+func (p *Pool) ConnectAvailable(ctx context.Context, n int) ([]Conn, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	pool := []Conn{}
 
 	for ; n != 0; n-- {
-		conn, err := p.tryConnect()
+		conn, err := p.tryConnect(ctx)
 		if err == ErrNoConnectionsAvailable {
 			break
 		} else if err != nil {
@@ -222,7 +222,7 @@ func closeAll(pool []Conn) error {
 
 var ErrNoConnectionsAvailable = errors.New("no connections available")
 
-func (p *Pool) tryConnect() (Conn, error) {
+func (p *Pool) tryConnect(ctx context.Context) (Conn, error) {
 	p.discardOldConnections()
 
 	if len(p.available) > 0 {
@@ -239,7 +239,7 @@ func (p *Pool) tryConnect() (Conn, error) {
 	}
 
 	if len(p.all) < p.maxConns {
-		conn, err := p.newConn()
+		conn, err := p.newConn(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -256,8 +256,8 @@ func (p *Pool) tryConnect() (Conn, error) {
 	return nil, ErrNoConnectionsAvailable
 }
 
-func (p *Pool) newConn() (*conn, error) {
-	conn, err := p.client.newConn()
+func (p *Pool) newConn(ctx context.Context) (*conn, error) {
+	conn, err := p.client.newConn(ctx)
 	if err != nil {
 		return nil, err
 	}

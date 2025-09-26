@@ -59,12 +59,12 @@ func TestClient(t *testing.T) {
 		t.Error("expected environment settings to match")
 	}
 
-	_, err = client.Connect()
+	_, err = client.Connect(t.Context())
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 
-	_, err = client.Connect()
+	_, err = client.Connect(t.Context())
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
@@ -109,7 +109,7 @@ func TestClient1(t *testing.T) {
 
 	defer client.Close()
 
-	_, err = client.Connect()
+	_, err = client.Connect(t.Context())
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
@@ -168,7 +168,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 
 		defer client.Close()
 
-		conns, err := client.ConnectAvailable(1)
+		conns, err := client.ConnectAvailable(t.Context(), 1)
 		if err != nil {
 			return err
 		}
@@ -179,7 +179,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 
 		conn := conns[0]
 
-		conns, err = client.ConnectAvailable(1)
+		conns, err = client.ConnectAvailable(t.Context(), 1)
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 		wg.Go(func() error {
 			defer close(done)
 
-			conn1, err := client.Connect()
+			conn1, err := client.Connect(t.Context())
 			if err != nil {
 				return err
 			}

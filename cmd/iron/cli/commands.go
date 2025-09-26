@@ -20,7 +20,7 @@ func (a *App) authenticate() *cobra.Command {
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, err := a.Connect()
+			conn, err := a.Connect(a.Context)
 			if err != nil {
 				return err
 			}

@@ -57,6 +57,7 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				tmpFile.Close()
 
 				// Remove read permissions
