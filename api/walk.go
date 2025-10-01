@@ -540,7 +540,7 @@ func (api *API) walkListDataObjects(ctx context.Context, ids []int64, pmap map[i
 
 		coll := pmap[object.CollectionID]
 
-		object.Path = coll + "/" + name
+		object.Path = skipPrefix(coll) + name
 
 		if prev, ok := mapping[object.ID]; ok {
 			prev.Replicas = append(prev.Replicas, replica)
