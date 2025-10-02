@@ -63,11 +63,6 @@ func TestClient(t *testing.T) {
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
-
-	_, err = client.Connect(t.Context())
-	if err != io.EOF {
-		t.Fatalf("expected EOF, got %v", err)
-	}
 }
 
 func TestClient1(t *testing.T) {

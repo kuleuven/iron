@@ -68,7 +68,6 @@ type Client struct {
 	envCallbackExpiry    time.Time
 	nativePasswordExpiry time.Time
 	defaultPool          *Pool
-	dialErr              error
 	firstUse             sync.Once
 	lock                 sync.Mutex
 	*api.API
@@ -125,14 +124,8 @@ func (c *Client) Env() Env {
 
 	// If an EnvCallback is provided, use it to retrieve the environment settings
 	if c.needsEnvCallback() {
-		if c.dialErr != nil {
-			return Env{}
-		}
-
 		env, expiry, err := c.option.EnvCallback()
 		if err != nil {
-			c.dialErr = err
-
 			return Env{}
 		}
 
@@ -188,17 +181,10 @@ func (c *Client) newConn(ctx context.Context) (*conn, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if c.dialErr != nil {
-		// Dial has already failed, return the same error without retrying
-		return nil, c.dialErr
-	}
-
 	// If an EnvCallback is provided, use it to retrieve the environment settings
 	if c.needsEnvCallback() {
 		env, expiry, err := c.option.EnvCallback()
 		if err != nil {
-			c.dialErr = err
-
 			return nil, err
 		}
 
@@ -224,8 +210,6 @@ func (c *Client) newConn(ctx context.Context) (*conn, error) {
 
 	conn, err := dial(ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
 	if err != nil {
-		c.dialErr = err
-
 		return nil, err
 	}
 
