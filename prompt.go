@@ -1,9 +1,14 @@
 package iron
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"regexp"
+	"runtime"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
 
@@ -22,10 +27,37 @@ type prompt struct {
 	r, w *os.File
 }
 
+var AuthenticateURL = regexp.MustCompile(`Please authenticate at (https?://[^\s]+)`)
+
 func (p *prompt) Print(message string) error {
 	_, err := fmt.Fprintf(p.w, "%s\n", message)
+	if err != nil {
+		return err
+	}
 
-	return err
+	// If we need to open an URL, print a newline
+	if result := AuthenticateURL.FindStringSubmatch(message); len(result) > 1 {
+		if err := SystemOpenBrowser(result[1]); err != nil {
+			logrus.Errorf("error opening browser: %s", err)
+		}
+	}
+
+	return nil
+}
+
+var ErrUnsupportedPlatform = errors.New("unsupported platform")
+
+func SystemOpenBrowser(url string) error {
+	switch runtime.GOOS {
+	case "linux":
+		return exec.Command("xdg-open", url).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		return exec.Command("open", url).Start()
+	default:
+		return ErrUnsupportedPlatform
+	}
 }
 
 func (p *prompt) Ask(message string) (string, error) {
