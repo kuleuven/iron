@@ -23,7 +23,7 @@ const (
 
 var ArgumentRE = regexp.MustCompile("(<[a-zA-Z0-9 _-]+>)")
 
-func ArgTypes(cmd *cobra.Command) []ArgType {
+func (a *App) ArgTypes(cmd *cobra.Command) []ArgType {
 	var args []ArgType
 
 	use := strings.ReplaceAll(cmd.Use, "[", "<")

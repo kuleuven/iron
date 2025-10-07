@@ -14,13 +14,21 @@ import (
 	"github.com/kuleuven/iron/scramble"
 )
 
-// Loader is a function that loads an iRODS environment from a file.
+// Loader is a function that loads an iRODS environment e.g. from a file.
 // The requested zone will be autodetected from the command, if possible,
 // and can be used by the loader in a multi-zone environments to determine
 // the right connection parameters. If no zone can be detected, an empty string
 // is passed. In this case, the Loader might fall back to a default zone,
 // or return ErrZoneRequired.
 type Loader func(ctx context.Context, zone string) (iron.Env, iron.DialFunc, error)
+
+// ConfigStore is a function that can store an iRODS environment e.g. to a file,
+// based on CLI parameters to generate the configuration. The function must return
+// the configured zone or an error. The returned zone name will subsequentially be
+// passed to the Loader, and using the resulting iRODS environment, a first iRODS
+// connection can be established. Lastly, the password will be persisted using
+// the PasswordStore function.
+type ConfigStore func(ctx context.Context, args []string) (string, error)
 
 // PasswordStore is a function that can persist an irods password, if wanted,
 // for use in subsequent commands.
@@ -32,6 +40,8 @@ type WorkdirStore func(ctx context.Context, workdir string) error
 
 type Option func(*App)
 
+// WithLoader sets the Loader for the App, which is used to load the environment
+// from a file, or other source.
 func WithLoader(loader Loader) Option {
 	return func(a *App) {
 		a.loadEnv = loader
@@ -72,6 +82,49 @@ func FileLoader(file string) Loader {
 		}
 
 		return env, iron.DefaultDialFunc, err
+	}
+}
+
+// WithConfigStore returns an Option that configures an App with a ConfigStore
+// and positional arguments for the store. The ConfigStore is used to store
+// the iRODS environment configuration, and the positional arguments are used
+// to generate and parse the CLI command. At least 2 arguments are expected.
+func WithConfigStore(store ConfigStore, argLabels []string) Option {
+	return func(a *App) {
+		if len(argLabels) < 2 {
+			panic("argLabels must have at least 2 elements")
+		}
+
+		a.configStore = store
+		a.configStoreArgs = argLabels
+	}
+}
+
+func FileStore(file string, template iron.Env) ConfigStore {
+	return func(ctx context.Context, args []string) (string, error) {
+		env := template
+
+		env.Username = args[0]
+		env.Zone = args[1]
+		env.Host = args[2]
+
+		env.ApplyDefaults()
+
+		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		if err != nil {
+			return "", err
+		}
+
+		defer f.Close()
+
+		err = json.NewEncoder(f).Encode(env)
+		if err != nil {
+			defer os.Remove(f.Name())
+
+			return "", err
+		}
+
+		return env.Zone, nil
 	}
 }
 
@@ -124,6 +177,12 @@ func WriteAuthFile(authFile, password string) error {
 	return err
 }
 
+// WithPasswordStore sets the password store function for the App.
+// This function is used to store the password for the iRODS environment
+// after the user has authenticated with the environment. The password
+// store function is called with the password and the App's context.
+// The password store function is expected to store the password securely
+// and to be able to retrieve the password later.
 func WithPasswordStore(store PasswordStore) Option {
 	return func(a *App) {
 		a.passwordStore = store
@@ -138,12 +197,23 @@ func FilePasswordStore(file string) PasswordStore {
 	}
 }
 
+// WithName sets the name of the App. This name is used to generate the
+// name of the command line tool when running the App.
+// The name is used to generate the command line tool help text and to
+// generate the command line tool completion. The name is also used
+// to generate the configuration file name when persisting the App's
+// configuration.
 func WithName(name string) Option {
 	return func(a *App) {
 		a.name = name
 	}
 }
 
+// WithDefaultWorkdir sets the default working directory for the App.
+// This option is used to specify the default working directory
+// when creating a new App. The default working directory is used
+// when the user does not specify a working directory when running
+// commands.
 func WithDefaultWorkdir(workdir string) Option {
 	return func(a *App) {
 		a.Workdir = workdir

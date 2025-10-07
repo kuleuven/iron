@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/cli"
 	"github.com/sirupsen/logrus"
 )
@@ -19,8 +20,9 @@ func main() {
 
 	app := cli.New(
 		context.Background(),
-		cli.WithPasswordStore(cli.FilePasswordStore(config)),
+		cli.WithConfigStore(cli.FileStore(config, iron.Env{AuthScheme: "pam_interactive"}), []string{"user name", "zone name", "host"}),
 		cli.WithLoader(cli.FileLoader(config)),
+		cli.WithPasswordStore(cli.FilePasswordStore(config)),
 		cli.WithDefaultWorkdirFromFile(config),
 	)
 

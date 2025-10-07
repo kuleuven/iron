@@ -105,11 +105,91 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	if err := app.cd().RunE(cmd, []string{"authenticate"}); err != nil {
+	if err := app.auth().RunE(cmd, []string{"authenticate"}); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := app.cd().RunE(cmd, []string{"test"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewConfigStore(t *testing.T) { //nolint:funlen
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			panic(err)
+		}
+
+		msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
+		msg.Write(conn, msg.Version{
+			ReleaseVersion: "rods5.0.1",
+		}, nil, msg.XML, "RODS_VERSION", 0)
+		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
+		msg.Write(conn, msg.AuthPluginResponse{
+			RequestResult: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+		}, nil, msg.XML, "RODS_API_REPLY", 0)
+		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
+		msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+		msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
+		conn.Close()
+	}()
+
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("expected TCP address, got %T", listener.Addr())
+	}
+
+	f, err := os.CreateTemp(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	envfile := f.Name()
+
+	err = f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	app := New(t.Context(),
+		WithConfigStore(FileStore(envfile, iron.Env{
+			Port:                    tcpAddr.Port,
+			ClientServerNegotiation: "no_negotiation",
+		}), []string{"user name", "zone name", "host"}),
+		WithLoader(FileLoader(envfile)),
+		WithPasswordStore(FilePasswordStore(envfile)),
+	)
+
+	cmd := app.Command()
+
+	if cmd == nil {
+		t.Fatal("expected command")
+	}
+
+	defer app.Close()
+
+	args := []string{"user", "zone", "127.0.0.1"}
+
+	if err := app.auth().Args(cmd, args); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.auth().PersistentPreRunE(cmd, args); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.auth().RunE(cmd, args); err != nil {
 		t.Fatal(err)
 	}
 }

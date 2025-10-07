@@ -13,12 +13,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func (a *App) authenticate() *cobra.Command {
+func (a *App) auth() *cobra.Command {
+	use := "auth [zone]"
+	args := cobra.MaximumNArgs(1)
+	preRun := a.Init
+
+	if a.configStore != nil {
+		use += " | {<" + strings.Join(a.configStoreArgs, "> <") + ">}"
+
+		args = func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 || len(args) == len(a.configStoreArgs) {
+				return nil
+			}
+
+			return fmt.Errorf("accepts 0, 1 or %d arg(s), received %d", len(a.configStoreArgs), len(args))
+		}
+
+		preRun = func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return a.Init(cmd, args)
+			}
+
+			return a.InitConfigStore(cmd, args)
+		}
+	}
+
 	return &cobra.Command{
-		Use:          "authenticate <zone>",
-		Short:        "Authenticate against the irods server.",
-		Args:         cobra.MaximumNArgs(1),
-		SilenceUsage: true,
+		Use:               use,
+		Aliases:           []string{"authenticate", "iinit"},
+		Short:             "Authenticate against the irods server using the .irods/irods_environment.json file.",
+		Args:              args,
+		SilenceUsage:      true,
+		PersistentPreRunE: preRun,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conn, err := a.Connect(a.Context)
 			if err != nil {

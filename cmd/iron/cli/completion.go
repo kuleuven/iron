@@ -28,7 +28,7 @@ func (a *App) CompleteArgs(cmd *cobra.Command, args []string, toComplete string)
 
 	// Try to find the zone of the previous arguments
 	// and detect the argument type of the last given argument
-	for i, a := range ArgTypes(cmd) {
+	for i, a := range a.ArgTypes(cmd) {
 		if i == len(args) {
 			argType = a
 

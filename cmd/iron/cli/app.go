@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/c-bata/go-prompt"
 	"github.com/kuleuven/iron"
@@ -36,10 +38,12 @@ func New(ctx context.Context, options ...Option) *App {
 type App struct {
 	*iron.Client
 
-	name          string
-	loadEnv       Loader
-	passwordStore PasswordStore
-	workdirStore  WorkdirStore
+	name            string
+	loadEnv         Loader
+	configStore     ConfigStore
+	configStoreArgs []string
+	passwordStore   PasswordStore
+	workdirStore    WorkdirStore
 
 	Context context.Context //nolint:containedctx
 
@@ -47,29 +51,21 @@ type App struct {
 	Debug   int
 	Native  bool
 	Workdir string
+	PamTTL  time.Duration
 }
 
-func (a *App) Command() *cobra.Command { //nolint:funlen
+func (a *App) Command() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   a.name,
-		Short: "Golang client for iRODS",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if a.Debug > 0 {
-				logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
-			}
-
-			if a.Client != nil || SkipInit(cmd) {
-				return nil
-			}
-
-			return a.Init(cmd, args)
-		},
+		Use:               a.name,
+		Short:             "Golang client for iRODS",
+		PersistentPreRunE: a.Init,
 	}
 
 	rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
 	rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
 	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
 	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
+	rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "TTL in case pam authentication is used")
 
 	rootCmd.AddCommand(
 		a.mkdir(),
@@ -92,7 +88,7 @@ func (a *App) Command() *cobra.Command { //nolint:funlen
 	sh := shell.New(rootCmd, nil, prompt.OptionLivePrefix(a.prefix))
 	run := sh.Run
 
-	sh.Use = "shell <zone>"
+	sh.Use = "shell [zone]"
 	sh.Args = cobra.MaximumNArgs(1)
 	sh.Run = func(cmd *cobra.Command, args []string) {
 		rootCmd.ResetFlags()
@@ -109,7 +105,7 @@ func (a *App) Command() *cobra.Command { //nolint:funlen
 	rootCmd.AddCommand(sh)
 
 	if a.passwordStore != nil {
-		rootCmd.AddCommand(a.authenticate())
+		rootCmd.AddCommand(a.auth())
 	}
 
 	if a.workdirStore != nil {
@@ -124,10 +120,18 @@ func (a *App) prefix() (string, bool) {
 }
 
 func (a *App) Init(cmd *cobra.Command, args []string) error {
+	if a.Debug > 0 {
+		logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
+	}
+
+	if a.Client != nil || SkipInit(cmd) {
+		return nil
+	}
+
 	var zone string
 
 	// Get zone from arguments
-	for i, argType := range ArgTypes(cmd) {
+	for i, argType := range a.ArgTypes(cmd) {
 		if i >= len(args) {
 			continue
 		}
@@ -145,10 +149,31 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 		return errors.New("multiple zones found in arguments")
 	}
 
+	return a.init(cmd, zone)
+}
+
+func (a *App) InitConfigStore(cmd *cobra.Command, args []string) error {
+	zone, err := a.configStore(a.Context, args)
+	if err != nil {
+		return err
+	}
+
+	if a.Debug > 0 {
+		logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
+	}
+
+	if a.Client != nil {
+		return nil
+	}
+
+	return a.init(cmd, zone)
+}
+
+func (a *App) init(cmd *cobra.Command, zone string) error {
 	// Load zone and start client
 	ctx := a.Context
 
-	if cmd.Use == "authenticate <zone>" {
+	if strings.HasPrefix(cmd.Use, "auth ") {
 		ctx = context.WithValue(ctx, ForceReauthentication, true)
 	}
 
@@ -156,6 +181,8 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	env.PamTTL = int(a.PamTTL.Hours())
 
 	a.Client, err = iron.New(a.Context, env, iron.Option{
 		ClientName:        a.name,
