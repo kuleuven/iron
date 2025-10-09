@@ -560,6 +560,10 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 		PState:              map[string]any{},
 	}
 
+	if err := c.env.PersistentState.Load(request.PState); err != nil {
+		return err
+	}
+
 	for {
 		var response msg.AuthPluginResponse
 
@@ -586,7 +590,7 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 		case "authenticated":
 			c.nativePassword = response.RequestResult
 
-			return nil
+			return c.env.PersistentState.Save(request.PState)
 
 		default:
 			return fmt.Errorf("unexpected next operation %s", response.NextOperation)

@@ -7,6 +7,7 @@ import (
 
 // Env contains the IRODS connection parameters to establish a connection.
 type Env struct {
+	// Credentials and settings
 	Host                          string `json:"irods_host"`
 	Port                          int    `json:"irods_port"`
 	Zone                          string `json:"irods_zone_name"`
@@ -22,10 +23,22 @@ type Env struct {
 	ClientServerNegotiation       string `json:"irods_client_server_negotiation"`
 	ClientServerNegotiationPolicy string `json:"irods_client_server_policy"`
 	DefaultResource               string `json:"irods_default_resource"`
-	PamTTL                        int    `json:"-"` // For pam authentication, the TTL to use for the generated native password
-	SSLServerName                 string `json:"-"` // If provided, this will be used for server verification, instead of the hostname
-	ProxyUsername                 string `json:"-"` // Authenticate with proxy credentials
-	ProxyZone                     string `json:"-"` // Authenticate with proxy credentials
+	ProxyUsername                 string `json:"irods_proxy_user"` // Authenticate with proxy credentials
+	ProxyZone                     string `json:"irods_proxy_zone"` // Authenticate with proxy credentials
+
+	// Advanced dial settings
+	SSLServerName string `json:"-"` // If provided, this will be used for server verification, instead of the hostname
+	PamTTL        int    `json:"-"` // For pam authentication, the TTL to use for the generated native password
+
+	// Persistent state for PAM interactive authentication
+	PersistentState PersistentState `json:"-"` // If provided, this will be used for PAM authentication as persistent store
+}
+
+// PersistentState refers to the pstate used for PAM interactive authentication
+// The functions must be thread-safe if multiple clients/connections are used concurrently.
+type PersistentState interface {
+	Load(m map[string]any) error // Load returns the current persistent state into the given map.
+	Save(m map[string]any) error // Save persists the given state. Later calls to Load will reconstruct the same map contents.
 }
 
 const (
@@ -129,4 +142,18 @@ func (env *Env) ApplyDefaults() {
 	if env.PamTTL <= 0 {
 		env.PamTTL = 60
 	}
+
+	if env.PersistentState == nil {
+		env.PersistentState = &discardPersistentState{}
+	}
+}
+
+type discardPersistentState struct{}
+
+func (s *discardPersistentState) Load(m map[string]any) error {
+	return nil
+}
+
+func (s *discardPersistentState) Save(m map[string]any) error {
+	return nil
 }

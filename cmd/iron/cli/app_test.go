@@ -95,10 +95,6 @@ func TestNew(t *testing.T) { //nolint:funlen
 
 	cmd := app.Command()
 
-	if cmd == nil {
-		t.Fatal("expected command")
-	}
-
 	defer app.Close()
 
 	if err := cmd.PersistentPreRunE(cmd, nil); err != nil {

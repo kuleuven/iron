@@ -81,8 +81,42 @@ func FileLoader(file string) Loader {
 			}
 		}
 
+		if env.AuthScheme == "pam_interactive" {
+			env.PersistentState = &persistentState{
+				file: filepath.Join(filepath.Dir(file), ".irodsA.pstate"),
+			}
+		}
+
 		return env, iron.DefaultDialFunc, err
 	}
+}
+
+type persistentState struct {
+	file string
+}
+
+func (p *persistentState) Load(m map[string]any) error {
+	f, err := os.Open(p.file)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	return json.NewDecoder(f).Decode(&m)
+}
+
+func (p *persistentState) Save(m map[string]any) error {
+	f, err := os.OpenFile(p.file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	return json.NewEncoder(f).Encode(m)
 }
 
 // WithConfigStore returns an Option that configures an App with a ConfigStore
