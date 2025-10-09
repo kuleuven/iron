@@ -8,5 +8,5 @@ import (
 )
 
 func uid(_ os.FileInfo) int {
-	return 0
+	return 1000
 }
