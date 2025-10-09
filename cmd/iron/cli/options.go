@@ -83,7 +83,7 @@ func FileLoader(file string) Loader {
 
 		if env.AuthScheme == "pam_interactive" {
 			env.PersistentState = &persistentState{
-				file: filepath.Join(filepath.Dir(file), ".irodsA.pstate"),
+				file: filepath.Join(filepath.Dir(file), ".irodsA.json"),
 			}
 		}
 
