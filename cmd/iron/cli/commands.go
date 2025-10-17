@@ -172,7 +172,10 @@ func (a *App) rm() *cobra.Command {
 				}
 
 				opts := transfer.Options{
-					SkipTrash: skip,
+					MaxQueued:  10000,
+					MaxThreads: 1,
+					Output:     os.Stdout,
+					SkipTrash:  skip,
 				}
 
 				return a.RemoveDir(a.Context, path, opts)
