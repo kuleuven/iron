@@ -352,6 +352,8 @@ func (a *App) upload() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
+	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
+	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
 	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 
@@ -412,6 +414,7 @@ func (a *App) download() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
+	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
 	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 
