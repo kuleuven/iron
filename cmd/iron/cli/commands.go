@@ -86,24 +86,19 @@ func (a *App) mkdir() *cobra.Command {
 }
 
 func (a *App) rmdir() *cobra.Command {
-	var skip, recursive bool
+	var skip bool
 
 	cmd := &cobra.Command{
 		Use:               "rmdir <collection path>",
-		Short:             "Remove a collection",
+		Short:             "Remove a empty collection",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if recursive {
-				return a.DeleteCollectionAll(a.Context, a.Path(args[0]), skip)
-			}
-
 			return a.DeleteCollection(a.Context, a.Path(args[0]), skip)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&skip, "skip-trash", "S", false, "Do not move to trash")
-	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Remove files in collection recursively")
 
 	return cmd
 }
