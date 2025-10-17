@@ -167,11 +167,15 @@ func (a *App) rm() *cobra.Command {
 			}
 
 			if obj.IsDir() {
-				if recursive {
-					return a.DeleteCollectionAll(a.Context, path, skip)
+				if !recursive {
+					return a.DeleteCollection(a.Context, path, skip)
 				}
 
-				return a.DeleteCollection(a.Context, path, skip)
+				opts := transfer.Options{
+					SkipTrash: skip,
+				}
+
+				return a.RemoveDir(a.Context, path, opts)
 			}
 
 			return a.DeleteDataObject(a.Context, path, skip)

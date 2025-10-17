@@ -188,7 +188,7 @@ func TestRm(t *testing.T) {
 	app.AddResponse(msg.CollectionOperationStat{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"rm", "-r", "/testzone/coll"})
+	cmd.SetArgs([]string{"rm", "/testzone/coll"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
