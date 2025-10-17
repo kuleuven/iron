@@ -13,6 +13,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func (a *App) version() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number of iron",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version)
+		},
+	}
+}
+
 func (a *App) auth() *cobra.Command {
 	use := "auth [zone]"
 	args := cobra.MaximumNArgs(1)

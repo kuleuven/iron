@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 func New(ctx context.Context, options ...Option) *App {
 	home := os.Getenv("HOME")
 
@@ -83,6 +85,7 @@ func (a *App) Command() *cobra.Command {
 		a.tree(),
 		a.stat(),
 		a.checksum(),
+		a.version(),
 	)
 
 	sh := shell.New(rootCmd, nil, prompt.OptionLivePrefix(a.prefix))
