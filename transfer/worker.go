@@ -100,6 +100,7 @@ func New(indexPool, transferPool *api.API, options Options) *Worker {
 }
 
 type Progress struct {
+	Action      Action
 	Label       string
 	Size        int64
 	Transferred int64
@@ -232,6 +233,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	// Schedule the upload
 	pw := &progressWriter{
 		progress: Progress{
+			Action:    TransferFile,
 			Label:     r.Name(),
 			Size:      r.Size(),
 			StartedAt: time.Now(),
@@ -361,6 +363,7 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 	// Schedule the download
 	pw := &progressWriter{
 		progress: Progress{
+			Action:    TransferFile,
 			Label:     w.Name(),
 			Size:      size,
 			StartedAt: time.Now(),
@@ -462,13 +465,13 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 				worker.Upload(ctx, u.Path, u.IrodsPath)
 
 			case RemoveFile:
-				worker.Error(u.Path, u.IrodsPath, worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash))
+				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.Error(u.Path, u.IrodsPath, worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash))
+				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case CreateDirectory:
-				worker.Error(u.Path, u.IrodsPath, worker.TransferPool.CreateCollection(ctx, u.IrodsPath))
+				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
 			}
 		}
 
@@ -508,10 +511,10 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 				worker.Download(ctx, u.Path, u.IrodsPath)
 
 			case RemoveFile, RemoveDirectory:
-				worker.Error(u.Path, u.IrodsPath, os.Remove(u.Path))
+				worker.Action(u.Path, u.IrodsPath, u.Action, func() error { return os.Remove(u.Path) })
 
 			case CreateDirectory:
-				worker.Error(u.Path, u.IrodsPath, os.Mkdir(u.Path, 0o755))
+				worker.Action(u.Path, u.IrodsPath, CreateDirectory, func() error { return os.Mkdir(u.Path, 0o755) })
 			}
 		}
 
@@ -542,6 +545,25 @@ const (
 	RemoveFile
 	RemoveDirectory
 )
+
+func (a Action) Format(label string) string {
+	switch a {
+	case CreateDirectory:
+		return fmt.Sprintf("\x1B[34m+ %s/\x1B[0m", label)
+
+	case TransferFile:
+		return fmt.Sprintf("+ %s", label)
+
+	case RemoveFile:
+		return fmt.Sprintf("\x1B[31m- %s\x1B[0m", label)
+
+	case RemoveDirectory:
+		return fmt.Sprintf("\x1B[33m- %s/\x1B[0m", label)
+
+	default:
+		return label
+	}
+}
 
 type Task struct {
 	Action          Action
@@ -646,7 +668,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 
 		case !hasLeft, hasRight && leftObject.irodsPath > rightObject.irodsPath:
 			if worker.options.Delete {
-				rightObject, hasRight = removeAll(right, rightObject, queue)
+				rightObject, hasRight = worker.removeAll(right, rightObject, queue)
 			} else {
 				rightObject, hasRight = skipAll(right, rightObject)
 			}
@@ -669,7 +691,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 			rightObject, hasRight = skipAll(right, rightObject)
 
 		case leftObject.info.Mode()&os.ModeType != rightObject.info.Mode()&os.ModeType:
-			rightObject, hasRight = removeAll(right, rightObject, queue)
+			rightObject, hasRight = worker.removeAll(right, rightObject, queue)
 
 		default:
 			if err := worker.compareAndTransfer(ctx, leftObject, rightObject, queue); err != nil {
@@ -722,12 +744,19 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 	return err
 }
 
-func removeAll(ch <-chan *object, obj *object, queue chan<- Task) (*object, bool) {
+func (worker *Worker) removeAll(ch <-chan *object, obj *object, queue chan<- Task) (*object, bool) {
 	if obj.info.IsDir() {
 		next, ok := <-ch
 
 		for ok && strings.HasPrefix(next.irodsPath, obj.irodsPath+"/") {
-			next, ok = removeAll(ch, next, queue)
+			next, ok = worker.removeAll(ch, next, queue)
+		}
+
+		if worker.options.ProgressHandler != nil {
+			worker.options.ProgressHandler(Progress{
+				Action: RemoveDirectory,
+				Label:  obj.path,
+			})
 		}
 
 		queue <- Task{
@@ -737,6 +766,13 @@ func removeAll(ch <-chan *object, obj *object, queue chan<- Task) (*object, bool
 		}
 
 		return next, ok
+	}
+
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(Progress{
+			Action: RemoveFile,
+			Label:  obj.path,
+		})
 	}
 
 	queue <- Task{
@@ -764,6 +800,13 @@ func skipAll(ch <-chan *object, obj *object) (*object, bool) {
 
 func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 	if obj.info.IsDir() {
+		if worker.options.ProgressHandler != nil {
+			worker.options.ProgressHandler(Progress{
+				Action: CreateDirectory,
+				Label:  obj.path,
+			})
+		}
+
 		queue <- Task{
 			Action:    CreateDirectory,
 			Path:      obj.path,
@@ -780,8 +823,9 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 
 	if worker.options.ProgressHandler != nil {
 		worker.options.ProgressHandler(Progress{
-			Label: obj.path,
-			Size:  obj.info.Size(),
+			Action: TransferFile,
+			Label:  obj.path,
+			Size:   obj.info.Size(),
 		})
 	}
 
@@ -792,12 +836,36 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 	}
 }
 
-// Error schedules an error
-func (worker *Worker) Error(local, remote string, err error) {
-	if err == nil {
+// Action runs a simple action and schedules an error
+func (worker *Worker) Action(local, remote string, action Action, callback func() error) {
+	startTime := time.Now()
+
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(Progress{
+			Action:    action,
+			Label:     local,
+			StartedAt: startTime,
+		})
+	}
+
+	if err := callback(); err != nil {
+		worker.Error(local, remote, err)
+
 		return
 	}
 
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(Progress{
+			Action:     action,
+			Label:      local,
+			StartedAt:  startTime,
+			FinishedAt: time.Now(),
+		})
+	}
+}
+
+// Error schedules an error
+func (worker *Worker) Error(local, remote string, err error) {
 	worker.wg.Go(func() error {
 		return worker.options.ErrorHandler(local, remote, err)
 	})

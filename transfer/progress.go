@@ -59,7 +59,7 @@ func (pb *PB) Handler(progress Progress) {
 	defer pb.Unlock()
 
 	switch {
-	case progress.Transferred == 0:
+	case progress.StartedAt.IsZero():
 		// Registration
 		if prev, ok := pb.actual[progress.Label]; ok {
 			pb.bytesTotal += progress.Size - prev.Size
@@ -82,7 +82,7 @@ func (pb *PB) Handler(progress Progress) {
 			return
 		}
 
-		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Label)
+		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
 	}
 }
 
