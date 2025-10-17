@@ -468,10 +468,10 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.Action(u.Path, u.IrodsPath, RemoveDirectory, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case CreateDirectory:
-				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
+				worker.Action(u.Path, u.IrodsPath, CreateDirectory, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
 			}
 		}
 
@@ -856,7 +856,7 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.Action(u.Path, u.IrodsPath, RemoveDirectory, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 			}
 		}
 
