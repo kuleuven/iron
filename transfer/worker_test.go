@@ -292,3 +292,47 @@ func TestClientVerify(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestClientRemoveDir(t *testing.T) {
+	testConn0 := &api.MockConn{}
+
+	testIndexAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn0, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	testConn0.AddResponses(responses) // walk
+
+	testConn1 := &api.MockConn{}
+
+	testTransferAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn1, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	testConn1.Add(msg.DATA_OBJ_UNLINK_AN, msg.DataObjectRequest{
+		Path: "/test/file1",
+	}, msg.EmptyResponse{})
+
+	testConn1.Add(msg.RM_COLL_AN, msg.CreateCollectionRequest{
+		Name: "/test",
+	}, msg.CollectionOperationStat{})
+
+	worker := New(testIndexAPI, testTransferAPI, Options{
+		MaxThreads: 1,
+	})
+
+	worker.RemoveDir(t.Context(), "/test")
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
+	}
+}

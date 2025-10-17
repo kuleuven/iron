@@ -10,6 +10,14 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
+func ProgressLabel(local, remote string) string {
+	if local == "" {
+		return remote
+	}
+
+	return local
+}
+
 func ProgressBar(w io.Writer) *PB {
 	pb := &PB{
 		actual:       map[string]Progress{},
@@ -86,13 +94,13 @@ func (pb *PB) Handler(progress Progress) {
 	}
 }
 
-func (pb *PB) ErrorHandler(path, _ string, err error) error {
+func (pb *PB) ErrorHandler(path, irodsPath string, err error) error {
 	pb.Lock()
 	defer pb.Unlock()
 
 	pb.errors++
 
-	fmt.Fprintf(pb.outputBuffer, "\x1B[31m%s FAILED: %s\x1B[0m\n", path, err.Error())
+	fmt.Fprintf(pb.outputBuffer, "\x1B[31m%s FAILED: %s\x1B[0m\n", ProgressLabel(path, irodsPath), err.Error())
 
 	return nil
 }

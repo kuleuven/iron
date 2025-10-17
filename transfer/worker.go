@@ -836,6 +836,63 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 	}
 }
 
+// RemoveDir removes a directory from the iRODS server entirely,
+// but instead of calling the recursive RemoveCollection API,
+// it handles the recursion client side. This allows the caller
+// to track the deletion progress better.
+// The call blocks until the source directory has been completely scanned.
+func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
+	queue := make(chan Task, worker.options.MaxQueued)
+
+	// Execute the deletions
+	worker.wg.Go(func() error {
+		for u := range queue {
+			if ctx.Err() != nil {
+				continue
+			}
+
+			switch u.Action { //nolint:exhaustive
+			case RemoveFile:
+				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
+
+			case RemoveDirectory:
+				worker.Action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+			}
+		}
+
+		return ctx.Err()
+	})
+
+	ch := make(chan *object)
+
+	// Walk the directory
+	worker.wg.Go(func() error {
+		defer close(ch)
+
+		return worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
+			if err != nil {
+				return worker.options.ErrorHandler("", irodsPath, err)
+			}
+
+			ch <- &object{
+				irodsPath: irodsPath,
+				info:      record,
+			}
+
+			return nil
+		}, api.LexographicalOrder, api.NoSkip)
+	})
+
+	defer close(queue)
+
+	// Process the objects
+	obj, ok := <-ch
+
+	for ok {
+		obj, ok = worker.removeAll(ch, obj, queue)
+	}
+}
+
 // Action runs a simple action and schedules an error
 func (worker *Worker) Action(local, remote string, action Action, callback func() error) {
 	startTime := time.Now()
@@ -843,7 +900,7 @@ func (worker *Worker) Action(local, remote string, action Action, callback func(
 	if worker.options.ProgressHandler != nil {
 		worker.options.ProgressHandler(Progress{
 			Action:    action,
-			Label:     local,
+			Label:     ProgressLabel(local, remote),
 			StartedAt: startTime,
 		})
 	}
@@ -857,7 +914,7 @@ func (worker *Worker) Action(local, remote string, action Action, callback func(
 	if worker.options.ProgressHandler != nil {
 		worker.options.ProgressHandler(Progress{
 			Action:     action,
-			Label:      local,
+			Label:      ProgressLabel(local, remote),
 			StartedAt:  startTime,
 			FinishedAt: time.Now(),
 		})
