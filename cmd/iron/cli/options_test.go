@@ -290,3 +290,29 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 		})
 	}
 }
+
+func TestPersistentState(t *testing.T) {
+	testFile := filepath.Join(t.TempDir(), ".irodsA.json")
+
+	testMap := map[string]any{
+		"test": "value",
+	}
+
+	state := &persistentState{
+		file: testFile,
+	}
+
+	if err := state.Save(testMap); err != nil {
+		t.Errorf("failed to save state: %v", err)
+	}
+
+	testMap = map[string]any{}
+
+	if err := state.Load(testMap); err != nil {
+		t.Errorf("failed to load state: %v", err)
+	}
+
+	if testMap["test"] != "value" {
+		t.Errorf("expected testMap['test'] to be 'value', got '%s'", testMap["test"])
+	}
+}
