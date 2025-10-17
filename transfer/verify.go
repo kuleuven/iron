@@ -49,6 +49,39 @@ func Verify(ctx context.Context, a *api.API, local, remote string) error {
 	return nil
 }
 
+// VerifyRemote checks the checksum of two remote files
+func VerifyRemote(ctx context.Context, a *api.API, remote1, remote2 string) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	var remote1Hash, remote2Hash []byte
+
+	g.Go(func() error {
+		var err error
+
+		remote1Hash, err = a.Checksum(ctx, remote1, false)
+
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+
+		remote2Hash, err = a.Checksum(ctx, remote2, false)
+
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	if !bytes.Equal(remote1Hash, remote2Hash) {
+		return fmt.Errorf("%w: remote1: %s remote2: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(remote1Hash), base64.StdEncoding.EncodeToString(remote2Hash))
+	}
+
+	return nil
+}
+
 // Sha256Checksum computes the sha256 checksum of a local file in a goroutine, so that it can be canceled with the context.
 // The checksum is computed in a goroutine, so that it can be canceled with the context.
 // The function returns the checksum as a byte slice, or an error if either the context is canceled or the checksum computation fails.
