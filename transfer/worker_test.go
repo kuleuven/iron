@@ -339,47 +339,53 @@ func TestClientRemoveDir(t *testing.T) {
 }
 
 func TestClientCopyDir(t *testing.T) {
-	testConn0 := &api.MockConn{}
+	for range 10 {
+		testConn0 := &api.MockConn{}
 
-	var i atomic.Int32
+		var i atomic.Int32
 
-	testIndexAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
-		Connect: func(context.Context) (api.Conn, error) {
-			if count := i.Add(1); count == 2 || count == 3 {
-				// Deliberately sleep for first two calls to order
-				// both calls to Walk
-				time.Sleep(time.Duration(count) * time.Second)
-			}
+		testIndexAPI := &api.API{
+			Username: "testuser",
+			Zone:     "testzone",
+			Connect: func(context.Context) (api.Conn, error) {
+				if count := i.Add(1); count == 2 || count == 3 {
+					// Deliberately sleep for first two calls to order
+					// both calls to Walk
+					time.Sleep(time.Duration(count) * time.Second / 10)
+				}
 
-			return testConn0, nil
-		},
-		DefaultResource: "demoResc",
-	}
+				return testConn0, nil
+			},
+			DefaultResource: "demoResc",
+		}
 
-	testConn0.AddResponse(msg.EmptyResponse{}) // mkdir
-	testConn0.AddResponses(responses)          // walk 1
-	testConn0.AddResponses(responses)          // walk 2
+		testConn0.AddResponse(msg.EmptyResponse{}) // mkdir
+		testConn0.AddResponses(responses)          // walk 1
+		testConn0.AddResponses(responses[:2])      // walk 2
+		testConn0.AddResponse(msg.QueryResponse{}) // walk 2
 
-	testConn1 := &api.MockConn{}
+		testConn1 := &api.MockConn{}
 
-	testTransferAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
-		Connect: func(context.Context) (api.Conn, error) {
-			return testConn1, nil
-		},
-		DefaultResource: "demoResc",
-	}
+		testTransferAPI := &api.API{
+			Username: "testuser",
+			Zone:     "testzone",
+			Connect: func(context.Context) (api.Conn, error) {
+				return testConn1, nil
+			},
+			DefaultResource: "demoResc",
+		}
 
-	worker := New(testIndexAPI, testTransferAPI, Options{
-		MaxThreads: 1,
-	})
+		testConn1.AddResponse(msg.EmptyResponse{}) // Either a copy or a remove
 
-	worker.CopyDir(t.Context(), "/test", "/test")
+		worker := New(testIndexAPI, testTransferAPI, Options{
+			MaxThreads: 1,
+			Delete:     true,
+		})
 
-	if err := worker.Wait(); err != nil {
-		t.Error(err)
+		worker.CopyDir(t.Context(), "/test", "/test")
+
+		if err := worker.Wait(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
