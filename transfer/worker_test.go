@@ -294,6 +294,32 @@ func TestClientVerify(t *testing.T) {
 	}
 }
 
+func TestClientVerifyRemote(t *testing.T) {
+	testConn := &api.MockConn{}
+
+	testAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	kv := msg.SSKeyVal{}
+	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+
+	for range 2 {
+		testConn.AddResponse(msg.Checksum{
+			Checksum: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+		})
+	}
+
+	if err := VerifyRemote(t.Context(), testAPI, "/test/file1", "/test/file2"); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestClientRemoveDir(t *testing.T) {
 	testConn0 := &api.MockConn{}
 
