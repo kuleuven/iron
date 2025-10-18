@@ -46,6 +46,14 @@ func (c *Client) RemoveDir(ctx context.Context, remote string, options transfer.
 	})
 }
 
+// CopyDir copies a remote directory to another remote directory from the iRODS server using client recursion.
+// The remote files refers to an iRODS path.
+func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options transfer.Options) error {
+	return c.runWorker(options, func(worker *transfer.Worker) {
+		worker.CopyDir(ctx, remote1, remote2)
+	})
+}
+
 // runWorker creates a new pool with the given number of threads and
 // creates a new transfer.Worker with it. The callback function is called
 // with the created worker. The worker is started and the error returned

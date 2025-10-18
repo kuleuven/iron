@@ -227,10 +227,23 @@ func (a *App) mv() *cobra.Command {
 }
 
 func (a *App) cp() *cobra.Command {
-	return &cobra.Command{
+	var (
+		skip       bool
+		maxThreads int
+	)
+
+	examples := []string{
+		a.name + " cp /path/to/collection1/file.txt /path/to/collection2/file.txt  (target should not exist)",
+		a.name + " cp /path/to/collection1/file.txt /path/to/collection2/          (target should not exist)",
+		a.name + " cp /path/to/collection1 /path/to/collection2                    (target may exist)",
+		a.name + " cp /path/to/collection1 /path/to/collection2/                   (target may exist)",
+	}
+
+	cmd := &cobra.Command{
 		Use:               "cp <object path> <target path>",
-		Short:             "Copy a data object",
+		Short:             "Copy a data object or a collection",
 		Args:              cobra.ExactArgs(2),
+		Example:           strings.Join(examples, "\n"),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src := a.Path(args[0])
@@ -242,9 +255,30 @@ func (a *App) cp() *cobra.Command {
 
 			dest = a.Path(dest)
 
+			obj, err := a.GetRecord(a.Context, src)
+			if err != nil {
+				return err
+			}
+
+			if obj.IsDir() {
+				opts := transfer.Options{
+					MaxQueued:  10000,
+					MaxThreads: maxThreads,
+					Output:     os.Stdout,
+					SkipTrash:  skip,
+				}
+
+				return a.CopyDir(a.Context, src, dest, opts)
+			}
+
 			return a.CopyDataObject(a.Context, src, dest)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&skip, "delete-skip-trash", "S", false, "Do not move to trash (applies only when copying a collection)")
+	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use (applies only when copying a collection)")
+
+	return cmd
 }
 
 func (a *App) create() *cobra.Command {
@@ -366,6 +400,7 @@ func (a *App) upload() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
 	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
+	cmd.Flags().BoolVar(&opts.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
 	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 

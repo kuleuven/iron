@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -331,6 +332,52 @@ func TestClientRemoveDir(t *testing.T) {
 	})
 
 	worker.RemoveDir(t.Context(), "/test")
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestClientCopyDir(t *testing.T) {
+	testConn0 := &api.MockConn{}
+
+	var i atomic.Int32
+
+	testIndexAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			if count := i.Add(1); count == 2 || count == 3 {
+				// Deliberately sleep for first two calls to order
+				// both calls to Walk
+				time.Sleep(time.Duration(count) * time.Second)
+			}
+
+			return testConn0, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	testConn0.AddResponse(msg.EmptyResponse{}) // mkdir
+	testConn0.AddResponses(responses)          // walk 1
+	testConn0.AddResponses(responses)          // walk 2
+
+	testConn1 := &api.MockConn{}
+
+	testTransferAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn1, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	worker := New(testIndexAPI, testTransferAPI, Options{
+		MaxThreads: 1,
+	})
+
+	worker.CopyDir(t.Context(), "/test", "/test")
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)

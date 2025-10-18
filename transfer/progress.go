@@ -80,12 +80,12 @@ func (pb *PB) Handler(progress Progress) {
 		// Transfer ongoing
 		pb.actual[progress.Label] = progress
 
-		pb.bytesTransferred += int64(progress.Increment)
+		pb.bytesTransferred += progress.Increment
 	default:
 		// Transfer complete
 		delete(pb.actual, progress.Label)
 
-		pb.bytesTransferred += int64(progress.Increment)
+		pb.bytesTransferred += progress.Increment
 
 		if progress.Transferred < progress.Size || progress.Label == "" {
 			// Assume error, don't print
