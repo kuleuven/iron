@@ -470,6 +470,16 @@ func TestSetMetadata(t *testing.T) {
 	}
 }
 
+func TestCopyMetadata(t *testing.T) {
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.EmptyResponse{})
+
+	if err := testAPI.CopyMetadata(t.Context(), "/test", CollectionType, "/test2", CollectionType); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestModifyMetadata(t *testing.T) {
 	testAPI := newAPI()
 

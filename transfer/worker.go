@@ -483,7 +483,7 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 
 	defer close(queue)
 
-	if err := worker.SynchronizeDir(ctx, local, remote, LocalToRemote, worker.options.DisableUpdateInPlace, queue); err != nil {
+	if err := worker.SynchronizeDir(ctx, local, remote, LocalToRemote, queue, SynchronizeOptions{DisableUpdateInPlace: worker.options.DisableUpdateInPlace}); err != nil {
 		worker.wg.Go(func() error {
 			return err
 		})
@@ -526,7 +526,7 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 
 	defer close(queue)
 
-	if err := worker.SynchronizeDir(ctx, local, remote, RemoteToLocal, worker.options.DisableUpdateInPlace, queue); err != nil {
+	if err := worker.SynchronizeDir(ctx, local, remote, RemoteToLocal, queue, SynchronizeOptions{DisableUpdateInPlace: worker.options.DisableUpdateInPlace}); err != nil {
 		worker.wg.Go(func() error {
 			return err
 		})
@@ -580,6 +580,10 @@ type object struct {
 	info      os.FileInfo
 }
 
+type SynchronizeOptions struct {
+	DisableUpdateInPlace bool
+}
+
 // SynchronizeDir schedules tasks to synchronize a local directory to or from a remote
 // collection on the iRODS server. All individual actions are appended to the queue.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
@@ -587,7 +591,7 @@ type object struct {
 // indicates whether to delete files first before retransferring, or whether files might
 // be updated in place.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, direction Direction, disableUpdateInPlace bool, queue chan<- Task) error {
+func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, direction Direction, queue chan<- Task, opts SynchronizeOptions) error {
 	lch := make(chan *object)
 	rch := make(chan *object)
 
@@ -639,10 +643,10 @@ func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, 
 	// Process the records
 	wg.Go(func() error {
 		if direction == RemoteToLocal {
-			return worker.merge(ctx, rch, lch, disableUpdateInPlace, Verify, queue)
+			return worker.merge(ctx, rch, lch, queue, mergeOptions{opts, Verify})
 		}
 
-		return worker.merge(ctx, lch, rch, disableUpdateInPlace, Verify, queue)
+		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, Verify})
 	})
 
 	return wg.Wait()
@@ -653,7 +657,7 @@ func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, 
 // The deleteFirst parameter indicates whether to delete files first before retransferring,
 // or whether files might be updated in place.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) SynchronizeRemoteDir(ctx context.Context, remote1, remote2 string, disableUpdateInPlace bool, queue chan<- Task) error {
+func (worker *Worker) SynchronizeRemoteDir(ctx context.Context, remote1, remote2 string, queue chan<- Task, opts SynchronizeOptions) error {
 	lch := make(chan *object)
 	rch := make(chan *object)
 
@@ -695,7 +699,7 @@ func (worker *Worker) SynchronizeRemoteDir(ctx context.Context, remote1, remote2
 
 	// Process the records
 	wg.Go(func() error {
-		return worker.merge(ctx, lch, rch, disableUpdateInPlace, VerifyRemote, queue)
+		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyRemote})
 	})
 
 	return wg.Wait()
@@ -719,7 +723,12 @@ func toLocalPath(base, path string) string {
 
 type checksumVerifyFunction func(ctx context.Context, a *api.API, local, remote string) error
 
-func (worker *Worker) merge(ctx context.Context, left, right chan *object, disableUpdateInPlace bool, checksumVerifier checksumVerifyFunction, queue chan<- Task) error {
+type mergeOptions struct {
+	SynchronizeOptions
+	ChecksumVerify checksumVerifyFunction
+}
+
+func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue chan<- Task, opts mergeOptions) error {
 	leftObject, hasLeft := <-left
 	rightObject, hasRight := <-right
 
@@ -756,7 +765,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, disab
 			rightObject, hasRight = worker.removeAll(right, rightObject, queue)
 
 		default:
-			if err := worker.compareAndTransfer(ctx, leftObject, rightObject, disableUpdateInPlace, checksumVerifier, queue); err != nil {
+			if err := worker.compareAndTransfer(ctx, leftObject, rightObject, queue, opts); err != nil {
 				return err
 			}
 
@@ -766,7 +775,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, disab
 	}
 }
 
-func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, disableUpdateInPlace bool, checksumVerifier checksumVerifyFunction, queue chan<- Task) error {
+func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error {
 	if left.info.IsDir() {
 		return nil
 	}
@@ -776,7 +785,7 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 		// Retransfer
 
 	case worker.options.VerifyChecksums:
-		err := checksumVerifier(ctx, worker.IndexPool, left.path, left.irodsPath)
+		err := opts.ChecksumVerify(ctx, worker.IndexPool, left.path, left.irodsPath)
 		if err == nil {
 			return nil
 		}
@@ -797,7 +806,7 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 		}
 	}
 
-	if disableUpdateInPlace {
+	if opts.DisableUpdateInPlace {
 		if worker.options.ProgressHandler != nil {
 			worker.options.ProgressHandler(Progress{
 				Action: RemoveFile,
@@ -1006,7 +1015,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 
 	defer close(queue)
 
-	if err := worker.SynchronizeRemoteDir(ctx, remote1, remote2, true, queue); err != nil {
+	if err := worker.SynchronizeRemoteDir(ctx, remote1, remote2, queue, SynchronizeOptions{DisableUpdateInPlace: true}); err != nil {
 		worker.wg.Go(func() error {
 			return err
 		})

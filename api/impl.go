@@ -492,6 +492,21 @@ func (api *API) SetMetadata(ctx context.Context, name string, itemType ObjectTyp
 	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
 }
 
+// CopyMetadata copies metadata from one data object to another.
+func (api *API) CopyMetadata(ctx context.Context, oldName string, oldItemType ObjectType, newName string, newItemType ObjectType) error {
+	request := &msg.ModifyMetadataRequest{
+		Operation: "cp",
+		ItemType:  fmt.Sprintf("-%s", string(oldItemType)), // arg1
+		ItemName:  fmt.Sprintf("-%s", string(newItemType)), // arg2
+		AttrName:  oldName,                                 // arg3
+		AttrValue: newName,                                 // arg4
+	}
+
+	api.setFlags(&request.KeyVals)
+
+	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+}
+
 // ModifyMetadata does a bulk update of metadata, removing and adding the given values.
 func (api *API) ModifyMetadata(ctx context.Context, name string, itemType ObjectType, add, remove []Metadata) error {
 	request := &msg.AtomicMetadataRequest{
