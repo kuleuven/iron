@@ -1065,6 +1065,175 @@ func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size in
 	})
 }
 
+// MoveDir renames one directory to another on the iRODS server.
+// It handles the recursion client side. New target collections are created,
+// with metadata and permissions copied from the source. Files are moved
+// into the new collections. Lastly, the now empty source directories are removed.
+// The call blocks until the source directory has been completely scanned.
+func (worker *Worker) MoveDir(ctx context.Context, remote1, remote2 string) { //nolint:funlen
+	if _, err := worker.IndexPool.GetRecord(ctx, remote2); !errors.Is(err, api.ErrNoRowFound) {
+		if err == nil {
+			err = errors.New("target already exists")
+		}
+
+		worker.Error(remote1, remote2, err)
+
+		return
+	}
+
+	queue := make(chan Task, worker.options.MaxQueued)
+
+	// Execute the renames
+	worker.wg.Go(func() error {
+		for u := range queue {
+			if ctx.Err() != nil {
+				continue
+			}
+
+			switch u.Action { //nolint:exhaustive
+			case TransferFile:
+				worker.action(u.Path, u.IrodsPath, TransferFile, func() error { return worker.TransferPool.RenameDataObject(ctx, u.Path, u.IrodsPath) })
+
+			case CreateDirectory:
+				worker.action(u.Path, u.IrodsPath, CreateDirectory, func() error {
+					if err := worker.TransferPool.CreateCollection(ctx, u.IrodsPath); err != nil {
+						return worker.options.ErrorHandler(u.Path, u.IrodsPath, err)
+					}
+
+					if err := worker.TransferPool.CopyMetadata(ctx, u.Path, api.CollectionType, u.IrodsPath, api.CollectionType); err != nil {
+						return worker.options.ErrorHandler(u.Path, u.IrodsPath, err)
+					}
+
+					if err := worker.copyPermissions(ctx, u.Path, u.IrodsPath); err != nil {
+						return worker.options.ErrorHandler(u.Path, u.IrodsPath, err)
+					}
+
+					return nil
+				})
+
+			case RemoveDirectory:
+				worker.action(u.Path, u.IrodsPath, RemoveDirectory, func() error { return worker.TransferPool.DeleteCollection(ctx, u.Path, worker.options.SkipTrash) })
+			}
+		}
+
+		return ctx.Err()
+	})
+
+	defer close(queue)
+
+	directories := []string{}
+
+	err := worker.IndexPool.Walk(ctx, remote1, func(path string, record api.Record, err error) error {
+		targetPath := remote2 + strings.TrimPrefix(path, remote1)
+
+		if err != nil {
+			return worker.options.ErrorHandler(path, targetPath, err)
+		}
+
+		if !record.IsDir() {
+			queue <- Task{
+				Action:    TransferFile,
+				Path:      path,
+				IrodsPath: targetPath,
+			}
+
+			return nil
+		}
+
+		removeAsMuchAsPossible(remote1, remote2, path, &directories, queue)
+
+		queue <- Task{
+			Action:    CreateDirectory,
+			Path:      path,
+			IrodsPath: targetPath,
+		}
+
+		directories = append(directories, path)
+
+		return nil
+	}, api.LexographicalOrder, api.NoSkip)
+	if err != nil {
+		worker.Error(remote1, remote2, err)
+		return
+	}
+
+	removeAsMuchAsPossible(remote1, remote2, "", &directories, queue)
+}
+
+func removeAsMuchAsPossible(remote1, remote2, path string, directories *[]string, queue chan<- Task) {
+	for len(*directories) != 0 {
+		last := (*directories)[len(*directories)-1]
+
+		if strings.HasPrefix(path, last) {
+			break
+		}
+
+		queue <- Task{
+			Action:    RemoveDirectory,
+			Path:      last,
+			IrodsPath: remote2 + strings.TrimPrefix(last, remote1),
+		}
+
+		*directories = (*directories)[:len(*directories)-1]
+	}
+}
+
+func (worker *Worker) copyPermissions(ctx context.Context, source, target string) error {
+	toMap := func(acl []api.Access, err error) (map[string]string, error) {
+		if err != nil {
+			return nil, err
+		}
+
+		m := map[string]string{}
+
+		for _, v := range acl {
+			m[v.User.Name+"#"+v.User.Zone] = v.Permission
+		}
+
+		return m, nil
+	}
+
+	cur, err := toMap(worker.TransferPool.ListAccess(ctx, target, api.CollectionType))
+	if err != nil {
+		return err
+	}
+
+	acl, err := toMap(worker.TransferPool.ListAccess(ctx, source, api.CollectionType))
+	if err != nil {
+		return err
+	}
+
+	var inherit bool
+
+	if src, err := worker.TransferPool.GetCollection(ctx, source); err == nil {
+		inherit = src.Inheritance
+	} else {
+		return err
+	}
+
+	for a, b := range acl {
+		if cur[a] == b {
+			continue
+		}
+
+		if err := worker.TransferPool.ModifyAccess(ctx, target, a, b, false); err != nil {
+			return err
+		}
+	}
+
+	for a := range cur {
+		if _, ok := acl[a]; ok {
+			continue
+		}
+
+		if err := worker.TransferPool.ModifyAccess(ctx, target, a, "null", false); err != nil {
+			return err
+		}
+	}
+
+	return worker.TransferPool.SetCollectionInheritance(ctx, target, inherit, false)
+}
+
 // action runs a simple action and schedules an error
 func (worker *Worker) action(local, remote string, action Action, callback func() error) {
 	startTime := time.Now()
