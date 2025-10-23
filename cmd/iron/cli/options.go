@@ -144,6 +144,10 @@ func FileStore(file string, template iron.Env) ConfigStore {
 
 		env.ApplyDefaults()
 
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+			return "", err
+		}
+
 		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 		if err != nil {
 			return "", err
