@@ -6,6 +6,28 @@ import (
 	"github.com/kuleuven/iron/msg"
 )
 
+func TestVersion(t *testing.T) {
+	app := testApp(t)
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"version"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpdateCommand(t *testing.T) {
+	app := testApp(t)
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"update"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMkdir(t *testing.T) {
 	app := testApp(t)
 

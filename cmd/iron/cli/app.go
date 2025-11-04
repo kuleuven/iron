@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/c-bata/go-prompt"
+	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/shell"
 	"github.com/sirupsen/logrus"
@@ -28,6 +29,8 @@ func New(ctx context.Context, options ...Option) *App {
 		Context: ctx,
 		name:    "iron",
 		loadEnv: FileLoader(home + "/.irods/irods_environment.json"),
+		updater: selfupdate.DefaultUpdater(),
+		repo:    selfupdate.ParseSlug("kuleuven/iron"),
 	}
 
 	for _, option := range options {
@@ -46,6 +49,9 @@ type App struct {
 	configStoreArgs []string
 	passwordStore   PasswordStore
 	workdirStore    WorkdirStore
+
+	updater *selfupdate.Updater
+	repo    selfupdate.RepositorySlug
 
 	Context context.Context //nolint:containedctx
 
@@ -105,7 +111,7 @@ func (a *App) Command() *cobra.Command {
 		run(cmd, args)
 	}
 
-	rootCmd.AddCommand(sh)
+	rootCmd.AddCommand(sh, a.update())
 
 	if a.passwordStore != nil {
 		rootCmd.AddCommand(a.auth())
@@ -130,6 +136,8 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 	if a.Client != nil || SkipInit(cmd) {
 		return nil
 	}
+
+	a.CheckUpdate()
 
 	var zone string
 
@@ -203,7 +211,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 }
 
 func SkipInit(cmd *cobra.Command) bool {
-	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" {
+	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" || cmd.Use == "version" || cmd.Use == "update" {
 		return true
 	}
 

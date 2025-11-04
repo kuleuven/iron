@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/transfer"
 	"github.com/spf13/cobra"
@@ -18,9 +19,30 @@ func (a *App) version() *cobra.Command {
 		Use:   "version",
 		Short: "Print the version number of iron",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(version)
+			fmt.Println(a.Version())
 		},
 	}
+}
+
+func (a *App) update() *cobra.Command {
+	var downgrade bool
+
+	cmd := &cobra.Command{
+		Use:          "update",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			exe, err := selfupdate.ExecutablePath()
+			if err != nil {
+				return err
+			}
+
+			return a.Update(exe, downgrade)
+		},
+	}
+
+	cmd.Flags().BoolVar(&downgrade, "downgrade", false, "Allow to downgrade to the latest release")
+
+	return cmd
 }
 
 func (a *App) auth() *cobra.Command {
