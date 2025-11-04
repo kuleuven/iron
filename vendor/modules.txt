@@ -24,7 +24,6 @@ github.com/creativeprojects/go-selfupdate/internal
 github.com/creativeprojects/go-selfupdate/update
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
-github.com/davecgh/go-spew/spew
 # github.com/davidmz/go-pageant v1.0.2
 ## explicit; go 1.16
 github.com/davidmz/go-pageant
@@ -97,7 +96,7 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.9
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/ulikunitz/xz v0.5.14
+# github.com/ulikunitz/xz v0.5.15
 ## explicit; go 1.12
 github.com/ulikunitz/xz
 github.com/ulikunitz/xz/internal/hash
