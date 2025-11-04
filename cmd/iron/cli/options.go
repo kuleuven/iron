@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/scramble"
 )
@@ -325,4 +326,11 @@ func StoreWorkdirInFile(file, workdir string) error {
 	defer t.Close()
 
 	return json.NewEncoder(t).Encode(m)
+}
+
+func WithUpdater(updater *selfupdate.Updater, repo selfupdate.RepositorySlug) Option {
+	return func(a *App) {
+		a.updater = updater
+		a.repo = repo
+	}
 }
