@@ -32,6 +32,8 @@ func (a *App) CheckUpdate() {
 	latest, err := a.LatestVersion()
 	if err != nil {
 		logrus.Debugf("failed to check for updates: %s", err)
+
+		return
 	}
 
 	current := a.Version()
