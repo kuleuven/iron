@@ -197,7 +197,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 	clientName := a.name
 
 	// Telemetry: send version, except for prereleases
-	if version := a.Version(); version.Prerelease() == "" {
+	if version := a.Version(); version.Prerelease() == "" && version.Metadata() == "" {
 		clientName = fmt.Sprintf("%s-%s", clientName, version.String())
 	}
 
