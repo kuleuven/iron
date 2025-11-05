@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/cmd/iron/tabwriter"
 	"github.com/kuleuven/iron/transfer"
 	"github.com/spf13/cobra"
 )
@@ -159,10 +159,14 @@ func (a *App) stat() *cobra.Command {
 				}
 			} else {
 				printer = &TablePrinter{
-					Writer: tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0),
-					Zone:   a.Zone,
+					Writer: &tabwriter.TabWriter{
+						Writer: os.Stdout,
+					},
+					Zone: a.Zone,
 				}
 			}
+
+			printer.Setup(true, true)
 
 			defer printer.Flush()
 
@@ -549,10 +553,14 @@ func (a *App) list() *cobra.Command {
 				}
 			} else {
 				printer = &TablePrinter{
-					Writer: tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0),
-					Zone:   a.Zone,
+					Writer: &tabwriter.TabWriter{
+						Writer: os.Stdout,
+					},
+					Zone: a.Zone,
 				}
 			}
+
+			printer.Setup(listACL, listMeta)
 
 			defer printer.Flush()
 

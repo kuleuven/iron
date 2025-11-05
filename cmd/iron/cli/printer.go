@@ -4,30 +4,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"slices"
-	"sync"
-	"text/tabwriter"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/cmd/iron/tabwriter"
 )
 
 type Printer interface {
-	Flush()
+	Setup(hasACL, hasMeta bool)
 	Print(name string, i api.Record)
+	Flush()
 }
 
 type TablePrinter struct {
-	Writer *tabwriter.Writer
+	Writer *tabwriter.TabWriter
 	Zone   string
+	Items  int
+}
+
+func (tp *TablePrinter) Setup(hasACL, hasMeta bool) {
+	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME\t"
+
+	if hasMeta {
+		header1 += "─── METADATA\tVALUE\tUNIT\t\n"
+	} else {
+		header1 += "\t\t\t\n"
+	}
+
+	var header2 string
+
+	if hasACL {
+		header2 = " └─ ACL\t\t\t\t\t\t\t\t\n"
+	}
+
+	fmt.Fprintf(tp.Writer, "%s%s%s%s", Bold, header1, header2, Reset)
 }
 
 func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
-	if i.IsDir() {
-		name += "/"
-	}
-
 	t := i.ModTime().Format("Jan 01  2006")
 
 	if i.ModTime().Year() == time.Now().Year() {
@@ -36,13 +50,14 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 	size := humanize.Bytes(uint64(i.Size()))
 
-	var status, owner string
+	var status, owner, color string
 
 	switch v := i.Sys().(type) {
 	case *api.DataObject:
 		for _, r := range v.Replicas {
 			status += r.Status
 			owner = tp.formatUser(r.Owner, r.OwnerZone)
+			color = NoColor
 		}
 
 	case *api.Collection:
@@ -50,35 +65,59 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 			status = "+"
 		}
 
+		name += "/"
 		owner = tp.formatUser(v.Owner, v.OwnerZone)
+		color = Green
 	}
-
-	fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s\t%s",
-		owner,
-		size,
-		t,
-		status,
-		name,
-	)
 
 	var acl []string
 
-	for _, a := range i.Access() {
-		acl = append(acl, fmt.Sprintf("%s\t%s", tp.formatUser(a.User.Name, a.User.Zone), formatPermission(a.Permission)))
+	for p, a := range i.Access() {
+		acl = append(acl, fmt.Sprintf("%s %s%s\t%s%s",
+			bracket(p+1, len(i.Access())+1),
+			Cyan,
+			tp.formatUser(a.User.Name, a.User.Zone),
+			formatPermission(a.Permission),
+			NoColor,
+		))
 	}
 
 	var meta []string
 
-	for _, m := range i.Metadata() {
-		meta = append(meta, fmt.Sprintf("┊\t%s\t%s\t%s", m.Name, m.Value, m.Units))
+	for p, m := range i.Metadata() {
+		meta = append(meta, fmt.Sprintf("%s %s%s\t%s\t%s%s",
+			bracket(p, len(i.Metadata())),
+			Yellow,
+			m.Name,
+			m.Value,
+			m.Units,
+			NoColor,
+		))
 	}
 
-	slices.Sort(acl)
-	slices.Sort(meta)
+	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s\t",
+		owner,
+		size,
+		t,
+		status,
+		color+Bold,
+		name,
+		NoColor+NoBold,
+	)
+
+	if len(meta) > 0 {
+		header += meta[0] + "\t\n"
+
+		meta = meta[1:]
+	} else {
+		header += "\t\t\n"
+	}
+
+	fmt.Fprint(tp.Writer, header)
 
 	for i := range max(len(acl), len(meta)) {
 		aclLine := "\t"
-		metaLine := "\t\t\t"
+		metaLine := "\t\t"
 
 		if i < len(acl) {
 			aclLine = acl[i]
@@ -88,22 +127,45 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 			metaLine = meta[i]
 		}
 
-		fmt.Fprintf(tp.Writer, "%s\n%s\t\t%s", Cyan, aclLine, metaLine)
+		fmt.Fprintf(tp.Writer, "%s\t\t\t\t%s\t\n", aclLine, metaLine)
 	}
+}
 
-	fmt.Fprintf(tp.Writer, "%s\n", Reset)
+func bracket(i, n int) string {
+	switch {
+	case n == 1:
+		return "───"
+	case i == 0:
+		return "─┬─"
+	case i+1 == n:
+		return " └─"
+	default:
+		return " ├─"
+	}
 }
 
 var (
-	Reset   = "\033[00m"
-	Red     = "\033[31m"
-	Green   = "\033[32m"
-	Yellow  = "\033[33m"
-	Blue    = "\033[34m"
-	Magenta = "\033[35m"
-	Cyan    = "\033[36m"
-	Gray    = "\033[37m"
-	White   = "\033[97m"
+	Reset     = "\033[00m"
+	Red       = "\033[31m"
+	Green     = "\033[32m"
+	Yellow    = "\033[33m"
+	Blue      = "\033[34m"
+	Magenta   = "\033[35m"
+	Cyan      = "\033[36m"
+	Gray      = "\033[37m"
+	LightGray = "\033[38m"
+	White     = "\033[97m"
+	NoColor   = "\033[39m"
+	Bold      = "\033[01m"
+	NoBold    = "\033[22m"
+
+	HeaderBackground = "\033[48;5;6m"
+	RowBackground    = "\033[48;5;14m"
+	AltRowBackground = "\033[48;5;111m" // 153,111  81,117
+	NoBackground     = "\033[49m"
+
+	Underline   = "\033[4m"
+	NoUnderline = "\033[24m"
 )
 
 func (tp *TablePrinter) formatUser(name, zone string) string {
@@ -137,28 +199,15 @@ type JSONPrinter struct {
 	Writer io.Writer
 }
 
+func (jp *JSONPrinter) Setup(asACL, hasMeta bool) {
+	// empty
+}
+
 func (jp *JSONPrinter) Print(name string, i api.Record) {
 	json.NewEncoder(jp.Writer).Encode(toMap(name, i)) //nolint:errcheck,errchkjson
 }
 
 func (jp *JSONPrinter) Flush() {
-	// empty
-}
-
-type ListAppender struct {
-	List []map[string]interface{}
-	sync.Mutex
-}
-
-func (la *ListAppender) Print(name string, i api.Record) {
-	la.Lock()
-
-	defer la.Unlock()
-
-	la.List = append(la.List, toMap(name, i))
-}
-
-func (la *ListAppender) Flush() {
 	// empty
 }
 
