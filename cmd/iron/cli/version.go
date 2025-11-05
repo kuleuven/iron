@@ -53,7 +53,7 @@ func (a *App) LatestVersion() (*semver.Version, error) {
 		return nil, fmt.Errorf("failed to get user cache dir: %w", err)
 	}
 
-	cacheDir = filepath.Join(cacheDir, "iron")
+	cacheDir = filepath.Join(cacheDir, a.name)
 
 	releaseFile := filepath.Join(cacheDir, "latest-release")
 
