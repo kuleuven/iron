@@ -16,8 +16,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "dev"
-
 func New(ctx context.Context, options ...Option) *App {
 	home := os.Getenv("HOME")
 
@@ -50,8 +48,9 @@ type App struct {
 	passwordStore   PasswordStore
 	workdirStore    WorkdirStore
 
-	updater *selfupdate.Updater
-	repo    selfupdate.RepositorySlug
+	releaseVersion string
+	updater        *selfupdate.Updater
+	repo           selfupdate.RepositorySlug
 
 	Context context.Context //nolint:containedctx
 

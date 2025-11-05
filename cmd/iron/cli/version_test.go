@@ -11,6 +11,8 @@ func TestUpdate(t *testing.T) {
 
 	testPath := filepath.Join(t.TempDir(), "iron")
 
+	WithVersion("devel")(app.App)
+
 	app.CheckUpdate()
 
 	// Put something at testPath

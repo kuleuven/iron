@@ -41,6 +41,13 @@ type WorkdirStore func(ctx context.Context, workdir string) error
 
 type Option func(*App)
 
+// WithVersion sets the version for the App.
+func WithVersion(version string) Option {
+	return func(a *App) {
+		a.releaseVersion = version
+	}
+}
+
 // WithLoader sets the Loader for the App, which is used to load the environment
 // from a file, or other source.
 func WithLoader(loader Loader) Option {

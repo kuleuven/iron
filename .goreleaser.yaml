@@ -2,4 +2,4 @@ version: 2
 builds:
   - main: ./cmd/iron/
     ldflags:
-      - -s -w -X github.com/kuleuven/iron/cmd/iron/cli.version={{.Version}}
+      - -s -w -X github.com/kuleuven/iron/cmd/iron.version={{.Version}}
