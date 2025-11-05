@@ -194,8 +194,15 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 
 	env.PamTTL = int(a.PamTTL.Hours())
 
+	clientName := a.name
+
+	// Telemetry: send version, except for prereleases
+	if version := a.Version(); version.Prerelease() == "" {
+		clientName = fmt.Sprintf("%s-%s", clientName, version.String())
+	}
+
 	a.Client, err = iron.New(a.Context, env, iron.Option{
-		ClientName:        a.name,
+		ClientName:        clientName,
 		Admin:             a.Admin,
 		UseNativeProtocol: a.Native,
 		MaxConns:          16,

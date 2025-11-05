@@ -27,7 +27,7 @@ func (a *App) Version() *semver.Version {
 		}
 	}
 
-	return semver.MustParse("9.0.0+dev")
+	return semver.MustParse("0.0.0+dev")
 }
 
 func (a *App) CheckUpdate() {
