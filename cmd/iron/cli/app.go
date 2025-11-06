@@ -27,8 +27,6 @@ func New(ctx context.Context, options ...Option) *App {
 		Context: ctx,
 		name:    "iron",
 		loadEnv: FileLoader(home + "/.irods/irods_environment.json"),
-		updater: selfupdate.DefaultUpdater(),
-		repo:    selfupdate.ParseSlug("kuleuven/iron"),
 	}
 
 	for _, option := range options {
@@ -111,7 +109,9 @@ func (a *App) Command() *cobra.Command {
 		run(cmd, args)
 	}
 
-	rootCmd.AddCommand(sh, a.update())
+	rootCmd.AddCommand(sh)
+
+	a.AddUpdateCommand(rootCmd)
 
 	if a.passwordStore != nil {
 		rootCmd.AddCommand(a.auth())

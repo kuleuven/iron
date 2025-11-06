@@ -1,6 +1,9 @@
 buildGo {
   name = "iron"
-  buildArgs = "-buildvcs=true"
+
+  // Disable updates
+  ldflags = "-X main.updateSlug="
+  
   rpm=true
   rpm_params=[
     repository: "icts-p-coz-rpm-local/common",

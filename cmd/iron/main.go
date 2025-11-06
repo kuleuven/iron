@@ -6,12 +6,16 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/cli"
 )
 
 // Version embedded from ldflags
 var version string
+
+// Source of updates. Embed empty string in ldflags to disable.
+var updateSlug = "kuleuven/iron"
 
 func main() {
 	home := os.Getenv("HOME")
@@ -37,6 +41,10 @@ func main() {
 		cli.WithPasswordStore(cli.FilePasswordStore(config)),
 		cli.WithDefaultWorkdirFromFile(config),
 	)
+
+	if updateSlug != "" {
+		cli.WithUpdater(selfupdate.DefaultUpdater(), selfupdate.ParseSlug(updateSlug))(app)
+	}
 
 	defer app.Close()
 

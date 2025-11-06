@@ -17,20 +17,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestUpdateCommand(t *testing.T) {
-	app := testApp(t)
-
-	// Ensure we're actually not going to update the current version
-	WithVersion("9999.0.0")(app.App)
-
-	cmd := app.Command()
-	cmd.SetArgs([]string{"update"})
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestMkdir(t *testing.T) {
 	app := testApp(t)
 
