@@ -59,7 +59,7 @@ type App struct {
 	PamTTL  time.Duration
 }
 
-func (a *App) Command() *cobra.Command {
+func (a *App) Command() *cobra.Command { //nolint:funlen
 	rootCmd := &cobra.Command{
 		Use:               a.name,
 		Short:             "Golang client for iRODS",
