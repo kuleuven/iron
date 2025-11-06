@@ -16,7 +16,7 @@ import (
 func (a *App) Version() *semver.Version {
 	// If version was passed as ld flag, use that.
 	if a.releaseVersion != "" {
-		if parsed, err := semver.NewVersion(a.releaseVersion); err == nil {
+		if parsed, err := semver.NewVersion(a.releaseVersion); err == nil && parsed.Prerelease() == "" {
 			return parsed
 		}
 	}
