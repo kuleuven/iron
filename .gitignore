@@ -1,1 +1,7 @@
 /iron
+
+.jenkins/
+.scannerwork/
+changelog.tmp
+iron-*.rpm
+sonar-project.properties
