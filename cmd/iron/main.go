@@ -11,7 +11,7 @@ import (
 )
 
 // Version embedded from ldflags
-var version string
+var release string
 
 func main() {
 	home := os.Getenv("HOME")
@@ -28,7 +28,7 @@ func main() {
 
 	app := cli.New(
 		ctx,
-		cli.WithVersion(version),
+		cli.WithVersion(release),
 		cli.WithConfigStore(cli.FileStore(config, iron.Env{
 			AuthScheme:      "pam_interactive",
 			DefaultResource: "default",
