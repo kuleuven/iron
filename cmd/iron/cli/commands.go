@@ -679,9 +679,10 @@ func (a *App) meta() *cobra.Command {
 
 func (a *App) metals() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls <path>",
-		Short: "List metadata",
-		Args:  cobra.ExactArgs(1),
+		Use:               "ls <path>",
+		Short:             "List metadata",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
@@ -709,9 +710,10 @@ func (a *App) metals() *cobra.Command {
 
 func (a *App) metaop(op, description string, fn func(*api.API) func(context.Context, string, api.ObjectType, api.Metadata) error) *cobra.Command {
 	return &cobra.Command{
-		Use:   op + " <path> <key> <value> [units]",
-		Short: description,
-		Args:  cobra.RangeArgs(3, 4),
+		Use:               op + " <path> <key> <value> [units]",
+		Short:             description,
+		Args:              cobra.RangeArgs(3, 4),
+		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 4 {
 				args = append(args, "")
@@ -733,9 +735,10 @@ func (a *App) metaop(op, description string, fn func(*api.API) func(context.Cont
 
 func (a *App) metaunset() *cobra.Command {
 	return &cobra.Command{
-		Use:   "unset <path> <key>",
-		Short: "Remove all metadata triplets with the given key",
-		Args:  cobra.ExactArgs(2),
+		Use:               "unset <path> <key>",
+		Short:             "Remove all metadata triplets with the given key",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
