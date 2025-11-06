@@ -24,18 +24,18 @@ type TablePrinter struct {
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta bool) {
-	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME\t"
+	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME"
 
 	if hasMeta {
-		header1 += "─── METADATA\tVALUE\tUNIT\t\n"
+		header1 += "\t─── METADATA KEY\tVALUE\tUNITS\n"
 	} else {
-		header1 += "\t\t\t\n"
+		header1 += "\t\t\n"
 	}
 
 	var header2 string
 
 	if hasACL {
-		header2 = " └─ ACL\t\t\t\t\t\t\t\t\n"
+		header2 = " └─ USER/GROUP\tACCESS\n"
 	}
 
 	fmt.Fprintf(tp.Writer, "%s%s%s%s", Bold, header1, header2, Reset)
@@ -95,7 +95,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		))
 	}
 
-	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s\t",
+	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s",
 		owner,
 		size,
 		t,
@@ -106,11 +106,11 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 	)
 
 	if len(meta) > 0 {
-		header += meta[0] + "\t\n"
+		header += "\t" + meta[0] + "\n"
 
 		meta = meta[1:]
 	} else {
-		header += "\t\t\n"
+		header += "\n"
 	}
 
 	fmt.Fprint(tp.Writer, header)
@@ -127,7 +127,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 			metaLine = meta[i]
 		}
 
-		fmt.Fprintf(tp.Writer, "%s\t\t\t\t%s\t\n", aclLine, metaLine)
+		fmt.Fprintf(tp.Writer, "%s\t\t\t\t%s\n", aclLine, metaLine)
 	}
 }
 

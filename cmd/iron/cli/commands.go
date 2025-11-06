@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -651,6 +652,109 @@ func (a *App) tree() *cobra.Command {
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 
 	return cmd
+}
+
+func (a *App) meta() *cobra.Command {
+	meta := &cobra.Command{
+		Use:   "meta",
+		Short: "Run a metadata command",
+	}
+
+	meta.AddCommand(
+		a.metals(),
+		a.metaop("add", "Add a single metadata triplet", func(client *api.API) func(context.Context, string, api.ObjectType, api.Metadata) error {
+			return client.AddMetadata
+		}),
+		a.metaop("rm", "Delete a single metadata triplet", func(client *api.API) func(context.Context, string, api.ObjectType, api.Metadata) error {
+			return client.RemoveMetadata
+		}),
+		a.metaop("set", "Set a metadata triplet and remove old metadata with the same key", func(client *api.API) func(context.Context, string, api.ObjectType, api.Metadata) error {
+			return client.SetMetadata
+		}),
+		a.metaunset(),
+	)
+
+	return meta
+}
+
+func (a *App) metals() *cobra.Command {
+	return &cobra.Command{
+		Use:   "ls <path>",
+		Short: "List metadata",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := a.Path(args[0])
+
+			stat, err := a.GetRecord(a.Context, path, api.FetchMetadata)
+			if err != nil {
+				return err
+			}
+
+			out := &tabwriter.TabWriter{
+				Writer: os.Stdout,
+			}
+
+			defer out.Flush()
+
+			fmt.Fprintf(out, "%sKEY\tVALUE\tUNITS%s\n", Bold, Reset)
+
+			for _, m := range stat.Metadata() {
+				fmt.Fprintf(out, "%s\t%s\t%s\n", m.Name, m.Value, m.Units)
+			}
+
+			return nil
+		},
+	}
+}
+
+func (a *App) metaop(op, description string, fn func(*api.API) func(context.Context, string, api.ObjectType, api.Metadata) error) *cobra.Command {
+	return &cobra.Command{
+		Use:   op + " <path> <key> <value> [units]",
+		Short: description,
+		Args:  cobra.RangeArgs(3, 4),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 4 {
+				args = append(args, "")
+			}
+
+			path := a.Path(args[0])
+
+			stat, err := a.GetRecord(a.Context, path)
+			if err != nil {
+				return err
+			}
+
+			return fn(a.Client.API)(a.Context, path, stat.Type(), api.Metadata{
+				Name: args[1], Value: args[2], Units: args[3],
+			})
+		},
+	}
+}
+
+func (a *App) metaunset() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unset <path> <key>",
+		Short: "Remove all metadata triplets with the given key",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := a.Path(args[0])
+
+			stat, err := a.GetRecord(a.Context, path, api.FetchMetadata)
+			if err != nil {
+				return err
+			}
+
+			toremove := []api.Metadata{}
+
+			for _, triplet := range stat.Metadata() {
+				if triplet.Name == args[1] {
+					toremove = append(toremove, triplet)
+				}
+			}
+
+			return a.Client.ModifyMetadata(a.Context, path, stat.Type(), nil, toremove)
+		},
+	}
 }
 
 func (a *App) pwd() *cobra.Command {

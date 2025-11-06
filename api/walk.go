@@ -15,6 +15,7 @@ type Record interface {
 	os.FileInfo
 	Metadata() []Metadata
 	Access() []Access
+	Type() ObjectType
 }
 
 type record struct {
@@ -29,6 +30,14 @@ func (r *record) Metadata() []Metadata {
 
 func (r *record) Access() []Access {
 	return r.access
+}
+
+func (r *record) Type() ObjectType {
+	if r.IsDir() {
+		return CollectionType
+	}
+
+	return DataObjectType
 }
 
 type WalkFunc func(path string, record Record, err error) error

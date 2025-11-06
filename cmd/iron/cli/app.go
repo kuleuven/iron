@@ -89,6 +89,7 @@ func (a *App) Command() *cobra.Command {
 		a.list(),
 		a.tree(),
 		a.stat(),
+		a.meta(),
 		a.checksum(),
 		a.version(),
 	)

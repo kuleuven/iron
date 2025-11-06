@@ -320,3 +320,47 @@ func TestLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMetaList(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponses(statResponses[:len(statResponses)-2])
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"meta", "ls", "/testzone/coll"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMetaBasicOps(t *testing.T) {
+	for _, op := range []string{"add", "rm", "set"} {
+		app := testApp(t)
+
+		app.AddResponses(statResponses[:2])
+		app.AddResponse(msg.EmptyResponse{})
+
+		cmd := app.Command()
+		cmd.SetArgs([]string{"meta", op, "/testzone/coll", "a", "b"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestMetaUnset(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponses(statResponses[:3])
+	app.AddResponse(msg.EmptyResponse{})
+	app.AddResponse(msg.EmptyResponse{})
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"meta", "unset", "/testzone/coll", "a"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
