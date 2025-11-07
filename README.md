@@ -14,12 +14,27 @@ It is both a golang library as well as a command line client.
 * The `Truncate` and `Touch` methods are only available on open file handles, to help identifying the right replica to adjust. Because irods only supports those operations when the file is closed, the operations are actually done on the replica when the file is closed.
 * This client also attempts to support the native protocol, but this should be considered experimental.
 
+## CLI installation
+
+The CLI binary can be downloaded from <https://github.com/kuleuven/iron/releases/latest>. E.g. on a Linux system or Windows WSL:
+
+```shell
+$ VERSION=$(curl -Ls -w %{url_effective} -o /dev/null https://github.com/kuleuven/iron/releases/latest | sed 's/.*\/v//')
+$ mkdir -p bin/
+$ curl -L -s "https://github.com/kuleuven/iron/releases/download/v${VERSION}/iron_${VERSION}_linux_amd64.tar.gz" | tar zxvf - -C bin/
+```
+
+Alternatively, it can be installed with `go install`:
+
+```shell
+$ go install github.com/kuleuven/iron/cmd/iron@latest
+```
+
 ## CLI usage
 
 The CLI expects a `~.irods/irods_environment.json` file being present, with native or pam_password authentication. The password should either be given in this file under the `pam_password` key, or the irods authentication file `.irods/.irodsA` must be present.
 
 ```shell
-$ go install github.com/kuleuven/iron/cmd/iron@latest
 $ iron
 Golang client for iRODS
 
