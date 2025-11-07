@@ -19,7 +19,10 @@ var version string
 var updateSlug = "kuleuven/iron"
 
 func main() {
-	home := os.Getenv("HOME")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
 
 	if home == "" {
 		home = "."
