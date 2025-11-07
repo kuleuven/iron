@@ -66,6 +66,23 @@ func TestNew(t *testing.T) { //nolint:funlen
 		}, nil, msg.XML, "RODS_API_REPLY", 0)
 		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
 		msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+
+		msg.Read(conn, &msg.QueryRequest{}, nil, msg.XML, "RODS_API_REQ")
+		msg.Write(conn, msg.QueryResponse{
+			RowCount:       1,
+			AttributeCount: 6,
+			TotalRowCount:  1,
+			ContinueIndex:  0,
+			SQLResult: []msg.SQLResult{
+				{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
+				{AttributeIndex: 503, ResultLen: 1, Values: []string{"/testzone/coll"}},
+				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
+				{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
+				{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+			},
+		}, nil, msg.XML, "RODS_API_REPLY", 0)
+
 		msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
 		conn.Close()
 	}()

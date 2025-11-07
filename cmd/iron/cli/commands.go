@@ -768,7 +768,14 @@ func (a *App) cd() *cobra.Command {
 				args = []string{"/" + a.Zone}
 			}
 
-			a.Workdir = a.Path(args[0])
+			target := a.Path(args[0])
+
+			// Check if the target is a collection
+			if _, err := a.GetCollection(a.Context, target); err != nil {
+				return err
+			}
+
+			a.Workdir = target
 
 			if a.workdirStore != nil {
 				return a.workdirStore(a.Context, a.Workdir)
