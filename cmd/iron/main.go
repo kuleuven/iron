@@ -9,6 +9,7 @@ import (
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/cli"
+	"github.com/spf13/cobra"
 )
 
 // Version embedded from ldflags
@@ -53,6 +54,9 @@ func main() {
 	if len(os.Args) < 2 {
 		cmd.SetArgs([]string{"shell"})
 	}
+
+	// Disable Cobra's mouse trap, we have our own shell to fall back to
+	cobra.MousetrapHelpText = ""
 
 	cmd.Execute() //nolint:errcheck
 }
