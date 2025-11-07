@@ -219,6 +219,9 @@ func testApp(t *testing.T) *mockApp {
 		},
 	}
 
+	WithName("test")(app)
+	WithDefaultWorkdir("")(app)
+
 	return &mockApp{
 		MockConn: testConn,
 		App:      app,
