@@ -97,6 +97,7 @@ func (a *App) Command() *cobra.Command { //nolint:funlen
 
 	sh.Use = "shell [zone]"
 	sh.Args = cobra.MaximumNArgs(1)
+	sh.PersistentPreRunE = a.TryInit
 	sh.Run = func(cmd *cobra.Command, args []string) {
 		rootCmd.ResetFlags()
 
@@ -128,6 +129,26 @@ func (a *App) prefix() (string, bool) {
 	return fmt.Sprintf("%s > %s > ", a.name, a.Workdir), true
 }
 
+// ResetClient closes the client and sets it to nil
+// This is used for the shell in combination with the "auth" command,
+// to switch between zones.
+func (a *App) ResetClient() error {
+	if a.Client == nil {
+		return nil
+	}
+
+	if err := a.Client.Close(); err != nil {
+		return err
+	}
+
+	a.Client = nil
+
+	return nil
+}
+
+// Init sets up the client for most commands.
+// It is used under the PersistentPreRunE hook.
+// To override, either adjust SkipInit or implement your own PersistentPreRunE hook.
 func (a *App) Init(cmd *cobra.Command, args []string) error {
 	if a.Debug > 0 {
 		logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
@@ -163,7 +184,23 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 	return a.init(cmd, zone)
 }
 
-func (a *App) InitConfigStore(cmd *cobra.Command, args []string) error {
+// ResetInit sets up the client for the "auth" command.
+// It ensures a previous client is closed, useful for the shell.
+func (a *App) ResetInit(cmd *cobra.Command, args []string) error {
+	if err := a.ResetClient(); err != nil {
+		return err
+	}
+
+	return a.Init(cmd, args)
+}
+
+// ResetInitConfigStore sets up the client for the "auth" command,
+// in case two or more arguments are provided and a ConfigStore is configured.
+func (a *App) ResetInitConfigStore(cmd *cobra.Command, args []string) error {
+	if err := a.ResetClient(); err != nil {
+		return err
+	}
+
 	zone, err := a.configStore(a.Context, args)
 	if err != nil {
 		return err
@@ -180,6 +217,22 @@ func (a *App) InitConfigStore(cmd *cobra.Command, args []string) error {
 	return a.init(cmd, zone)
 }
 
+// TryInit calls Init but does not fail on error,
+// instead it writes an invitation to authenticate.
+// Useful for the shell only.
+func (a *App) TryInit(cmd *cobra.Command, args []string) error {
+	err := a.Init(cmd, args)
+	if err == nil || a.configStore == nil {
+		return err
+	}
+
+	fmt.Println(err)
+
+	a.Workdir = "not authenticated"
+
+	return nil
+}
+
 func (a *App) init(cmd *cobra.Command, zone string) error {
 	// Load zone and start client
 	ctx := a.Context
@@ -190,7 +243,10 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 
 	env, dialer, err := a.loadEnv(ctx, zone)
 	if err != nil {
-		return err
+		// Doesn't make sense to print usage here
+		cmd.SilenceUsage = true
+
+		return InitError{a, err}
 	}
 
 	env.PamTTL = int(a.PamTTL.Hours())
@@ -209,16 +265,41 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		MaxConns:          16,
 		DialFunc:          dialer,
 	})
+	if err != nil {
+		// Doesn't make sense to print usage here
+		cmd.SilenceUsage = true
+
+		return InitError{a, err}
+	}
 
 	if a.Workdir == "" {
 		a.Workdir = fmt.Sprintf("/%s", env.Zone)
 	}
 
-	return err
+	return nil
+}
+
+type InitError struct {
+	App *App
+	Err error
+}
+
+func (e InitError) Error() string {
+	var instructions string
+
+	if e.App.configStore != nil {
+		instructions = fmt.Sprintf("\nRun `iron auth <%s>` to authenticate.", strings.Join(e.App.configStoreArgs, "> <"))
+	}
+
+	if errors.Is(e.Err, os.ErrNotExist) {
+		return fmt.Sprintf("%s%s", e.Err.Error(), instructions)
+	}
+
+	return fmt.Sprintf("failed to initialize client: %s%s", e.Err.Error(), instructions)
 }
 
 func SkipInit(cmd *cobra.Command) bool {
-	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" || cmd.Use == "version" || cmd.Use == "update" {
+	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" || cmd.Use == "version" || cmd.Use == "update" || cmd.Use == "local" {
 		return true
 	}
 

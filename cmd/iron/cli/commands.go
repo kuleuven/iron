@@ -27,7 +27,7 @@ func (a *App) version() *cobra.Command {
 func (a *App) auth() *cobra.Command {
 	use := "auth [zone]"
 	args := cobra.MaximumNArgs(1)
-	preRun := a.Init
+	preRun := a.ResetInit
 
 	if a.configStore != nil {
 		use += " | {<" + strings.Join(a.configStoreArgs, "> <") + ">}"
@@ -42,10 +42,10 @@ func (a *App) auth() *cobra.Command {
 
 		preRun = func(cmd *cobra.Command, args []string) error {
 			if len(args) < 2 {
-				return a.Init(cmd, args)
+				return a.ResetInit(cmd, args)
 			}
 
-			return a.InitConfigStore(cmd, args)
+			return a.ResetInitConfigStore(cmd, args)
 		}
 	}
 
@@ -70,6 +70,14 @@ func (a *App) auth() *cobra.Command {
 			}
 
 			return a.passwordStore(a.Context, password)
+		},
+		PostRun: func(cmd *cobra.Command, args []string) {
+			// Reset the workdir if needed
+			defaultDir := fmt.Sprintf("/%s", a.Client.Env().Zone)
+
+			if a.Workdir != "/" && !strings.HasPrefix(a.Workdir, defaultDir+"/") {
+				a.Workdir = defaultDir
+			}
 		},
 	}
 }

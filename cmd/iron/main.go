@@ -48,5 +48,11 @@ func main() {
 
 	defer app.Close()
 
-	app.Command().Execute() //nolint:errcheck
+	cmd := app.Command()
+
+	if len(os.Args) < 2 {
+		cmd.SetArgs([]string{"shell"})
+	}
+
+	cmd.Execute() //nolint:errcheck
 }

@@ -68,7 +68,9 @@ func FileLoader(file string) Loader {
 	return func(ctx context.Context, _ string) (iron.Env, iron.DialFunc, error) {
 		var env iron.Env
 
-		err := env.LoadFromFile(file)
+		if err := env.LoadFromFile(file); err != nil {
+			return env, nil, err
+		}
 
 		if forceReauthentication, ok := ctx.Value(ForceReauthentication).(bool); ok && forceReauthentication {
 			// Force reauthentication
@@ -81,10 +83,8 @@ func FileLoader(file string) Loader {
 				authFile = f
 			}
 
-			env.Password, err = ReadAuthFile(authFile)
-			if errors.Is(err, os.ErrNotExist) {
-				err = nil
-			} else if err == nil {
+			if password, err := ReadAuthFile(authFile); err == nil {
+				env.Password = password
 				env.AuthScheme = "native"
 			}
 		}
@@ -95,7 +95,7 @@ func FileLoader(file string) Loader {
 			}
 		}
 
-		return env, iron.DefaultDialFunc, err
+		return env, iron.DefaultDialFunc, nil
 	}
 }
 

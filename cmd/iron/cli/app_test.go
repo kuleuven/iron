@@ -116,25 +116,27 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			panic(err)
-		}
+	for range 2 {
+		go func() {
+			conn, err := listener.Accept()
+			if err != nil {
+				panic(err)
+			}
 
-		msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
-		msg.Write(conn, msg.Version{
-			ReleaseVersion: "rods5.0.1",
-		}, nil, msg.XML, "RODS_VERSION", 0)
-		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
-		msg.Write(conn, msg.AuthPluginResponse{
-			RequestResult: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-		}, nil, msg.XML, "RODS_API_REPLY", 0)
-		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
-		msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
-		msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
-		conn.Close()
-	}()
+			msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
+			msg.Write(conn, msg.Version{
+				ReleaseVersion: "rods5.0.1",
+			}, nil, msg.XML, "RODS_VERSION", 0)
+			msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
+			msg.Write(conn, msg.AuthPluginResponse{
+				RequestResult: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+			}, nil, msg.XML, "RODS_API_REPLY", 0)
+			msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
+			msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+			msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
+			conn.Close()
+		}()
+	}
 
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
@@ -175,18 +177,24 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	defer app.Close()
 
+	if err := app.TryInit(app.auth(), nil); err != nil {
+		t.Fatal(err)
+	}
+
 	args := []string{"user", "zone", "127.0.0.1"}
 
 	if err := app.auth().Args(cmd, args); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := app.auth().PersistentPreRunE(cmd, args); err != nil {
-		t.Fatal(err)
-	}
+	for range 2 {
+		if err := app.auth().PersistentPreRunE(cmd, args); err != nil {
+			t.Fatal(err)
+		}
 
-	if err := app.auth().RunE(cmd, args); err != nil {
-		t.Fatal(err)
+		if err := app.auth().RunE(cmd, args); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
