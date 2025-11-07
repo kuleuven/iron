@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -786,7 +787,7 @@ func (a *App) cd() *cobra.Command {
 	}
 }
 
-func (a *App) local() *cobra.Command {
+func (a *App) local() *cobra.Command { //nolint:funlen
 	local := &cobra.Command{
 		Use:   "local",
 		Short: "Run a local command",
@@ -818,6 +819,39 @@ func (a *App) local() *cobra.Command {
 				}
 
 				return os.Chdir(args[0])
+			},
+		},
+		&cobra.Command{
+			Use:   "ls [local directory]",
+			Short: "List the local working directory",
+			Args:  cobra.MaximumNArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				if len(args) == 0 {
+					args = []string{"."}
+				}
+
+				entries, err := os.ReadDir(args[0])
+				if err != nil {
+					return err
+				}
+
+				slices.SortFunc(entries, func(a, b os.DirEntry) int {
+					return strings.Compare(a.Name(), b.Name())
+				})
+
+				for _, entry := range entries {
+					name := entry.Name()
+					color := NoColor
+
+					if entry.IsDir() {
+						name += "/"
+						color = Blue
+					}
+
+					fmt.Printf("%s%s%s\n", color, name, Reset)
+				}
+
+				return nil
 			},
 		},
 	)

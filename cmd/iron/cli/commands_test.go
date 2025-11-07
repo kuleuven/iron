@@ -305,6 +305,12 @@ func TestLocal(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
+
+	cmd.SetArgs([]string{"ls"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestMetaList(t *testing.T) {
