@@ -57,6 +57,8 @@ type App struct {
 	Native  bool
 	Workdir string
 	PamTTL  time.Duration
+
+	inShell bool
 }
 
 func (a *App) Command() *cobra.Command { //nolint:funlen
@@ -97,7 +99,7 @@ func (a *App) Command() *cobra.Command { //nolint:funlen
 
 	sh.Use = "shell [zone]"
 	sh.Args = cobra.MaximumNArgs(1)
-	sh.PersistentPreRunE = a.TryInit
+	sh.PersistentPreRunE = a.ShellInit
 	sh.Run = func(cmd *cobra.Command, args []string) {
 		rootCmd.ResetFlags()
 
@@ -217,10 +219,12 @@ func (a *App) ResetInitConfigStore(cmd *cobra.Command, args []string) error {
 	return a.init(cmd, zone)
 }
 
-// TryInit calls Init but does not fail on error,
+// ShellInit calls Init but does not fail on error,
 // instead it writes an invitation to authenticate.
 // Useful for the shell only.
-func (a *App) TryInit(cmd *cobra.Command, args []string) error {
+func (a *App) ShellInit(cmd *cobra.Command, args []string) error {
+	a.inShell = true
+
 	err := a.Init(cmd, args)
 	if err == nil || a.configStore == nil {
 		return err
@@ -288,7 +292,11 @@ func (e InitError) Error() string {
 	var instructions string
 
 	if e.App.configStore != nil {
-		instructions = fmt.Sprintf("\nRun `iron auth <%s>` to authenticate.", strings.Join(e.App.configStoreArgs, "> <"))
+		if e.App.inShell {
+			instructions = fmt.Sprintf("\nRun `auth <%s>` to authenticate.", strings.Join(e.App.configStoreArgs, "> <"))
+		} else {
+			instructions = fmt.Sprintf("\nRun `iron auth <%s>` to authenticate.", strings.Join(e.App.configStoreArgs, "> <"))
+		}
 	}
 
 	if errors.Is(e.Err, os.ErrNotExist) {

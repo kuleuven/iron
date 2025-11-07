@@ -177,7 +177,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	defer app.Close()
 
-	if err := app.TryInit(app.auth(), nil); err != nil {
+	if err := app.ShellInit(app.auth(), nil); err != nil {
 		t.Fatal(err)
 	}
 
