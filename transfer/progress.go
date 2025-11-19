@@ -67,7 +67,8 @@ func (pb *PB) Handler(progress Progress) {
 	defer pb.Unlock()
 
 	switch {
-	case progress.StartedAt.IsZero():
+	case progress.StartedAt.IsZero(),
+		progress.FinishedAt.IsZero() && progress.Transferred == 0:
 		// Registration
 		if prev, ok := pb.actual[progress.Label]; ok {
 			pb.bytesTotal += progress.Size - prev.Size
