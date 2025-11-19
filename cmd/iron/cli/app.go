@@ -114,6 +114,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.download(),
 		a.cat(),
 		a.head(),
+		a.save(),
 		a.chmod(),
 		a.inherit(),
 		a.list(),

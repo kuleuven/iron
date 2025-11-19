@@ -553,6 +553,33 @@ func (a *App) head() *cobra.Command {
 	return cmd
 }
 
+func (a *App) save() *cobra.Command {
+	return &cobra.Command{
+		Use:               "save <object path>",
+		Short:             "Stream stdin into a data object",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := a.Path(args[0])
+
+			f, err := a.OpenDataObject(a.Context, target, api.O_WRONLY|api.O_CREAT|api.O_TRUNC)
+			if err != nil {
+				return err
+			}
+
+			defer f.Close()
+
+			if a.inShell {
+				fmt.Println("[Press Ctrl+D to end input]")
+			}
+
+			_, err = io.Copy(f, os.Stdin)
+
+			return err
+		},
+	}
+}
+
 func (a *App) chmod() *cobra.Command {
 	var recursive bool
 
