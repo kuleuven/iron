@@ -35,7 +35,7 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta bool) {
 	var header2 string
 
 	if hasACL {
-		header2 = " └─ USER/GROUP\tACCESS\n"
+		header2 = " └─ USER\tACCESS\n"
 	}
 
 	fmt.Fprintf(tp.Writer, "%s%s%s%s", Bold, header1, header2, Reset)
@@ -56,7 +56,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 	case *api.DataObject:
 		for _, r := range v.Replicas {
 			status += r.Status
-			owner = tp.formatUser(r.Owner, r.OwnerZone)
+			owner = tp.formatUser(r.Owner, r.OwnerZone, false)
 			color = NoColor
 		}
 
@@ -66,7 +66,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		}
 
 		name += "/"
-		owner = tp.formatUser(v.Owner, v.OwnerZone)
+		owner = tp.formatUser(v.Owner, v.OwnerZone, false)
 		color = Green
 	}
 
@@ -76,7 +76,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		acl = append(acl, fmt.Sprintf("%s %s%s\t%s%s",
 			bracket(p+1, len(i.Access())+1),
 			Cyan,
-			tp.formatUser(a.User.Name, a.User.Zone),
+			tp.formatUser(a.User.Name, a.User.Zone, a.User.Type == "rodsgroup"),
 			formatPermission(a.Permission),
 			NoColor,
 		))
@@ -168,7 +168,11 @@ var (
 	NoUnderline = "\033[24m"
 )
 
-func (tp *TablePrinter) formatUser(name, zone string) string {
+func (tp *TablePrinter) formatUser(name, zone string, isGroup bool) string {
+	if isGroup {
+		name = fmt.Sprintf("g:%s", name)
+	}
+
 	if zone == tp.Zone {
 		return name
 	}
