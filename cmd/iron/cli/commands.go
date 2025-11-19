@@ -556,7 +556,9 @@ func (a *App) head() *cobra.Command {
 }
 
 func (a *App) save() *cobra.Command {
-	return &cobra.Command{
+	var append bool
+
+	cmd := &cobra.Command{
 		Use:               "save <object path>",
 		Short:             "Stream stdin into a data object",
 		Args:              cobra.ExactArgs(1),
@@ -564,7 +566,13 @@ func (a *App) save() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := a.Path(args[0])
 
-			f, err := a.OpenDataObject(a.Context, target, api.O_WRONLY|api.O_CREAT|api.O_TRUNC)
+			flags := api.O_WRONLY | api.O_CREAT | api.O_TRUNC
+
+			if append {
+				flags = api.O_WRONLY | api.O_CREAT | api.O_APPEND
+			}
+
+			f, err := a.OpenDataObject(a.Context, target, flags)
 			if err != nil {
 				return err
 			}
@@ -580,6 +588,10 @@ func (a *App) save() *cobra.Command {
 			return err
 		},
 	}
+
+	cmd.Flags().BoolVarP(&append, "append", "a", false, "Append to existing data object")
+
+	return cmd
 }
 
 func (a *App) chmod() *cobra.Command {
