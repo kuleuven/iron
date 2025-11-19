@@ -460,7 +460,7 @@ func (h *handle) getReplicaAccessInfo() (*ReplicaAccessInfo, error) {
 	return &info, nil
 }
 
-func toInt(i interface{}) (int, error) {
+func toInt(i any) (int, error) {
 	asJ, err := json.Marshal(i)
 	if err != nil {
 		return 0, err
@@ -476,7 +476,7 @@ func toInt(i interface{}) (int, error) {
 	return number, nil
 }
 
-func toString(i interface{}) (string, error) {
+func toString(i any) (string, error) {
 	asJ, err := json.Marshal(i)
 	if err != nil {
 		return "", err

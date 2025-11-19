@@ -215,7 +215,7 @@ func (jp *JSONPrinter) Flush() {
 	// empty
 }
 
-func toMap(name string, i api.Record) map[string]interface{} {
+func toMap(name string, i api.Record) map[string]any {
 	var (
 		creator string
 		id      int64
@@ -231,7 +231,7 @@ func toMap(name string, i api.Record) map[string]interface{} {
 		creator = v.Owner
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"name":     name,
 		"size":     i.Size(),
 		"modified": i.ModTime().Format(time.RFC3339),

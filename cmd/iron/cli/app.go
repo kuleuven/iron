@@ -61,7 +61,7 @@ type App struct {
 	inShell bool
 }
 
-func (a *App) Command() *cobra.Command { //nolint:funlen
+func (a *App) Command() *cobra.Command {
 	// Root command
 	rootCmd := a.root(false)
 
@@ -89,7 +89,7 @@ func (a *App) Command() *cobra.Command { //nolint:funlen
 	return rootCmd
 }
 
-func (a *App) root(inShell bool) *cobra.Command {
+func (a *App) root(shellCommand bool) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:               a.name,
 		Short:             "Golang client for iRODS",
@@ -126,15 +126,15 @@ func (a *App) root(inShell bool) *cobra.Command {
 		rootCmd.AddCommand(a.auth())
 	}
 
-	if a.workdirStore != nil || inShell {
+	if a.workdirStore != nil || shellCommand {
 		rootCmd.AddCommand(a.pwd(), a.cd())
 	}
 
-	if inShell {
+	if shellCommand {
 		rootCmd.AddCommand(a.local())
 	}
 
-	if !inShell && a.updater != nil {
+	if !shellCommand && a.updater != nil {
 		rootCmd.AddCommand(a.update())
 	}
 

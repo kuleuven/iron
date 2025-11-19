@@ -48,11 +48,7 @@ func ObfuscateNewPassword(newPassword, oldPassword, signature string) string {
 
 // ScrambleV2 scrambles string (ver2)
 func ScrambleV2(newPassword, oldPassword, signature string) string {
-	v2prefixLen := len(v2Prefix)
-
-	if v2prefixLen > 10 {
-		v2prefixLen = 10
-	}
+	v2prefixLen := min(len(v2Prefix), 10)
 
 	if len(newPassword) > 150 {
 		newPassword = newPassword[:150]

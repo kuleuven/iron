@@ -203,7 +203,7 @@ var ErrAttributeIndexMismatch = fmt.Errorf("attribute index mismatch")
 // to by dest, in order.  If an error occurs during scanning, the
 // error is returned. The values pointed to by dest before the error
 // occurred might be modified.
-func (r *Result) Scan(dest ...interface{}) error {
+func (r *Result) Scan(dest ...any) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -292,7 +292,7 @@ func (r *Result) cleanup() {
 	}
 }
 
-func parseValue(value string, dest interface{}) error {
+func parseValue(value string, dest any) error {
 	if value == "" {
 		return nil
 	}
@@ -334,7 +334,7 @@ func parseValue(value string, dest interface{}) error {
 		reflect.ValueOf(dest).Elem().SetBool(b)
 
 	case reflect.Struct:
-		if reflect.ValueOf(dest).Elem().Type() == reflect.TypeOf(time.Time{}) {
+		if reflect.ValueOf(dest).Elem().Type() == reflect.TypeFor[time.Time]() {
 			t, err := parseTime(value)
 			if err != nil {
 				return fmt.Errorf("%w: %s (time)", err, value)
@@ -440,7 +440,7 @@ var ErrNoRowFound = &msg.IRODSError{
 // error is returned. The values pointed to by dest before the error
 // occurred might be modified.
 // If no rows are found, ErrNoRowFound is returned.
-func (r *SingleRowResult) Scan(dest ...interface{}) error {
+func (r *SingleRowResult) Scan(dest ...any) error {
 	if r.err != nil {
 		return r.err
 	}

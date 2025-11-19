@@ -26,7 +26,7 @@ func GenerateAuthResponse(challenge []byte, password string) string {
 	encodedPassword := m.Sum(nil)
 
 	// replace 0x00 to 0x01
-	for idx := 0; idx < len(encodedPassword); idx++ {
+	for idx := range encodedPassword {
 		if encodedPassword[idx] == 0 {
 			encodedPassword[idx] = 1
 		}

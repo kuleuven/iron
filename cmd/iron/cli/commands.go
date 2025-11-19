@@ -810,9 +810,10 @@ func (a *App) local() *cobra.Command { //nolint:funlen
 			},
 		},
 		&cobra.Command{
-			Use:   "cd <local directory>",
-			Short: "Change the local working directory",
-			Args:  cobra.MaximumNArgs(1),
+			Use:               "cd <local directory>",
+			Short:             "Change the local working directory",
+			Args:              cobra.MaximumNArgs(1),
+			ValidArgsFunction: a.CompleteArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				if len(args) == 0 {
 					args = []string{os.Getenv("HOME")}
@@ -822,9 +823,10 @@ func (a *App) local() *cobra.Command { //nolint:funlen
 			},
 		},
 		&cobra.Command{
-			Use:   "ls [local directory]",
-			Short: "List the local working directory",
-			Args:  cobra.MaximumNArgs(1),
+			Use:               "ls [local directory]",
+			Short:             "List the local working directory",
+			Args:              cobra.MaximumNArgs(1),
+			ValidArgsFunction: a.CompleteArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				if len(args) == 0 {
 					args = []string{"."}

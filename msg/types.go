@@ -210,31 +210,31 @@ type GetDescriptorInfoRequest struct { // No xml.Name means this is a json struc
 }
 
 type GetDescriptorInfoResponse struct { // No xml.Name means this is a json struct
-	L3DescriptorIndex       int                    `json:"l3descInx"`
-	InUseFlag               bool                   `json:"in_use"`
-	OperationType           int                    `json:"operation_type"`
-	OpenType                int                    `json:"open_type"`
-	OperationStatus         int                    `json:"operation_status"`
-	ReplicationFlag         int                    `json:"data_object_input_replica_flag"`
-	DataObjectInput         map[string]interface{} `json:"data_object_input"`
-	DataObjectInfo          map[string]interface{} `json:"data_object_info"`
-	OtherDataObjectInfo     map[string]interface{} `json:"other_data_object_info"`
-	CopiesNeeded            int                    `json:"copies_needed"`
-	BytesWritten            int64                  `json:"bytes_written"`
-	DataSize                int64                  `json:"data_size"`
-	ReplicaStatus           int                    `json:"replica_status"`
-	ChecksumFlag            int                    `json:"checksum_flag"`
-	SourceL1DescriptorIndex int                    `json:"source_l1_descriptor_index"`
-	Checksum                string                 `json:"checksum"`
-	RemoteL1DescriptorIndex int                    `json:"remote_l1_descriptor_index"`
-	StageFlag               int                    `json:"stage_flag"`
-	PurgeCacheFlag          int                    `json:"purge_cache_flag"`
-	LockFileDescriptor      int                    `json:"lock_file_descriptor"`
-	PluginData              map[string]interface{} `json:"plugin_data"`
-	ReplicaDataObjectInfo   map[string]interface{} `json:"replication_data_object_info"`
-	RemoteZoneHost          map[string]interface{} `json:"remote_zone_host"`
-	InPDMO                  string                 `json:"in_pdmo"`
-	ReplicaToken            string                 `json:"replica_token"`
+	L3DescriptorIndex       int            `json:"l3descInx"`
+	InUseFlag               bool           `json:"in_use"`
+	OperationType           int            `json:"operation_type"`
+	OpenType                int            `json:"open_type"`
+	OperationStatus         int            `json:"operation_status"`
+	ReplicationFlag         int            `json:"data_object_input_replica_flag"`
+	DataObjectInput         map[string]any `json:"data_object_input"`
+	DataObjectInfo          map[string]any `json:"data_object_info"`
+	OtherDataObjectInfo     map[string]any `json:"other_data_object_info"`
+	CopiesNeeded            int            `json:"copies_needed"`
+	BytesWritten            int64          `json:"bytes_written"`
+	DataSize                int64          `json:"data_size"`
+	ReplicaStatus           int            `json:"replica_status"`
+	ChecksumFlag            int            `json:"checksum_flag"`
+	SourceL1DescriptorIndex int            `json:"source_l1_descriptor_index"`
+	Checksum                string         `json:"checksum"`
+	RemoteL1DescriptorIndex int            `json:"remote_l1_descriptor_index"`
+	StageFlag               int            `json:"stage_flag"`
+	PurgeCacheFlag          int            `json:"purge_cache_flag"`
+	LockFileDescriptor      int            `json:"lock_file_descriptor"`
+	PluginData              map[string]any `json:"plugin_data"`
+	ReplicaDataObjectInfo   map[string]any `json:"replication_data_object_info"`
+	RemoteZoneHost          map[string]any `json:"remote_zone_host"`
+	InPDMO                  string         `json:"in_pdmo"`
+	ReplicaToken            string         `json:"replica_token"`
 }
 
 type CloseDataObjectReplicaRequest struct { // No xml.Name means this is a json struct
@@ -461,7 +461,7 @@ type AuthPluginResponse struct { // No xml.Name means this is a json struct
 		Retrieve    string           `json:"retrieve,omitempty"`
 		DefaultPath string           `json:"default_path,omitempty"`
 		Patch       []map[string]any `json:"patch,omitempty"`
-	} `json:"msg,omitempty"`
+	} `json:"msg"`
 	RequestResult string `json:"request_result,omitempty"`
 }
 

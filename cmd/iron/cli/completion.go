@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -61,16 +63,22 @@ func (a *App) CompleteArgs(cmd *cobra.Command, args []string, toComplete string)
 // it uses completeIrodsArgument to generate completions. Otherwise, it initializes
 // a new client to perform completion.
 func (a *App) completeArgument(zone, toComplete string, argType ArgType) ([]string, cobra.ShellCompDirective) {
-	if argType == LocalFile {
-		return nil, cobra.ShellCompDirectiveDefault
-	}
+	switch {
+	case a.inShell && argType == LocalFile,
+		a.inShell && argType == LocalDirectory:
+		return a.completeLocalArgument(toComplete, argType), cobra.ShellCompDirectiveNoFileComp
 
-	if argType == LocalDirectory {
-		return nil, cobra.ShellCompDirectiveFilterDirs
-	}
-
-	if !slices.Contains(IrodsArguments, argType) {
+	case argType == LocalFile:
 		return nil, cobra.ShellCompDirectiveNoFileComp
+
+	case argType == LocalDirectory:
+		return nil, cobra.ShellCompDirectiveFilterDirs
+
+	case !slices.Contains(IrodsArguments, argType):
+		return nil, cobra.ShellCompDirectiveNoFileComp
+
+	default:
+		// See below
 	}
 
 	// Get zone from argument that needs completion, but only if it is at least of thet format /zone/
@@ -103,6 +111,31 @@ func (a *App) completeArgument(zone, toComplete string, argType ArgType) ([]stri
 	defer client.Close()
 
 	return a.completeIrodsArgument(client, toComplete, argType), cobra.ShellCompDirectiveNoSpace
+}
+
+func (a *App) completeLocalArgument(toComplete string, argType ArgType) []string {
+	dir := filepath.Dir(toComplete)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var completions []string
+
+	for _, entry := range entries {
+		if argType == LocalDirectory && !entry.IsDir() {
+			continue
+		}
+
+		if !strings.HasPrefix(entry.Name(), filepath.Base(toComplete)) {
+			continue
+		}
+
+		completions = append(completions, filepath.Join(dir, entry.Name()))
+	}
+
+	return completions
 }
 
 // completeIrodsArgument provides shell completion for the specified argument type

@@ -30,7 +30,7 @@ func Marshal(obj any, protocol Protocol, msgType string) (*Message, error) {
 		return marshalBytes(val.Bytes(), msgType)
 	}
 
-	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
+	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeFor[xml.Name]() {
 		if protocol == Native {
 			return marshalCStruct(obj, msgType)
 		}
@@ -73,7 +73,7 @@ func Unmarshal(msg Message, protocol Protocol, obj any) error {
 		return nil
 	}
 
-	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeOf(xml.Name{}) {
+	if val.Kind() == reflect.Struct && val.Field(0).Type() == reflect.TypeFor[xml.Name]() {
 		if protocol == Native {
 			return unmarshalCStruct(msg, obj)
 		}

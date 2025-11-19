@@ -412,9 +412,7 @@ func BenchmarkBot_Ask(b *testing.B) {
 		"key3": "value3",
 	}
 
-	b.ResetTimer()
-
-	for range b.N {
+	for b.Loop() {
 		_, _ = bot.Ask("key1")
 	}
 }
@@ -422,9 +420,7 @@ func BenchmarkBot_Ask(b *testing.B) {
 func BenchmarkBot_Print(b *testing.B) {
 	bot := Bot{}
 
-	b.ResetTimer()
-
-	for range b.N {
+	for b.Loop() {
 		_ = bot.Print("test message")
 	}
 }

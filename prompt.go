@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
@@ -66,7 +67,7 @@ func (p *prompt) Ask(message string) (string, error) {
 		return "", err
 	}
 
-	var value string
+	var value strings.Builder
 
 	// Read until newline
 	for {
@@ -81,10 +82,10 @@ func (p *prompt) Ask(message string) (string, error) {
 			break
 		}
 
-		value += string(r[0])
+		value.WriteString(string(r[0])) //nolint:gosec
 	}
 
-	return value, err
+	return value.String(), err
 }
 
 func (p *prompt) Password(message string) (string, error) {
