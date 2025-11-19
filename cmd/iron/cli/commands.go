@@ -523,7 +523,7 @@ func (a *App) list() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "ls <collection path>",
 		Aliases:           []string{"list"},
-		Short:             "List a collection",
+		Short:             "List the contents of a collection or information about a data object",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
