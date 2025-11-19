@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/kuleuven/iron/msg"
@@ -386,6 +387,24 @@ func TestHead(t *testing.T) {
 
 	cmd := app.Command()
 	cmd.SetArgs([]string{"head", "/testzone/obj1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSave(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponse(msg.FileDescriptor(1))
+	app.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           6,
+	}, msg.EmptyResponse{}, []byte("hello\n"), nil)
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"save", "/testzone/obj1"})
+	cmd.SetIn(strings.NewReader("hello\n"))
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)

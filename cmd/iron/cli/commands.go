@@ -146,12 +146,12 @@ func (a *App) stat() *cobra.Command {
 
 			if jsonFormat {
 				printer = &JSONPrinter{
-					Writer: os.Stdout,
+					Writer: cmd.OutOrStdout(),
 				}
 			} else {
 				printer = &TablePrinter{
 					Writer: &tabwriter.TabWriter{
-						Writer: os.Stdout,
+						Writer: cmd.OutOrStdout(),
 					},
 					Zone: a.Zone,
 				}
@@ -196,7 +196,7 @@ func (a *App) rm() *cobra.Command {
 				opts := transfer.Options{
 					MaxQueued:  10000,
 					MaxThreads: 1,
-					Output:     os.Stdout,
+					Output:     cmd.OutOrStdout(),
 					SkipTrash:  skip,
 				}
 
@@ -281,7 +281,7 @@ func (a *App) cp() *cobra.Command {
 				opts := transfer.Options{
 					MaxQueued:  10000,
 					MaxThreads: maxThreads,
-					Output:     os.Stdout,
+					Output:     cmd.OutOrStdout(),
 					SkipTrash:  skip,
 				}
 
@@ -371,7 +371,6 @@ func (a *App) upload() *cobra.Command {
 	opts := transfer.Options{
 		SyncModTime: true,
 		MaxQueued:   10000,
-		Output:      os.Stdout,
 	}
 
 	examples := []string{
@@ -404,6 +403,8 @@ func (a *App) upload() *cobra.Command {
 				return err
 			}
 
+			opts.Output = cmd.OutOrStdout()
+
 			if !fi.IsDir() {
 				opts.SyncModTime = false
 
@@ -428,7 +429,6 @@ func (a *App) download() *cobra.Command {
 	opts := transfer.Options{
 		SyncModTime: true,
 		MaxQueued:   10000,
-		Output:      os.Stdout,
 	}
 
 	examples := []string{
@@ -467,6 +467,8 @@ func (a *App) download() *cobra.Command {
 				return err
 			}
 
+			opts.Output = cmd.OutOrStdout()
+
 			if !record.IsDir() {
 				opts.SyncModTime = false
 
@@ -501,7 +503,7 @@ func (a *App) cat() *cobra.Command {
 
 			defer f.Close()
 
-			_, err = io.Copy(os.Stdout, f)
+			_, err = io.Copy(cmd.OutOrStdout(), f)
 
 			return err
 		},
@@ -531,7 +533,7 @@ func (a *App) head() *cobra.Command {
 			for range n {
 				payload, err := r.ReadBytes('\n')
 
-				_, err2 := os.Stdout.Write(payload)
+				_, err2 := cmd.OutOrStdout().Write(payload)
 
 				if errors.Is(err, io.EOF) {
 					break
@@ -573,7 +575,7 @@ func (a *App) save() *cobra.Command {
 				fmt.Println("[Press Ctrl+D to end input]")
 			}
 
-			_, err = io.Copy(f, os.Stdin)
+			_, err = io.Copy(f, cmd.InOrStdin())
 
 			return err
 		},
@@ -635,12 +637,12 @@ func (a *App) list() *cobra.Command {
 
 			if jsonFormat {
 				printer = &JSONPrinter{
-					Writer: os.Stdout,
+					Writer: cmd.OutOrStdout(),
 				}
 			} else {
 				printer = &TablePrinter{
 					Writer: &tabwriter.TabWriter{
-						Writer: os.Stdout,
+						Writer: cmd.OutOrStdout(),
 					},
 					Zone: a.Zone,
 				}
@@ -777,7 +779,7 @@ func (a *App) metals() *cobra.Command {
 			}
 
 			out := &tabwriter.TabWriter{
-				Writer: os.Stdout,
+				Writer: cmd.OutOrStdout(),
 			}
 
 			defer out.Flush()
