@@ -14,11 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func (a *App) AddUpdateCommand(rootCmd *cobra.Command) {
-	if a.updater == nil {
-		return
-	}
-
+func (a *App) update() *cobra.Command {
 	var downgrade bool
 
 	cmd := &cobra.Command{
@@ -36,7 +32,7 @@ func (a *App) AddUpdateCommand(rootCmd *cobra.Command) {
 
 	cmd.Flags().BoolVar(&downgrade, "downgrade", false, "Allow to downgrade to the latest release")
 
-	rootCmd.AddCommand(cmd)
+	return cmd
 }
 
 func (a *App) CheckUpdate() {

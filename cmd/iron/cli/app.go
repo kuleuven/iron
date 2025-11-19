@@ -62,6 +62,34 @@ type App struct {
 }
 
 func (a *App) Command() *cobra.Command { //nolint:funlen
+	// Root command
+	rootCmd := a.root(false)
+
+	// Root to be used in shell
+	rootShell := a.root(true)
+	hiddenChild := a.root(true)
+	hiddenChild.Hidden = true
+	rootShell.AddCommand(hiddenChild)
+
+	// Shell subcommand
+	shellCmd := shell.New(rootShell, nil, prompt.OptionLivePrefix(a.prefix))
+	run := shellCmd.Run
+
+	shellCmd.Use = "shell [zone]"
+	shellCmd.Args = cobra.MaximumNArgs(1)
+	shellCmd.PersistentPreRunE = a.ShellInit
+	shellCmd.Run = func(cmd *cobra.Command, args []string) {
+		rootShell.ResetFlags()
+
+		run(cmd, args)
+	}
+
+	rootCmd.AddCommand(shellCmd)
+
+	return rootCmd
+}
+
+func (a *App) root(inShell bool) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:               a.name,
 		Short:             "Golang client for iRODS",
@@ -94,34 +122,20 @@ func (a *App) Command() *cobra.Command { //nolint:funlen
 		a.version(),
 	)
 
-	sh := shell.New(rootCmd, nil, prompt.OptionLivePrefix(a.prefix))
-	run := sh.Run
-
-	sh.Use = "shell [zone]"
-	sh.Args = cobra.MaximumNArgs(1)
-	sh.PersistentPreRunE = a.ShellInit
-	sh.Run = func(cmd *cobra.Command, args []string) {
-		rootCmd.ResetFlags()
-
-		if a.workdirStore == nil {
-			rootCmd.AddCommand(a.pwd(), a.cd())
-		}
-
-		rootCmd.AddCommand(a.local())
-
-		run(cmd, args)
-	}
-
-	rootCmd.AddCommand(sh)
-
-	a.AddUpdateCommand(rootCmd)
-
 	if a.passwordStore != nil {
 		rootCmd.AddCommand(a.auth())
 	}
 
-	if a.workdirStore != nil {
+	if a.workdirStore != nil || inShell {
 		rootCmd.AddCommand(a.pwd(), a.cd())
+	}
+
+	if inShell {
+		rootCmd.AddCommand(a.local())
+	}
+
+	if !inShell && a.updater != nil {
+		rootCmd.AddCommand(a.update())
 	}
 
 	return rootCmd
