@@ -90,7 +90,7 @@ func (s *cobraShell) executor(line string) {
 	args, err := shlex.Split(line)
 	if err != nil {
 		fmt.Print(err)
-	} else {
+	} else if len(args) > 0 {
 		_ = execute(s.root, args) //nolint:errcheck
 	}
 
