@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -478,6 +481,74 @@ func (a *App) download() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
 	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
+
+	return cmd
+}
+
+func (a *App) cat() *cobra.Command {
+	return &cobra.Command{
+		Use:               "cat <object path>",
+		Short:             "Stream a data object to stdout",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			source := a.Path(args[0])
+
+			f, err := a.OpenDataObject(a.Context, source, api.O_RDONLY)
+			if err != nil {
+				return err
+			}
+
+			defer f.Close()
+
+			_, err = io.Copy(os.Stdout, f)
+
+			return err
+		},
+	}
+}
+
+func (a *App) head() *cobra.Command {
+	var n int
+
+	cmd := &cobra.Command{
+		Use:               "head <object path>",
+		Short:             "Print the first lines of a data object to stdout",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			source := a.Path(args[0])
+
+			f, err := a.OpenDataObject(a.Context, source, api.O_RDONLY)
+			if err != nil {
+				return err
+			}
+
+			defer f.Close()
+
+			r := bufio.NewReader(f)
+
+			for range n {
+				payload, err := r.ReadBytes('\n')
+
+				_, err2 := os.Stdout.Write(payload)
+
+				if errors.Is(err, io.EOF) {
+					break
+				} else if err != nil {
+					return err
+				}
+
+				if err2 != nil {
+					return err2
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&n, "lines", 10, "Number of lines to print")
 
 	return cmd
 }

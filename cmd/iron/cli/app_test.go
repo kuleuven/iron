@@ -262,6 +262,32 @@ func TestAutocomplete(t *testing.T) {
 	}
 }
 
+func TestAutocompleteLocal(t *testing.T) {
+	app := testApp(t)
+	app.inShell = true
+
+	dir := t.TempDir()
+
+	if err := os.Mkdir(filepath.Join(dir, "test"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(dir)
+
+	opts, directive := app.CompleteArgs(app.local().Commands()[1], []string{}, "te")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("expected default directive, got %d", directive)
+	}
+
+	if len(opts) != 1 {
+		t.Fatalf("expected 1 options, got %v", opts)
+	}
+
+	if opts[0] != "test" {
+		t.Fatalf("expected test, got %s", opts[0])
+	}
+}
+
 var responses = []any{
 	msg.QueryResponse{
 		RowCount:       1,

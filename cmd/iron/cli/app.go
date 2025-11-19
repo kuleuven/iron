@@ -112,6 +112,8 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.touch(),
 		a.upload(),
 		a.download(),
+		a.cat(),
+		a.head(),
 		a.chmod(),
 		a.inherit(),
 		a.list(),

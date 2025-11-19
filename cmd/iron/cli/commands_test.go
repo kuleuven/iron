@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/kuleuven/iron/msg"
@@ -351,6 +352,40 @@ func TestMetaUnset(t *testing.T) {
 
 	cmd := app.Command()
 	cmd.SetArgs([]string{"meta", "unset", "/testzone/coll", "a"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCat(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponse(msg.FileDescriptor(1))
+	app.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           32768,
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("hello"), 20))
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"cat", "/testzone/obj1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHead(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponse(msg.FileDescriptor(1))
+	app.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           4096,
+	}, msg.ReadResponse(120), nil, bytes.Repeat([]byte("hello\n"), 20))
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"head", "/testzone/obj1"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
