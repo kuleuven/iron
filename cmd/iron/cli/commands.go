@@ -503,7 +503,20 @@ func (a *App) cat() *cobra.Command {
 
 			defer f.Close()
 
-			_, err = io.Copy(cmd.OutOrStdout(), f)
+			size, err := f.Size()
+			if err != nil {
+				return err
+			}
+
+			bufSize := 32 * 1024 * 1024
+
+			if size < int64(bufSize) {
+				bufSize = int(size) + 1
+			}
+
+			buf := make([]byte, bufSize)
+
+			_, err = CopyBuffer(cmd.OutOrStdout(), f, buf)
 
 			return err
 		},
@@ -556,7 +569,7 @@ func (a *App) head() *cobra.Command {
 }
 
 func (a *App) save() *cobra.Command {
-	var append bool
+	var appendFlag bool
 
 	cmd := &cobra.Command{
 		Use:               "save <object path>",
@@ -568,7 +581,7 @@ func (a *App) save() *cobra.Command {
 
 			flags := api.O_WRONLY | api.O_CREAT | api.O_TRUNC
 
-			if append {
+			if appendFlag {
 				flags = api.O_WRONLY | api.O_CREAT | api.O_APPEND
 			}
 
@@ -583,13 +596,15 @@ func (a *App) save() *cobra.Command {
 				fmt.Println("[Press Ctrl+D to end input]")
 			}
 
-			_, err = io.Copy(f, cmd.InOrStdin())
+			buf := make([]byte, 32*1024*1024)
+
+			_, err = CopyBuffer(f, cmd.InOrStdin(), buf)
 
 			return err
 		},
 	}
 
-	cmd.Flags().BoolVarP(&append, "append", "a", false, "Append to existing data object")
+	cmd.Flags().BoolVarP(&appendFlag, "append", "a", false, "Append to existing data object")
 
 	return cmd
 }
