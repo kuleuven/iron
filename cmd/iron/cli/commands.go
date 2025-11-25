@@ -516,7 +516,7 @@ func (a *App) cat() *cobra.Command {
 
 			buf := make([]byte, bufSize)
 
-			_, err = CopyBuffer(cmd.OutOrStdout(), f, buf)
+			_, err = CopyBuffer(a.Context, cmd.OutOrStdout(), f, buf)
 
 			return err
 		},
@@ -600,7 +600,7 @@ func (a *App) save() *cobra.Command {
 
 			buf := make([]byte, 32*1024*1024)
 
-			_, err = CopyBuffer(f, cmd.InOrStdin(), buf)
+			_, err = CopyBuffer(a.Context, f, cmd.InOrStdin(), buf)
 
 			return err
 		},

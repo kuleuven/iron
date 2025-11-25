@@ -73,16 +73,9 @@ func (a *App) Command() *cobra.Command {
 
 	// Shell subcommand
 	shellCmd := shell.New(rootShell, nil, prompt.OptionLivePrefix(a.prefix))
-	run := shellCmd.Run
-
 	shellCmd.Use = "shell [zone]"
 	shellCmd.Args = cobra.MaximumNArgs(1)
 	shellCmd.PersistentPreRunE = a.ShellInit
-	shellCmd.Run = func(cmd *cobra.Command, args []string) {
-		rootShell.ResetFlags()
-
-		run(cmd, args)
-	}
 
 	rootCmd.AddCommand(shellCmd)
 
@@ -95,12 +88,6 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		Short:             "Golang client for iRODS",
 		PersistentPreRunE: a.Init,
 	}
-
-	rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
-	rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
-	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
-	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
-	rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "TTL in case pam authentication is used")
 
 	rootCmd.AddCommand(
 		a.mkdir(),
@@ -139,6 +126,14 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 
 	if !shellCommand && a.updater != nil {
 		rootCmd.AddCommand(a.update())
+	}
+
+	if !shellCommand {
+		rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
+		rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
+		rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
+		rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
+		rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "TTL in case pam authentication is used")
 	}
 
 	return rootCmd

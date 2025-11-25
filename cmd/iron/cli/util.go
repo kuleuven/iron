@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"io"
 	"strings"
 
@@ -56,10 +57,14 @@ func Name(path string) string {
 
 // CopyBuffer reads from src into buf and writes to dst.
 // Implementation taken from io.CopyBuffer, but removed the ReadFrom and WriteTo checks
-func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (int64, error) {
+func CopyBuffer(ctx context.Context, dst io.Writer, src io.Reader, buf []byte) (int64, error) {
 	var written int64
 
 	for {
+		if ctx.Err() != nil {
+			return written, ctx.Err()
+		}
+
 		nr, er := src.Read(buf)
 		if nr > 0 {
 			nw, ew := dst.Write(buf[0:nr])
