@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/creativeprojects/go-selfupdate"
+	"github.com/inconshreveable/mousetrap"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/cli"
 	"github.com/spf13/cobra"
@@ -61,5 +62,16 @@ func main() {
 	// Disable Cobra's mouse trap, we have our own shell to fall back to
 	cobra.MousetrapHelpText = ""
 
+	if mousetrap.StartedByExplorer() {
+		gotoHomeDir()
+	}
+
 	cmd.Execute() //nolint:errcheck
+}
+
+func gotoHomeDir() {
+	home, err := os.UserHomeDir()
+	if err == nil {
+		_ = os.Chdir(home) //nolint:errcheck
+	}
 }
