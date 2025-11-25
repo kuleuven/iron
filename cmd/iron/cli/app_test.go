@@ -118,11 +118,13 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	if err := app.auth().RunE(cmd, []string{"authenticate"}); err != nil {
+	authCmd := app.auth()
+
+	if err := authCmd.RunE(authCmd, []string{"authenticate"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := app.cd().RunE(cmd, []string{"test"}); err != nil {
+	if err := authCmd.RunE(authCmd, []string{"test"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -200,16 +202,21 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	args := []string{"user", "zone", "127.0.0.1"}
 
-	if err := app.auth().Args(cmd, args); err != nil {
+	authCmd := app.auth()
+
+	// Alter Use so init() does not erase password
+	authCmd.Use = "test-" + authCmd.Use
+
+	if err := authCmd.Args(authCmd, args); err != nil {
 		t.Fatal(err)
 	}
 
 	for range 2 {
-		if err := app.auth().PersistentPreRunE(cmd, args); err != nil {
+		if err := authCmd.PersistentPreRunE(authCmd, args); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := app.auth().RunE(cmd, args); err != nil {
+		if err := authCmd.RunE(authCmd, args); err != nil {
 			t.Fatal(err)
 		}
 	}
