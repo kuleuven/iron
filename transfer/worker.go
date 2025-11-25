@@ -220,13 +220,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		mode |= api.O_EXCL
 	}
 
-	w, err := worker.TransferPool.OpenDataObject(ctx, remote, mode)
-	if code, ok := api.ErrorCode(err); ok && code == msg.HIERARCHY_ERROR {
-		if err = worker.IndexPool.RenameDataObject(ctx, remote, remote+".bad"); err == nil {
-			w, err = worker.TransferPool.OpenDataObject(ctx, remote, mode|api.O_EXCL)
-		}
-	}
-
+	w, err := worker.tryOpenDataObject(ctx, remote, mode)
 	if err != nil {
 		worker.Error(r.Name(), remote, multierr.Append(err, r.Close()))
 
@@ -291,6 +285,30 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	})
 }
 
+func (worker *Worker) tryOpenDataObject(ctx context.Context, remote string, mode int) (api.File, error) {
+	w, err := worker.TransferPool.OpenDataObject(ctx, remote, mode)
+	if err == nil {
+		return w, nil
+	}
+
+	code, ok := api.ErrorCode(err)
+	if !ok {
+		return nil, err
+	}
+
+	if code == msg.HIERARCHY_ERROR {
+		if err2 := worker.IndexPool.RenameDataObject(ctx, remote, remote+".bad"); err2 == nil {
+			return worker.TransferPool.OpenDataObject(ctx, remote, mode|api.O_EXCL)
+		}
+	}
+
+	if code == -510017 && mode&api.O_EXCL != 0 {
+		return nil, fmt.Errorf("cannot upload exclusively: %s", os.ErrExist)
+	}
+
+	return nil, err
+}
+
 // Download schedules the download of a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
@@ -302,7 +320,11 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) {
 	}
 
 	w, err := os.OpenFile(local, mode, 0o600)
-	if err != nil {
+	if errors.Is(err, os.ErrExist) && worker.options.Exclusive {
+		worker.Error(local, remote, fmt.Errorf("cannot download exclusively: %w", os.ErrExist))
+
+		return
+	} else if err != nil {
 		worker.Error(local, remote, err)
 
 		return
