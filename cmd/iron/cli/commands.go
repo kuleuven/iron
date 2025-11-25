@@ -573,7 +573,9 @@ func (a *App) save() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "save <object path>",
-		Short:             "Stream stdin into a data object",
+		Short:             "Stream the standard input to a data object.",
+		Long:              "Stream the standard input to a data object. If the data object does not exist, it will be created. Use '--append' to append to an existing data object.",
+		Example:           "echo Test | " + a.name + " save object.txt",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
