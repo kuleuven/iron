@@ -108,10 +108,9 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	app := New(WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile), WithPasswordStore(FilePasswordStore(envfile)))
+	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile), WithPasswordStore(FilePasswordStore(envfile)))
 
 	cmd := app.Command()
-	cmd.SetContext(t.Context())
 
 	defer app.Close()
 
@@ -178,11 +177,10 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	app := New(
+	app := New(t.Context(),
 		WithConfigStore(FileStore(envfile, iron.Env{
 			Port:                    tcpAddr.Port,
 			ClientServerNegotiation: "no_negotiation",
-			Password:                "test",
 		}), []string{"user name", "zone name", "host"}),
 		WithLoader(FileLoader(envfile)),
 		WithPasswordStore(FilePasswordStore(envfile)),
@@ -196,29 +194,22 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	defer app.Close()
 
-	auth := app.auth()
-	auth.SetContext(t.Context())
-
-	// We cannot test with asking a password
-	// Override behaviour of a.auth
-	auth.Use = "test-" + auth.Use
-
-	if err := app.ShellInit(auth, nil); err != nil {
+	if err := app.ShellInit(app.auth(), nil); err != nil {
 		t.Fatal(err)
 	}
 
 	args := []string{"user", "zone", "127.0.0.1"}
 
-	if err := auth.Args(auth, args); err != nil {
+	if err := app.auth().Args(cmd, args); err != nil {
 		t.Fatal(err)
 	}
 
 	for range 2 {
-		if err := auth.PersistentPreRunE(auth, args); err != nil {
+		if err := app.auth().PersistentPreRunE(cmd, args); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := auth.RunE(auth, args); err != nil {
+		if err := app.auth().RunE(cmd, args); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -229,8 +220,8 @@ type mockApp struct {
 	*App
 }
 
-func testApp(_ *testing.T) *mockApp {
-	app := New()
+func testApp(t *testing.T) *mockApp {
+	app := New(t.Context())
 
 	testConn := &api.MockConn{}
 
@@ -257,10 +248,7 @@ func testApp(_ *testing.T) *mockApp {
 func TestAutocomplete(t *testing.T) {
 	app := testApp(t)
 
-	cmd := app.mkdir()
-	cmd.SetContext(t.Context())
-
-	opts, directive := app.CompleteArgs(cmd, []string{}, "/test")
+	opts, directive := app.CompleteArgs(app.mkdir(), []string{}, "/test")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("expected default directive, got %d", directive)
 	}
@@ -286,10 +274,7 @@ func TestAutocompleteLocal(t *testing.T) {
 
 	t.Chdir(dir)
 
-	cmd := app.local().Commands()[1]
-	cmd.SetContext(t.Context())
-
-	opts, directive := app.CompleteArgs(cmd, []string{}, "te")
+	opts, directive := app.CompleteArgs(app.local().Commands()[1], []string{}, "te")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("expected default directive, got %d", directive)
 	}
@@ -341,10 +326,7 @@ func TestAutocomplete2(t *testing.T) {
 
 	app.AddResponses(responses)
 
-	cmd := app.mkdir()
-	cmd.SetContext(t.Context())
-
-	opts, directive := app.CompleteArgs(cmd, []string{}, "/testzone/hom")
+	opts, directive := app.CompleteArgs(app.mkdir(), []string{}, "/testzone/hom")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("expected default directive, got %d", directive)
 	}

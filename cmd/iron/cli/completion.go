@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -53,7 +52,7 @@ func (a *App) CompleteArgs(cmd *cobra.Command, args []string, toComplete string)
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	return a.completeArgument(cmd.Context(), zone, toComplete, argType)
+	return a.completeArgument(zone, toComplete, argType)
 }
 
 // completeArgument provides shell completion for the specified argument type.
@@ -63,7 +62,7 @@ func (a *App) CompleteArgs(cmd *cobra.Command, args []string, toComplete string)
 // and uses it to load the iRODS environment if necessary. If a client is available,
 // it uses completeIrodsArgument to generate completions. Otherwise, it initializes
 // a new client to perform completion.
-func (a *App) completeArgument(ctx context.Context, zone, toComplete string, argType ArgType) ([]string, cobra.ShellCompDirective) {
+func (a *App) completeArgument(zone, toComplete string, argType ArgType) ([]string, cobra.ShellCompDirective) {
 	switch {
 	case a.inShell && argType == LocalFile,
 		a.inShell && argType == LocalDirectory:
@@ -90,16 +89,16 @@ func (a *App) completeArgument(ctx context.Context, zone, toComplete string, arg
 	}
 
 	if a.Client != nil {
-		return a.completeIrodsArgument(ctx, a.Client, toComplete, argType), cobra.ShellCompDirectiveNoFileComp
+		return a.completeIrodsArgument(a.Client, toComplete, argType), cobra.ShellCompDirectiveNoFileComp
 	}
 
 	// Load client to complete the argument
-	env, dialer, err := a.loadEnv(ctx, zone)
+	env, dialer, err := a.loadEnv(a.Context, zone)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	client, err := iron.New(ctx, env, iron.Option{
+	client, err := iron.New(a.Context, env, iron.Option{
 		ClientName:        a.name,
 		Admin:             a.Admin,
 		UseNativeProtocol: a.Native,
@@ -111,7 +110,7 @@ func (a *App) completeArgument(ctx context.Context, zone, toComplete string, arg
 
 	defer client.Close()
 
-	return a.completeIrodsArgument(ctx, client, toComplete, argType), cobra.ShellCompDirectiveNoSpace
+	return a.completeIrodsArgument(client, toComplete, argType), cobra.ShellCompDirectiveNoSpace
 }
 
 func (a *App) completeLocalArgument(toComplete string, argType ArgType) []string {
@@ -141,7 +140,7 @@ func (a *App) completeLocalArgument(toComplete string, argType ArgType) []string
 
 // completeIrodsArgument provides shell completion for the specified argument type
 // and completes the given path in the iRODS file system.
-func (a *App) completeIrodsArgument(ctx context.Context, client *iron.Client, toComplete string, argType ArgType) []string {
+func (a *App) completeIrodsArgument(client *iron.Client, toComplete string, argType ArgType) []string {
 	relativeBase, filePrefix := api.Split(toComplete)
 
 	absoluteBase := a.Path(relativeBase)
@@ -156,7 +155,7 @@ func (a *App) completeIrodsArgument(ctx context.Context, client *iron.Client, to
 
 	var completions []string
 
-	client.Walk(ctx, absoluteBase, func(path string, info api.Record, err error) error { //nolint:errcheck
+	client.Walk(a.Context, absoluteBase, func(path string, info api.Record, err error) error { //nolint:errcheck
 		if path == absoluteBase {
 			return api.SkipSubDirs
 		}
