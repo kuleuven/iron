@@ -36,7 +36,6 @@ func main() {
 	defer stop()
 
 	app := cli.New(
-		ctx,
 		cli.WithVersion(version),
 		cli.WithConfigStore(cli.FileStore(config, iron.Env{
 			AuthScheme:      "pam_interactive",
@@ -66,7 +65,7 @@ func main() {
 		gotoHomeDir()
 	}
 
-	cmd.Execute() //nolint:errcheck
+	cmd.ExecuteContext(ctx) //nolint:errcheck
 }
 
 func gotoHomeDir() {

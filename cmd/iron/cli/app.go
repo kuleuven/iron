@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func New(ctx context.Context, options ...Option) *App {
+func New(options ...Option) *App {
 	home := os.Getenv("HOME")
 
 	if home == "" {
@@ -24,7 +24,6 @@ func New(ctx context.Context, options ...Option) *App {
 	}
 
 	app := &App{
-		Context: ctx,
 		name:    "iron",
 		loadEnv: FileLoader(home + "/.irods/irods_environment.json"),
 	}
@@ -49,8 +48,6 @@ type App struct {
 	releaseVersion string
 	updater        *selfupdate.Updater
 	repo           selfupdate.RepositorySlug
-
-	Context context.Context //nolint:containedctx
 
 	Admin   bool
 	Debug   int
@@ -177,7 +174,7 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	a.CheckUpdate()
+	a.CheckUpdate(cmd.Context())
 
 	var zone string
 
@@ -220,7 +217,7 @@ func (a *App) ResetInitConfigStore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	zone, err := a.configStore(a.Context, args)
+	zone, err := a.configStore(cmd.Context(), args)
 	if err != nil {
 		return err
 	}
@@ -256,7 +253,7 @@ func (a *App) ShellInit(cmd *cobra.Command, args []string) error {
 
 func (a *App) init(cmd *cobra.Command, zone string) error {
 	// Load zone and start client
-	ctx := a.Context
+	ctx := cmd.Context()
 
 	if strings.HasPrefix(cmd.Use, "auth ") {
 		ctx = context.WithValue(ctx, ForceReauthentication, true)
@@ -279,7 +276,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		clientName = fmt.Sprintf("%s-%s", clientName, version.String())
 	}
 
-	a.Client, err = iron.New(a.Context, env, iron.Option{
+	a.Client, err = iron.New(cmd.Context(), env, iron.Option{
 		ClientName:        clientName,
 		Admin:             a.Admin,
 		UseNativeProtocol: a.Native,

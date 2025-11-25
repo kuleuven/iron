@@ -12,6 +12,7 @@ func TestVersion(t *testing.T) {
 	app := testApp(t)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"version"})
 
 	if err := cmd.Execute(); err != nil {
@@ -25,6 +26,7 @@ func TestMkdir(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"mkdir", "testdir"})
 
 	if err := cmd.Execute(); err != nil {
@@ -38,6 +40,7 @@ func TestRmdir(t *testing.T) {
 	app.AddResponse(msg.CollectionOperationStat{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"rmdir", "testdir"})
 
 	if err := cmd.Execute(); err != nil {
@@ -54,6 +57,7 @@ func TestTree(t *testing.T) {
 	app.AddResponse(msg.QueryResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"tree", "/testzone"})
 
 	if err := cmd.Execute(); err != nil {
@@ -67,6 +71,7 @@ func TestList(t *testing.T) {
 	app.AddResponses(responses)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"ls", "/testzone"})
 
 	if err := cmd.Execute(); err != nil {
@@ -113,6 +118,7 @@ func TestListExtra(t *testing.T) {
 	})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"ls", "--acl", "--meta", "/testzone"})
 
 	if err := cmd.Execute(); err != nil {
@@ -126,6 +132,7 @@ func TestListJSON(t *testing.T) {
 	app.AddResponses(responses)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"ls", "--json", "/testzone"})
 
 	if err := cmd.Execute(); err != nil {
@@ -160,6 +167,7 @@ func TestStat(t *testing.T) {
 	app.AddResponses(statResponses)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"stat", "/testzone/coll"})
 
 	if err := cmd.Execute(); err != nil {
@@ -173,6 +181,7 @@ func TestStatJSON(t *testing.T) {
 	app.AddResponses(statResponses)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"stat", "--json", "/testzone/coll"})
 
 	if err := cmd.Execute(); err != nil {
@@ -187,6 +196,7 @@ func TestMv(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"mv", "/testzone/coll", "/testzone/coll2"})
 
 	if err := cmd.Execute(); err != nil {
@@ -201,6 +211,7 @@ func TestRm(t *testing.T) {
 	app.AddResponse(msg.CollectionOperationStat{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"rm", "/testzone/coll"})
 
 	if err := cmd.Execute(); err != nil {
@@ -236,6 +247,7 @@ func TestCopy(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"cp", "/testzone/coll/file", "/testzone/coll2/"})
 
 	if err := cmd.Execute(); err != nil {
@@ -257,6 +269,7 @@ func TestTouch(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"touch", "/testzone/obj1"})
 
 	if err := cmd.Execute(); err != nil {
@@ -272,6 +285,7 @@ func TestChecksum(t *testing.T) {
 	})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"checksum", "/testzone/obj1"})
 
 	if err := cmd.Execute(); err != nil {
@@ -283,7 +297,7 @@ func TestPWD(t *testing.T) {
 	app := testApp(t)
 
 	cmd := app.pwd()
-
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{})
 
 	if err := cmd.Execute(); err != nil {
@@ -295,7 +309,7 @@ func TestLocal(t *testing.T) {
 	app := testApp(t)
 
 	cmd := app.local()
-
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"pwd"})
 
 	if err := cmd.Execute(); err != nil {
@@ -321,6 +335,7 @@ func TestMetaList(t *testing.T) {
 	app.AddResponses(statResponses[:len(statResponses)-2])
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"meta", "ls", "/testzone/coll"})
 
 	if err := cmd.Execute(); err != nil {
@@ -336,6 +351,7 @@ func TestMetaBasicOps(t *testing.T) {
 		app.AddResponse(msg.EmptyResponse{})
 
 		cmd := app.Command()
+		cmd.SetContext(t.Context())
 		cmd.SetArgs([]string{"meta", op, "/testzone/coll", "a", "b"})
 
 		if err := cmd.Execute(); err != nil {
@@ -352,6 +368,7 @@ func TestMetaUnset(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"meta", "unset", "/testzone/coll", "a"})
 
 	if err := cmd.Execute(); err != nil {
@@ -384,6 +401,7 @@ func TestCat(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"cat", "/testzone/obj1"})
 
 	if err := cmd.Execute(); err != nil {
@@ -402,6 +420,7 @@ func TestHead(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"head", "/testzone/obj1"})
 
 	if err := cmd.Execute(); err != nil {
@@ -419,6 +438,7 @@ func TestSave(t *testing.T) {
 	}, msg.EmptyResponse{}, []byte("hello\n"), nil)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 	cmd.SetArgs([]string{"save", "/testzone/obj1"})
 	cmd.SetIn(strings.NewReader("hello\n"))
 
