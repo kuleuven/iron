@@ -18,18 +18,16 @@ import (
 )
 
 type cobraShell struct {
-	root    *cobra.Command
-	refresh func() *cobra.Command
-	cache   map[string][]prompt.Suggest
-	stdin   *term.State
+	root  *cobra.Command
+	cache map[string][]prompt.Suggest
+	stdin *term.State
 }
 
 // New creates a Cobra CLI command named "shell" which runs an interactive shell prompt for the root command.
-func New(root *cobra.Command, refresh func() *cobra.Command, opts ...prompt.Option) *cobra.Command {
+func New(root *cobra.Command, opts ...prompt.Option) *cobra.Command {
 	shell := &cobraShell{
-		root:    root,
-		refresh: refresh,
-		cache:   make(map[string][]prompt.Suggest),
+		root:  root,
+		cache: make(map[string][]prompt.Suggest),
 	}
 
 	prefix := fmt.Sprintf("> %s ", root.Name())
@@ -95,17 +93,6 @@ func (s *cobraShell) executor(line string) {
 		fmt.Print(err)
 	} else if len(args) > 0 {
 		_ = execute(s.root, args) //nolint:errcheck
-	}
-
-	if s.refresh != nil {
-		s.root = s.refresh()
-		s.editCommandTree(s.root)
-	} else {
-		if cmd, _, err := s.root.Find(args); err == nil {
-			cmd.Flags().VisitAll(func(flag *pflag.Flag) {
-				flag.Changed = false
-			})
-		}
 	}
 
 	s.cache = make(map[string][]prompt.Suggest)
@@ -189,6 +176,19 @@ func assert(err error) {
 }
 
 func execute(cmd *cobra.Command, args []string) error {
+	resetArgs(cmd, args)
+
+	cmd.SetArgs(args)
+
+	// Provide a separate context to the command
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+
+	defer stop()
+
+	return cmd.ExecuteContext(ctx)
+}
+
+func resetArgs(cmd *cobra.Command, args []string) {
 	if cmd, _, err := cmd.Find(args); err == nil {
 		// Reset flag values between runs due to a limitation in Cobra
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
@@ -199,20 +199,13 @@ func execute(cmd *cobra.Command, args []string) error {
 			}
 
 			assert(cmd.Flags().SetAnnotation(flag.Name, cobra.BashCompOneRequiredFlag, []string{"false"}))
+
+			flag.Changed = false
 		})
 
 		cmd.InitDefaultHelpFlag()
-		cmd.SetContext(nil) //NOSONAR
+		cmd.SetContext(nil) //nolint:staticcheck //NOSONAR
 	}
-
-	cmd.SetArgs(args)
-
-	// Provide a separate context to the command
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
-
-	defer stop()
-
-	return cmd.ExecuteContext(ctx)
 }
 
 func parseSuggestions(out string) []prompt.Suggest {

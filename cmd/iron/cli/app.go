@@ -69,7 +69,7 @@ func (a *App) Command() *cobra.Command {
 	rootShell.AddCommand(hiddenChild)
 
 	// Shell subcommand
-	shellCmd := shell.New(rootShell, nil, prompt.OptionLivePrefix(a.prefix))
+	shellCmd := shell.New(rootShell, prompt.OptionLivePrefix(a.prefix))
 	shellCmd.Use = "shell [zone]"
 	shellCmd.Args = cobra.MaximumNArgs(1)
 	shellCmd.PersistentPreRunE = a.ShellInit

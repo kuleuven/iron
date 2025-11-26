@@ -14,7 +14,7 @@ func TestNew(t *testing.T) {
 		Use: "testcli",
 	}
 
-	shellCmd := New(root, nil)
+	shellCmd := New(root)
 
 	if shellCmd.Use != "shell" {
 		t.Errorf("Expected shell command Use to be 'shell', got '%s'", shellCmd.Use)
@@ -26,29 +26,6 @@ func TestNew(t *testing.T) {
 
 	if shellCmd.Run == nil {
 		t.Error("Expected shell command to have a Run function")
-	}
-}
-
-func TestNewWithRefresh(t *testing.T) {
-	root := &cobra.Command{
-		Use: "testcli",
-	}
-
-	refreshCalled := false
-	refresh := func() *cobra.Command {
-		refreshCalled = true
-		return root
-	}
-
-	shellCmd := New(root, refresh)
-
-	if shellCmd == nil {
-		t.Error("Expected shell command to be created")
-	}
-
-	// The refresh function should be stored but not called during New()
-	if refreshCalled {
-		t.Error("Expected refresh function not to be called during New()")
 	}
 }
 
@@ -506,43 +483,6 @@ func TestCobraShellExecutor(t *testing.T) {
 	expectedArgs := []string{"arg1", "arg2"}
 	if !reflect.DeepEqual(receivedArgs, expectedArgs) {
 		t.Errorf("Expected args %v, got %v", expectedArgs, receivedArgs)
-	}
-}
-
-func TestCobraShellExecutorWithRefresh(t *testing.T) {
-	var executed bool
-
-	var refreshCalled bool
-
-	testCmd := &cobra.Command{
-		Use: "test",
-		Run: func(cmd *cobra.Command, args []string) {
-			executed = true
-		},
-	}
-
-	root := &cobra.Command{Use: "root"}
-	root.AddCommand(testCmd)
-
-	refresh := func() *cobra.Command {
-		refreshCalled = true
-		return root
-	}
-
-	shell := &cobraShell{
-		root:    root,
-		refresh: refresh,
-		cache:   make(map[string][]prompt.Suggest),
-	}
-
-	shell.executor("test")
-
-	if !executed {
-		t.Error("Expected command to be executed")
-	}
-
-	if !refreshCalled {
-		t.Error("Expected refresh function to be called")
 	}
 }
 
