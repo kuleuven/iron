@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -336,7 +337,29 @@ var responses = []any{
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
 		},
 	},
-	msg.QueryResponse{},
+	msg.QueryResponse{
+		RowCount:       4,
+		AttributeCount: 15,
+		TotalRowCount:  4,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 401, ResultLen: 2, Values: []string{"4", "4", "5", "6"}},
+			{AttributeIndex: 403, ResultLen: 2, Values: []string{"file1", "file1", "file2", "file3"}},
+			{AttributeIndex: 402, ResultLen: 2, Values: slices.Repeat([]string{"1"}, 4)},
+			{AttributeIndex: 406, ResultLen: 2, Values: slices.Repeat([]string{"generic"}, 4)},
+			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1", "2", "3"}},
+			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000", "100", "1024000"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: slices.Repeat([]string{"rods"}, 4)},
+			{AttributeIndex: 412, ResultLen: 2, Values: slices.Repeat([]string{"zone"}, 4)},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum", "", ""}},
+			{AttributeIndex: 413, ResultLen: 2, Values: []string{"2", "4", "0", "1"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2", "resc1", "resc2"}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2", "/path3", "/path4"}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2", "demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 419, ResultLen: 2, Values: slices.Repeat([]string{"10000"}, 4)},
+			{AttributeIndex: 420, ResultLen: 2, Values: slices.Repeat([]string{"10000"}, 4)},
+		},
+	},
 }
 
 func TestAutocomplete2(t *testing.T) {
