@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -569,14 +570,29 @@ func (a *App) head() *cobra.Command {
 	return cmd
 }
 
+var saveDescription = `Stream the standard input to a data object.
+If the data object does not exist, it will be created.
+Use '--append' to append to an existing data object.`
+
 func (a *App) save() *cobra.Command {
 	var appendFlag bool
+
+	eofMessage := "Press Ctrl+D to end input"
+
+	if runtime.GOOS == "windows" {
+		eofMessage = "Press Ctrl+Z followed by Enter to end input"
+	}
+
+	examples := []string{
+		"  Read from standard input (" + eofMessage + "):\n\t" + a.name + " save object.txt",
+		"  Pipe from other command (does not work inside `" + a.name + " shell`):\n\techo Test | " + a.name + " save --append object.txt",
+	}
 
 	cmd := &cobra.Command{
 		Use:               "save <object path>",
 		Short:             "Stream the standard input to a data object.",
-		Long:              "Stream the standard input to a data object. If the data object does not exist, it will be created. Use '--append' to append to an existing data object.",
-		Example:           "echo Test | " + a.name + " save object.txt",
+		Long:              saveDescription,
+		Example:           strings.Join(examples, "\n"),
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -596,7 +612,7 @@ func (a *App) save() *cobra.Command {
 			defer f.Close()
 
 			if a.inShell {
-				fmt.Println("[Press Ctrl+D to end input]")
+				fmt.Printf("[%s]\n", eofMessage)
 			}
 
 			buf := make([]byte, 32*1024*1024)
