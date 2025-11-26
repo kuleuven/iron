@@ -51,42 +51,44 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			panic(err)
-		}
+	for range 3 {
+		go func() {
+			conn, err := listener.Accept()
+			if err != nil {
+				panic(err)
+			}
 
-		msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
-		msg.Write(conn, msg.Version{
-			ReleaseVersion: "rods5.0.1",
-		}, nil, msg.XML, "RODS_VERSION", 0)
-		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
-		msg.Write(conn, msg.AuthPluginResponse{
-			RequestResult: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-		}, nil, msg.XML, "RODS_API_REPLY", 0)
-		msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
-		msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
+			msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
+			msg.Write(conn, msg.Version{
+				ReleaseVersion: "rods5.0.1",
+			}, nil, msg.XML, "RODS_VERSION", 0)
+			msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
+			msg.Write(conn, msg.AuthPluginResponse{
+				RequestResult: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+			}, nil, msg.XML, "RODS_API_REPLY", 0)
+			msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
+			msg.Write(conn, msg.AuthPluginResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
 
-		msg.Read(conn, &msg.QueryRequest{}, nil, msg.XML, "RODS_API_REQ")
-		msg.Write(conn, msg.QueryResponse{
-			RowCount:       1,
-			AttributeCount: 6,
-			TotalRowCount:  1,
-			ContinueIndex:  0,
-			SQLResult: []msg.SQLResult{
-				{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-				{AttributeIndex: 503, ResultLen: 1, Values: []string{"/testzone/coll"}},
-				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
-				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
-				{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
-				{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
-			},
-		}, nil, msg.XML, "RODS_API_REPLY", 0)
+			msg.Read(conn, &msg.QueryRequest{}, nil, msg.XML, "RODS_API_REQ")
+			msg.Write(conn, msg.QueryResponse{
+				RowCount:       1,
+				AttributeCount: 6,
+				TotalRowCount:  1,
+				ContinueIndex:  0,
+				SQLResult: []msg.SQLResult{
+					{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
+					{AttributeIndex: 503, ResultLen: 1, Values: []string{"/testzone/coll"}},
+					{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+					{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
+					{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
+					{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+				},
+			}, nil, msg.XML, "RODS_API_REPLY", 0)
 
-		msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
-		conn.Close()
-	}()
+			msg.Read(conn, msg.EmptyResponse{}, nil, msg.XML, "RODS_DISCONNECT")
+			conn.Close()
+		}()
+	}
 
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
@@ -120,14 +122,22 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	authCmd := app.auth()
-	authCmd.SetContext(t.Context())
+	// Alter Use so init() does not erase password
+	for _, child := range cmd.Commands() {
+		if strings.HasPrefix(child.Use, "auth ") {
+			child.Use = "test-" + child.Use
+		}
+	}
 
-	if err := authCmd.RunE(authCmd, []string{"authenticate"}); err != nil {
+	cmd.SetArgs([]string{"test-auth", "zone1"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := authCmd.RunE(authCmd, []string{"test"}); err != nil {
+	cmd.SetArgs([]string{"test-auth", "zone2"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
