@@ -647,10 +647,7 @@ func (a *App) inherit() *cobra.Command {
 	return cmd
 }
 
-func (a *App) list() *cobra.Command {
-	var jsonFormat, listACL, listMeta bool
-
-	description := `List the contents of a collection or information about a data object.
+var listDescription = `List the contents of a collection or information about a data object.
 
 The column STATUS indicates for collections whether ACL inheritance is enabled (+) or not (-).
 For data objects it indicates the status of the data object replicas, as follows:
@@ -661,11 +658,14 @@ For data objects it indicates the status of the data object replicas, as follows
 		or an earlier process did not finish properly.
 	🚫	Replica is in intermediate state, another replica is write-locked.`
 
+func (a *App) list() *cobra.Command {
+	var jsonFormat, listACL, listMeta bool
+
 	cmd := &cobra.Command{
 		Use:               "ls <collection path>",
 		Aliases:           []string{"list"},
 		Short:             "List the contents of a collection or information about a data object",
-		Long:              description,
+		Long:              listDescription,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

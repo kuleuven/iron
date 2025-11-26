@@ -131,7 +131,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 	}
 }
 
-func appendStatus(list string, status string) string {
+func appendStatus(list, status string) string {
 	switch status {
 	case "1":
 		return list + "✔" // Good replica
