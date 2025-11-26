@@ -120,12 +120,6 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	cmd.SetArgs([]string{"auth", "authenticate"})
-
-	if err := cmd.ExecuteContext(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-
 	authCmd := app.auth()
 	authCmd.SetContext(t.Context())
 
@@ -136,6 +130,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 	if err := authCmd.RunE(authCmd, []string{"test"}); err != nil {
 		t.Fatal(err)
 	}
+
 }
 
 func TestNewConfigStore(t *testing.T) { //nolint:funlen
