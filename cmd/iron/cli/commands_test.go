@@ -446,3 +446,14 @@ func TestCD(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSleep(t *testing.T) {
+	app := testApp(t)
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"sleep", "0.1"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -130,7 +130,6 @@ func TestNew(t *testing.T) { //nolint:funlen
 	if err := authCmd.RunE(authCmd, []string{"test"}); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 func TestNewConfigStore(t *testing.T) { //nolint:funlen

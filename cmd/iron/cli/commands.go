@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -988,4 +989,27 @@ func (a *App) local() *cobra.Command { //nolint:funlen
 	)
 
 	return local
+}
+
+// The main purpose of this command is to test context cancellation
+func (a *App) sleep() *cobra.Command {
+	return &cobra.Command{
+		Use:    "sleep <seconds>",
+		Short:  "Sleep for the given number of seconds",
+		Args:   cobra.ExactArgs(1),
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			n, err := strconv.ParseFloat(args[0], 64)
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-cmd.Context().Done():
+				return cmd.Context().Err()
+			case <-time.After(time.Duration(n * float64(time.Second))):
+				return nil
+			}
+		},
+	}
 }

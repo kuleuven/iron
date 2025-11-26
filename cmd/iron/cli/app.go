@@ -107,6 +107,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.meta(),
 		a.checksum(),
 		a.version(),
+		a.sleep(),
 	)
 
 	if a.passwordStore != nil {
