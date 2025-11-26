@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -421,6 +422,25 @@ func TestSave(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"save", "/testzone/obj1"})
 	cmd.SetIn(strings.NewReader("hello\n"))
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCD(t *testing.T) {
+	app := testApp(t)
+
+	// mock the workdir store
+	app.workdirStore = func(_ context.Context, _ string) error {
+		return nil
+	}
+
+	app.AddResponse(statResponses[1])
+	app.AddResponse(msg.EmptyResponse{})
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"cd", "testdir"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
