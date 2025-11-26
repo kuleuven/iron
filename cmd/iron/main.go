@@ -63,15 +63,8 @@ func main() {
 	cobra.MousetrapHelpText = ""
 
 	if mousetrap.StartedByExplorer() {
-		gotoHomeDir()
+		_ = os.Chdir(home) //nolint:errcheck
 	}
 
 	cmd.ExecuteContext(ctx) //nolint:errcheck
-}
-
-func gotoHomeDir() {
-	home, err := os.UserHomeDir()
-	if err == nil {
-		_ = os.Chdir(home) //nolint:errcheck
-	}
 }

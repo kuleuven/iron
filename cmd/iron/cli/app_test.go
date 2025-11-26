@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,6 +120,12 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
+	cmd.SetArgs([]string{"auth", "authenticate"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
 	authCmd := app.auth()
 	authCmd.SetContext(t.Context())
 
@@ -199,28 +206,21 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	defer app.Close()
 
-	authCmd := app.auth()
-	authCmd.SetContext(t.Context())
-
-	if err := app.ShellInit(authCmd, nil); err != nil {
+	if err := app.ShellInit(cmd, nil); err != nil {
 		t.Fatal(err)
 	}
-
-	args := []string{"user", "zone", "127.0.0.1"}
 
 	// Alter Use so init() does not erase password
-	authCmd.Use = "test-" + authCmd.Use
-
-	if err := authCmd.Args(authCmd, args); err != nil {
-		t.Fatal(err)
+	for _, child := range cmd.Commands() {
+		if strings.HasPrefix(child.Use, "auth ") {
+			child.Use = "test-" + child.Use
+		}
 	}
 
-	for range 2 {
-		if err := authCmd.PersistentPreRunE(authCmd, args); err != nil {
-			t.Fatal(err)
-		}
+	cmd.SetArgs([]string{"test-auth", "user", "zone", "127.0.0.1"})
 
-		if err := authCmd.RunE(authCmd, args); err != nil {
+	for range 2 {
+		if err := cmd.ExecuteContext(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}
