@@ -202,6 +202,7 @@ func execute(cmd *cobra.Command, args []string) error {
 		})
 
 		cmd.InitDefaultHelpFlag()
+		cmd.SetContext(nil) //NOSONAR
 	}
 
 	cmd.SetArgs(args)
