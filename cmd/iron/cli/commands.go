@@ -665,11 +665,11 @@ func (a *App) inherit() *cobra.Command {
 
 var listDescription = `List the contents of a collection or information about a data object.
 
-The column STATUS indicates for collections whether ACL inheritance is enabled (+) or not (-).
+The column STATUS indicates for collections whether ACL inheritance is enabled (+).
 For data objects it indicates the status of the data object replicas, as follows:
 
-	✔	Good up-to-date replica
-	✘	Stale replica
+	✔️	Good up-to-date replica
+	❌	Stale replica
 	🔒	Replica is write-locked, i.e. a process is currently writing to the file
 		or an earlier process did not finish properly.
 	🚫	Replica is in intermediate state, another replica is write-locked.`

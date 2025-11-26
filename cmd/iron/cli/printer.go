@@ -134,9 +134,9 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 func appendStatus(list, status string) string {
 	switch status {
 	case "1":
-		return list + "✔" // Good replica
+		return list + "✔️" // Good replica
 	case "0":
-		return list + "✘" // Stale replica
+		return list + "❌" // Stale replica
 	case "2":
 		return list + "🔒" // Write locked
 	case "4":
