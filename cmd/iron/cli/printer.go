@@ -55,7 +55,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 	switch v := i.Sys().(type) {
 	case *api.DataObject:
 		for _, r := range v.Replicas {
-			status += r.Status
+			status = appendStatus(status, r.Status)
 			owner = tp.formatUser(r.Owner, r.OwnerZone, false)
 			color = NoColor
 		}
@@ -128,6 +128,21 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		}
 
 		fmt.Fprintf(tp.Writer, "%s\t\t\t\t%s\n", aclLine, metaLine)
+	}
+}
+
+func appendStatus(list string, status string) string {
+	switch status {
+	case "1":
+		return list + "✔" // Good replica
+	case "0":
+		return list + "✘" // Stale replica
+	case "2":
+		return list + "🔒" // Write locked
+	case "4":
+		return list + "🚫" // Intermediate
+	default:
+		return list + status
 	}
 }
 
