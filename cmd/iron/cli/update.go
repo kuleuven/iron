@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,7 +27,7 @@ func (a *App) update() *cobra.Command {
 				return err
 			}
 
-			return a.Update(exe, downgrade)
+			return a.Update(cmd.Context(), exe, downgrade)
 		},
 	}
 
@@ -35,12 +36,12 @@ func (a *App) update() *cobra.Command {
 	return cmd
 }
 
-func (a *App) CheckUpdate() {
+func (a *App) CheckUpdate(ctx context.Context) {
 	if a.updater == nil {
 		return
 	}
 
-	latest, err := a.LatestVersion()
+	latest, err := a.LatestVersion(ctx)
 	if err != nil {
 		logrus.Debugf("failed to check for updates: %s", err)
 
@@ -56,7 +57,7 @@ func (a *App) CheckUpdate() {
 	logrus.Infof("Currently running version %s of %s. Version %s has been released and is available for installation. Please update with `%s update`.", current, a.name, latest, a.name)
 }
 
-func (a *App) LatestVersion() (*semver.Version, error) {
+func (a *App) LatestVersion(ctx context.Context) (*semver.Version, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user cache dir: %w", err)
@@ -77,7 +78,7 @@ func (a *App) LatestVersion() (*semver.Version, error) {
 	}
 
 	// Retrieve latest release
-	latest, found, err := a.updater.DetectLatest(a.Context, a.repo)
+	latest, found, err := a.updater.DetectLatest(ctx, a.repo)
 	if err != nil {
 		return nil, fmt.Errorf("error occurred while detecting version: %w", err)
 	}
@@ -96,12 +97,12 @@ func (a *App) LatestVersion() (*semver.Version, error) {
 	return semver.NewVersion(latest.Version())
 }
 
-func (a *App) Update(path string, allowDowngrade bool) error {
+func (a *App) Update(ctx context.Context, path string, allowDowngrade bool) error {
 	if a.updater == nil {
 		return nil
 	}
 
-	latest, found, err := a.updater.DetectLatest(a.Context, a.repo)
+	latest, found, err := a.updater.DetectLatest(ctx, a.repo)
 	if err != nil {
 		return fmt.Errorf("error occurred while detecting version: %w", err)
 	}
@@ -120,7 +121,7 @@ func (a *App) Update(path string, allowDowngrade bool) error {
 		return nil
 	}
 
-	if err := a.updater.UpdateTo(a.Context, latest, path); errors.Is(err, os.ErrPermission) {
+	if err := a.updater.UpdateTo(ctx, latest, path); errors.Is(err, os.ErrPermission) {
 		return fmt.Errorf("cannot update binary: path %s is not writable", path)
 	} else if err != nil {
 		return fmt.Errorf("error occurred while updating binary: %w", err)

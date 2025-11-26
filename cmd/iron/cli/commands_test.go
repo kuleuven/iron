@@ -14,7 +14,7 @@ func TestVersion(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"version"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -27,7 +27,7 @@ func TestMkdir(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"mkdir", "testdir"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -40,7 +40,7 @@ func TestRmdir(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"rmdir", "testdir"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -56,7 +56,7 @@ func TestTree(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"tree", "/testzone"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -69,7 +69,7 @@ func TestList(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"ls", "/testzone"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -115,7 +115,7 @@ func TestListExtra(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"ls", "--acl", "--meta", "/testzone"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -128,7 +128,7 @@ func TestListJSON(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"ls", "--json", "/testzone"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -162,7 +162,7 @@ func TestStat(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"stat", "/testzone/coll"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -175,7 +175,7 @@ func TestStatJSON(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"stat", "--json", "/testzone/coll"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -189,7 +189,7 @@ func TestMv(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"mv", "/testzone/coll", "/testzone/coll2"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -203,7 +203,7 @@ func TestRm(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"rm", "/testzone/coll"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -238,7 +238,7 @@ func TestCopy(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"cp", "/testzone/coll/file", "/testzone/coll2/"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -259,7 +259,7 @@ func TestTouch(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"touch", "/testzone/obj1"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -274,7 +274,7 @@ func TestChecksum(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"checksum", "/testzone/obj1"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -286,7 +286,7 @@ func TestPWD(t *testing.T) {
 
 	cmd.SetArgs([]string{})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -298,19 +298,19 @@ func TestLocal(t *testing.T) {
 
 	cmd.SetArgs([]string{"pwd"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
 	cmd.SetArgs([]string{"cd", "."})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
 	cmd.SetArgs([]string{"ls"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -323,7 +323,7 @@ func TestMetaList(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"meta", "ls", "/testzone/coll"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -338,7 +338,7 @@ func TestMetaBasicOps(t *testing.T) {
 		cmd := app.Command()
 		cmd.SetArgs([]string{"meta", op, "/testzone/coll", "a", "b"})
 
-		if err := cmd.Execute(); err != nil {
+		if err := cmd.ExecuteContext(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -354,7 +354,7 @@ func TestMetaUnset(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"meta", "unset", "/testzone/coll", "a"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -386,7 +386,7 @@ func TestCat(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"cat", "/testzone/obj1"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -404,7 +404,7 @@ func TestHead(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"head", "/testzone/obj1"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -422,7 +422,7 @@ func TestSave(t *testing.T) {
 	cmd.SetArgs([]string{"save", "/testzone/obj1"})
 	cmd.SetIn(strings.NewReader("hello\n"))
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -2,10 +2,13 @@ package shell
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/c-bata/go-prompt"
 	"github.com/google/shlex"
@@ -203,7 +206,12 @@ func execute(cmd *cobra.Command, args []string) error {
 
 	cmd.SetArgs(args)
 
-	return cmd.Execute()
+	// Provide a separate context to the command
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+
+	defer stop()
+
+	return cmd.ExecuteContext(ctx)
 }
 
 func parseSuggestions(out string) []prompt.Suggest {

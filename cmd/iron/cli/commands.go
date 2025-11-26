@@ -61,7 +61,7 @@ func (a *App) auth() *cobra.Command {
 		SilenceUsage:      true,
 		PersistentPreRunE: preRun,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, err := a.Connect(a.Context)
+			conn, err := a.Connect(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -73,7 +73,7 @@ func (a *App) auth() *cobra.Command {
 				return err
 			}
 
-			return a.passwordStore(a.Context, password)
+			return a.passwordStore(cmd.Context(), password)
 		},
 		PostRun: func(cmd *cobra.Command, args []string) {
 			// Reset the workdir if needed
@@ -96,10 +96,10 @@ func (a *App) mkdir() *cobra.Command {
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if recursive {
-				return a.CreateCollectionAll(a.Context, a.Path(args[0]))
+				return a.CreateCollectionAll(cmd.Context(), a.Path(args[0]))
 			}
 
-			return a.CreateCollection(a.Context, a.Path(args[0]))
+			return a.CreateCollection(cmd.Context(), a.Path(args[0]))
 		},
 	}
 
@@ -117,7 +117,7 @@ func (a *App) rmdir() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.DeleteCollection(a.Context, a.Path(args[0]), skip)
+			return a.DeleteCollection(cmd.Context(), a.Path(args[0]), skip)
 		},
 	}
 
@@ -137,7 +137,7 @@ func (a *App) stat() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
-			record, err := a.GetRecord(a.Context, path, api.FetchMetadata, api.FetchAccess)
+			record, err := a.GetRecord(cmd.Context(), path, api.FetchMetadata, api.FetchAccess)
 			if err != nil {
 				return err
 			}
@@ -183,14 +183,14 @@ func (a *App) rm() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
-			obj, err := a.GetRecord(a.Context, path)
+			obj, err := a.GetRecord(cmd.Context(), path)
 			if err != nil {
 				return err
 			}
 
 			if obj.IsDir() {
 				if !recursive {
-					return a.DeleteCollection(a.Context, path, skip)
+					return a.DeleteCollection(cmd.Context(), path, skip)
 				}
 
 				opts := transfer.Options{
@@ -200,10 +200,10 @@ func (a *App) rm() *cobra.Command {
 					SkipTrash:  skip,
 				}
 
-				return a.RemoveDir(a.Context, path, opts)
+				return a.RemoveDir(cmd.Context(), path, opts)
 			}
 
-			return a.DeleteDataObject(a.Context, path, skip)
+			return a.DeleteDataObject(cmd.Context(), path, skip)
 		},
 	}
 
@@ -229,16 +229,16 @@ func (a *App) mv() *cobra.Command {
 
 			dest = a.Path(dest)
 
-			obj, err := a.GetRecord(a.Context, src)
+			obj, err := a.GetRecord(cmd.Context(), src)
 			if err != nil {
 				return err
 			}
 
 			if obj.IsDir() {
-				return a.RenameCollection(a.Context, src, dest)
+				return a.RenameCollection(cmd.Context(), src, dest)
 			}
 
-			return a.RenameDataObject(a.Context, src, dest)
+			return a.RenameDataObject(cmd.Context(), src, dest)
 		},
 	}
 }
@@ -272,7 +272,7 @@ func (a *App) cp() *cobra.Command {
 
 			dest = a.Path(dest)
 
-			obj, err := a.GetRecord(a.Context, src)
+			obj, err := a.GetRecord(cmd.Context(), src)
 			if err != nil {
 				return err
 			}
@@ -285,10 +285,10 @@ func (a *App) cp() *cobra.Command {
 					SkipTrash:  skip,
 				}
 
-				return a.CopyDir(a.Context, src, dest, opts)
+				return a.CopyDir(cmd.Context(), src, dest, opts)
 			}
 
-			return a.CopyDataObject(a.Context, src, dest)
+			return a.CopyDataObject(cmd.Context(), src, dest)
 		},
 	}
 
@@ -307,7 +307,7 @@ func (a *App) create() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := api.O_CREAT | api.O_WRONLY | api.O_EXCL
 
-			h, err := a.CreateDataObject(a.Context, a.Path(args[0]), mode)
+			h, err := a.CreateDataObject(cmd.Context(), a.Path(args[0]), mode)
 			if err != nil {
 				return err
 			}
@@ -328,7 +328,7 @@ func (a *App) touch() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := api.O_CREAT | api.O_RDWR
 
-			h, err := a.OpenDataObject(a.Context, a.Path(args[0]), mode)
+			h, err := a.OpenDataObject(cmd.Context(), a.Path(args[0]), mode)
 			if err != nil {
 				return err
 			}
@@ -355,7 +355,7 @@ func (a *App) checksum() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			checksum, err := a.Checksum(a.Context, a.Path(args[0]), false)
+			checksum, err := a.Checksum(cmd.Context(), a.Path(args[0]), false)
 			if err != nil {
 				return err
 			}
@@ -408,10 +408,10 @@ func (a *App) upload() *cobra.Command {
 			if !fi.IsDir() {
 				opts.SyncModTime = false
 
-				return a.Upload(a.Context, args[0], target, opts)
+				return a.Upload(cmd.Context(), args[0], target, opts)
 			}
 
-			return a.UploadDir(a.Context, args[0], target, opts)
+			return a.UploadDir(cmd.Context(), args[0], target, opts)
 		},
 	}
 
@@ -462,7 +462,7 @@ func (a *App) download() *cobra.Command {
 				target += Name(source)
 			}
 
-			record, err := a.GetRecord(a.Context, source)
+			record, err := a.GetRecord(cmd.Context(), source)
 			if err != nil {
 				return err
 			}
@@ -472,10 +472,10 @@ func (a *App) download() *cobra.Command {
 			if !record.IsDir() {
 				opts.SyncModTime = false
 
-				return a.Download(a.Context, target, source, opts)
+				return a.Download(cmd.Context(), target, source, opts)
 			}
 
-			return a.DownloadDir(a.Context, target, source, opts)
+			return a.DownloadDir(cmd.Context(), target, source, opts)
 		},
 	}
 
@@ -496,7 +496,7 @@ func (a *App) cat() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			source := a.Path(args[0])
 
-			f, err := a.OpenDataObject(a.Context, source, api.O_RDONLY)
+			f, err := a.OpenDataObject(cmd.Context(), source, api.O_RDONLY)
 			if err != nil {
 				return err
 			}
@@ -516,7 +516,7 @@ func (a *App) cat() *cobra.Command {
 
 			buf := make([]byte, bufSize)
 
-			_, err = CopyBuffer(a.Context, cmd.OutOrStdout(), f, buf)
+			_, err = CopyBuffer(cmd.Context(), cmd.OutOrStdout(), f, buf)
 
 			return err
 		},
@@ -534,7 +534,7 @@ func (a *App) head() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			source := a.Path(args[0])
 
-			f, err := a.OpenDataObject(a.Context, source, api.O_RDONLY)
+			f, err := a.OpenDataObject(cmd.Context(), source, api.O_RDONLY)
 			if err != nil {
 				return err
 			}
@@ -587,7 +587,7 @@ func (a *App) save() *cobra.Command {
 				flags = api.O_WRONLY | api.O_CREAT | api.O_APPEND
 			}
 
-			f, err := a.OpenDataObject(a.Context, target, flags)
+			f, err := a.OpenDataObject(cmd.Context(), target, flags)
 			if err != nil {
 				return err
 			}
@@ -600,7 +600,7 @@ func (a *App) save() *cobra.Command {
 
 			buf := make([]byte, 32*1024*1024)
 
-			_, err = CopyBuffer(a.Context, f, cmd.InOrStdin(), buf)
+			_, err = CopyBuffer(cmd.Context(), f, cmd.InOrStdin(), buf)
 
 			return err
 		},
@@ -619,7 +619,7 @@ func (a *App) chmod() *cobra.Command {
 		Short: "Change permissions",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.ModifyAccess(a.Context, a.Path(args[2]), args[1], args[0], recursive)
+			return a.ModifyAccess(cmd.Context(), a.Path(args[2]), args[1], args[0], recursive)
 		},
 	}
 
@@ -636,7 +636,7 @@ func (a *App) inherit() *cobra.Command {
 		Short: "Change permission inheritance",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.SetCollectionInheritance(a.Context, a.Path(args[0]), inherit, recursive)
+			return a.SetCollectionInheritance(cmd.Context(), a.Path(args[0]), inherit, recursive)
 		},
 	}
 
@@ -681,7 +681,7 @@ func (a *App) list() *cobra.Command {
 
 			defer printer.Flush()
 
-			return a.Walk(a.Context, dir, func(path string, record api.Record, err error) error {
+			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
 				if err != nil {
 					return err
 				}
@@ -743,7 +743,7 @@ func (a *App) tree() *cobra.Command {
 				opts = append(opts, api.NoSkip)
 			}
 
-			return a.Walk(a.Context, dir, func(path string, record api.Record, err error) error {
+			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
 				depth := strings.Count(strings.TrimPrefix(path, dir), "/")
 
 				fmt.Printf("%s%s\n", strings.Repeat("  ", depth), path)
@@ -802,7 +802,7 @@ func (a *App) metals() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
-			stat, err := a.GetRecord(a.Context, path, api.FetchMetadata)
+			stat, err := a.GetRecord(cmd.Context(), path, api.FetchMetadata)
 			if err != nil {
 				return err
 			}
@@ -837,12 +837,12 @@ func (a *App) metaop(op, description string, fn func(*api.API) func(context.Cont
 
 			path := a.Path(args[0])
 
-			stat, err := a.GetRecord(a.Context, path)
+			stat, err := a.GetRecord(cmd.Context(), path)
 			if err != nil {
 				return err
 			}
 
-			return fn(a.Client.API)(a.Context, path, stat.Type(), api.Metadata{
+			return fn(a.Client.API)(cmd.Context(), path, stat.Type(), api.Metadata{
 				Name: args[1], Value: args[2], Units: args[3],
 			})
 		},
@@ -858,7 +858,7 @@ func (a *App) metaunset() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
-			stat, err := a.GetRecord(a.Context, path, api.FetchMetadata)
+			stat, err := a.GetRecord(cmd.Context(), path, api.FetchMetadata)
 			if err != nil {
 				return err
 			}
@@ -871,7 +871,7 @@ func (a *App) metaunset() *cobra.Command {
 				}
 			}
 
-			return a.Client.ModifyMetadata(a.Context, path, stat.Type(), nil, toremove)
+			return a.Client.ModifyMetadata(cmd.Context(), path, stat.Type(), nil, toremove)
 		},
 	}
 }
@@ -901,14 +901,14 @@ func (a *App) cd() *cobra.Command {
 			target := a.Path(args[0])
 
 			// Check if the target is a collection
-			if _, err := a.GetCollection(a.Context, target); err != nil {
+			if _, err := a.GetCollection(cmd.Context(), target); err != nil {
 				return err
 			}
 
 			a.Workdir = target
 
 			if a.workdirStore != nil {
-				return a.workdirStore(a.Context, a.Workdir)
+				return a.workdirStore(cmd.Context(), a.Workdir)
 			}
 
 			return nil

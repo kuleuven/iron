@@ -31,7 +31,7 @@ func main() {
 
 	config := home + "/.irods/irods_environment.json"
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	defer stop()
 
@@ -66,7 +66,7 @@ func main() {
 		gotoHomeDir()
 	}
 
-	cmd.Execute() //nolint:errcheck
+	cmd.ExecuteContext(ctx) //nolint:errcheck
 }
 
 func gotoHomeDir() {

@@ -111,6 +111,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile), WithPasswordStore(FilePasswordStore(envfile)))
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 
 	defer app.Close()
 
@@ -119,6 +120,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 	}
 
 	authCmd := app.auth()
+	authCmd.SetContext(t.Context())
 
 	if err := authCmd.RunE(authCmd, []string{"authenticate"}); err != nil {
 		t.Fatal(err)
@@ -189,6 +191,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 	)
 
 	cmd := app.Command()
+	cmd.SetContext(t.Context())
 
 	if cmd == nil {
 		t.Fatal("expected command")
@@ -196,13 +199,14 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	defer app.Close()
 
-	if err := app.ShellInit(app.auth(), nil); err != nil {
+	authCmd := app.auth()
+	authCmd.SetContext(t.Context())
+
+	if err := app.ShellInit(authCmd, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	args := []string{"user", "zone", "127.0.0.1"}
-
-	authCmd := app.auth()
 
 	// Alter Use so init() does not erase password
 	authCmd.Use = "test-" + authCmd.Use
@@ -281,7 +285,10 @@ func TestAutocompleteLocal(t *testing.T) {
 
 	t.Chdir(dir)
 
-	opts, directive := app.CompleteArgs(app.local().Commands()[1], []string{}, "te")
+	cmd := app.local().Commands()[1]
+	cmd.SetContext(t.Context())
+
+	opts, directive := app.CompleteArgs(cmd, []string{}, "te")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("expected default directive, got %d", directive)
 	}
@@ -333,7 +340,10 @@ func TestAutocomplete2(t *testing.T) {
 
 	app.AddResponses(responses)
 
-	opts, directive := app.CompleteArgs(app.mkdir(), []string{}, "/testzone/hom")
+	cmd := app.mkdir()
+	cmd.SetContext(t.Context())
+
+	opts, directive := app.CompleteArgs(cmd, []string{}, "/testzone/hom")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("expected default directive, got %d", directive)
 	}

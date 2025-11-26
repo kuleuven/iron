@@ -16,14 +16,14 @@ func TestUpdate(t *testing.T) {
 	WithVersion("devel")(app.App)
 	WithUpdater(selfupdate.DefaultUpdater(), selfupdate.ParseSlug("kuleuven/iron"))(app.App)
 
-	app.CheckUpdate()
+	app.CheckUpdate(t.Context())
 
 	// Put something at testPath
 	if err := os.WriteFile(testPath, []byte("test"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := app.Update(testPath, true); err != nil {
+	if err := app.Update(t.Context(), testPath, true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -38,7 +38,7 @@ func TestUpdateCommand(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetArgs([]string{"update"})
 
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
