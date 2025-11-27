@@ -92,73 +92,36 @@ func (env *Env) LoadFromFile(path string) error {
 // It uses the values from DefaultEnv for most fields. If the ProxyUsername and ProxyZone
 // are not specified, it uses the Username and Zone respectively. Additionally, if PamTTL
 // is not set or is less than or equal to zero, it defaults to 60
-func (env *Env) ApplyDefaults() { //nolint:funlen
-	if env.Port == 0 {
-		env.Port = DefaultEnv.Port
-	}
-
-	if env.AuthScheme == "" {
-		env.AuthScheme = DefaultEnv.AuthScheme
-	}
-
-	if env.EncryptionAlgorithm == "" {
-		env.EncryptionAlgorithm = DefaultEnv.EncryptionAlgorithm
-	}
-
-	if env.EncryptionSaltSize == 0 {
-		env.EncryptionSaltSize = DefaultEnv.EncryptionSaltSize
-	}
-
-	if env.EncryptionKeySize == 0 {
-		env.EncryptionKeySize = DefaultEnv.EncryptionKeySize
-	}
-
-	if env.EncryptionNumHashRounds == 0 {
-		env.EncryptionNumHashRounds = DefaultEnv.EncryptionNumHashRounds
-	}
-
-	if env.Username == "" {
-		env.Username = DefaultEnv.Username
-	}
-
-	if env.SSLVerifyServer == "" {
-		env.SSLVerifyServer = DefaultEnv.SSLVerifyServer
-	}
-
-	if env.ClientServerNegotiation == "" {
-		env.ClientServerNegotiation = DefaultEnv.ClientServerNegotiation
-	}
-
-	if env.ClientServerNegotiationPolicy == "" {
-		env.ClientServerNegotiationPolicy = DefaultEnv.ClientServerNegotiationPolicy
-	}
-
-	if env.DefaultResource == "" {
-		env.DefaultResource = DefaultEnv.DefaultResource
-	}
-
-	if env.ProxyUsername == "" {
-		env.ProxyUsername = env.Username
-	}
-
-	if env.ProxyZone == "" {
-		env.ProxyZone = env.Zone
-	}
-
-	if env.GeneratedPasswordTimeout == 0 {
-		env.GeneratedPasswordTimeout = DefaultEnv.GeneratedPasswordTimeout
-	}
-
-	if env.DialTimeout == 0 {
-		env.DialTimeout = DefaultEnv.DialTimeout
-	}
-
-	if env.HandshakeTimeout == 0 {
-		env.HandshakeTimeout = DefaultEnv.HandshakeTimeout
-	}
+func (env *Env) ApplyDefaults() {
+	setDefaultValue(&env.Port, DefaultEnv.Port)
+	setDefaultValue(&env.AuthScheme, DefaultEnv.AuthScheme)
+	setDefaultValue(&env.EncryptionAlgorithm, DefaultEnv.EncryptionAlgorithm)
+	setDefaultValue(&env.EncryptionSaltSize, DefaultEnv.EncryptionSaltSize)
+	setDefaultValue(&env.EncryptionKeySize, DefaultEnv.EncryptionKeySize)
+	setDefaultValue(&env.EncryptionNumHashRounds, DefaultEnv.EncryptionNumHashRounds)
+	setDefaultValue(&env.Username, DefaultEnv.Username)
+	setDefaultValue(&env.SSLVerifyServer, DefaultEnv.SSLVerifyServer)
+	setDefaultValue(&env.ClientServerNegotiation, DefaultEnv.ClientServerNegotiation)
+	setDefaultValue(&env.ClientServerNegotiationPolicy, DefaultEnv.ClientServerNegotiationPolicy)
+	setDefaultValue(&env.DefaultResource, DefaultEnv.DefaultResource)
+	setDefaultValue(&env.ProxyUsername, env.Username)
+	setDefaultValue(&env.ProxyZone, env.Zone)
+	setDefaultValue(&env.GeneratedPasswordTimeout, DefaultEnv.GeneratedPasswordTimeout)
+	setDefaultValue(&env.DialTimeout, DefaultEnv.DialTimeout)
+	setDefaultValue(&env.HandshakeTimeout, DefaultEnv.HandshakeTimeout)
 
 	if env.PersistentState == nil {
 		env.PersistentState = &discardPersistentState{}
+	}
+}
+
+// setDefaultValue sets the value of ptr to defaultValue if ptr is empty (i.e. has its zero value).
+// It is a helper function to set default values for environment fields.
+func setDefaultValue[S comparable](ptr *S, defaultValue S) {
+	var empty S
+
+	if *ptr == empty {
+		*ptr = defaultValue
 	}
 }
 
