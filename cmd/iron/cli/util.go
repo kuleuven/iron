@@ -9,15 +9,19 @@ import (
 )
 
 func (a *App) Path(path string) string {
+	return a.PathIn(path, a.Workdir)
+}
+
+func (a *App) PathIn(path, workdir string) string {
 	if path == "" || path == "." {
-		return a.Workdir
+		return workdir
 	}
 
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 
-		if a.Workdir != "/" {
-			path = a.Workdir + "/" + path
+		if workdir != "/" {
+			path = workdir + "/" + path
 		}
 	}
 

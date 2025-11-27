@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -144,7 +145,7 @@ func (a *App) completeLocalArgument(toComplete string, argType ArgType) []string
 func (a *App) completeIrodsArgument(ctx context.Context, client *iron.Client, toComplete string, argType ArgType) []string {
 	relativeBase, filePrefix := api.Split(toComplete)
 
-	absoluteBase := a.Path(relativeBase)
+	absoluteBase := a.PathIn(relativeBase, pick(a.Workdir, fmt.Sprintf("/%s", client.Zone)))
 
 	if absoluteBase == "" || absoluteBase == "/" {
 		return []string{"/" + client.Zone + "/"}
@@ -179,4 +180,12 @@ func (a *App) completeIrodsArgument(ctx context.Context, client *iron.Client, to
 	slices.Sort(completions)
 
 	return completions
+}
+
+func pick(a, b string) string {
+	if a == "" {
+		return b
+	}
+
+	return a
 }

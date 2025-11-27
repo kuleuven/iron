@@ -17,6 +17,9 @@ github.com/c-bata/go-prompt/internal/bisect
 github.com/c-bata/go-prompt/internal/debug
 github.com/c-bata/go-prompt/internal/strings
 github.com/c-bata/go-prompt/internal/term
+# github.com/c9s/goprocinfo v0.0.0-20210130143923-c95fcf8c64a8
+## explicit
+github.com/c9s/goprocinfo/linux
 # github.com/creativeprojects/go-selfupdate v1.5.1
 ## explicit; go 1.24.6
 github.com/creativeprojects/go-selfupdate

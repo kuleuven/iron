@@ -285,6 +285,12 @@ func GetWorkdirFromFile(file string) (string, error) {
 
 	if _, err := os.Stat(pidFile); err == nil {
 		file = pidFile
+	} else if grandParent, err := findParentOf(os.Getppid()); err == nil {
+		pidFile = fmt.Sprintf("%s.%d", file, grandParent)
+
+		if _, err := os.Stat(pidFile); err == nil {
+			file = pidFile
+		}
 	}
 
 	f, err := os.Open(file)
