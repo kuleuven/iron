@@ -58,7 +58,8 @@ func (a *App) auth() *cobra.Command {
 	return &cobra.Command{
 		Use:               use,
 		Aliases:           []string{"authenticate", "iinit"},
-		Short:             "Authenticate against the irods server using the .irods/irods_environment.json file.",
+		Short:             "Authenticate against the irods server.",
+		Long:              "Authenticate against the irods server using the .irods/irods_environment.json file.",
 		Args:              args,
 		SilenceUsage:      true,
 		PersistentPreRunE: preRun,
