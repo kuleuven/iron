@@ -3,6 +3,7 @@ package iron
 import (
 	"encoding/json"
 	"os"
+	"time"
 )
 
 // Env contains the IRODS connection parameters to establish a connection.
@@ -27,8 +28,10 @@ type Env struct {
 	ProxyZone                     string `json:"irods_proxy_zone"` // Authenticate with proxy credentials
 
 	// Advanced dial settings
-	SSLServerName string `json:"-"` // If provided, this will be used for server verification, instead of the hostname
-	PamTTL        int    `json:"-"` // For pam authentication, the TTL to use for the generated native password
+	SSLServerName            string        `json:"-"` // If provided, this will be used for server verification, instead of the hostname
+	DialTimeout              time.Duration `json:"-"` // If provided, this will be used for dial timeout
+	HandshakeTimeout         time.Duration `json:"-"` // If provided, this will be used for the handshake timeout
+	GeneratedPasswordTimeout time.Duration `json:"-"` // For pam authentication, the TTL to use for the generated native password
 
 	// Persistent state for PAM interactive authentication
 	PersistentState PersistentState `json:"-"` // If provided, this will be used for PAM authentication as persistent store
@@ -67,6 +70,9 @@ var DefaultEnv = Env{
 	ClientServerNegotiation:       "request_server_negotiation",
 	ClientServerNegotiationPolicy: "CS_NEG_REQUIRE",
 	DefaultResource:               "demoResc",
+	DialTimeout:                   time.Minute,
+	HandshakeTimeout:              time.Minute,
+	GeneratedPasswordTimeout:      time.Hour,
 }
 
 // LoadFromFile reads an environment configuration from a JSON file at the given path,
@@ -86,7 +92,7 @@ func (env *Env) LoadFromFile(path string) error {
 // It uses the values from DefaultEnv for most fields. If the ProxyUsername and ProxyZone
 // are not specified, it uses the Username and Zone respectively. Additionally, if PamTTL
 // is not set or is less than or equal to zero, it defaults to 60
-func (env *Env) ApplyDefaults() {
+func (env *Env) ApplyDefaults() { //nolint:funlen
 	if env.Port == 0 {
 		env.Port = DefaultEnv.Port
 	}
@@ -139,8 +145,16 @@ func (env *Env) ApplyDefaults() {
 		env.ProxyZone = env.Zone
 	}
 
-	if env.PamTTL <= 0 {
-		env.PamTTL = 60
+	if env.GeneratedPasswordTimeout == 0 {
+		env.GeneratedPasswordTimeout = DefaultEnv.GeneratedPasswordTimeout
+	}
+
+	if env.DialTimeout == 0 {
+		env.DialTimeout = DefaultEnv.DialTimeout
+	}
+
+	if env.HandshakeTimeout == 0 {
+		env.HandshakeTimeout = DefaultEnv.HandshakeTimeout
 	}
 
 	if env.PersistentState == nil {

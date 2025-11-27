@@ -263,7 +263,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		return InitError{a, err}
 	}
 
-	env.PamTTL = int(a.PamTTL.Hours())
+	env.GeneratedPasswordTimeout = a.PamTTL
 
 	clientName := a.name
 

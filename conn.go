@@ -96,15 +96,15 @@ type conn struct {
 	closeErr      error
 }
 
-// Dialer is used to connect to an IRODS server.
-var Dialer = net.Dialer{
-	Timeout: time.Minute,
-}
-
+// DialFunc is used to connect to an IRODS server.
 type DialFunc func(ctx context.Context, env Env, clientName string) (net.Conn, error)
 
 func DefaultDialFunc(ctx context.Context, env Env, clientName string) (net.Conn, error) {
-	return Dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
+	dialer := net.Dialer{
+		Timeout: env.DialTimeout,
+	}
+
+	return dialer.DialContext(ctx, "tcp", net.JoinHostPort(env.Host, strconv.FormatInt(int64(env.Port), 10)))
 }
 
 // Dial connects to an IRODS server and creates a new connection.
@@ -173,7 +173,11 @@ func newConn(ctx context.Context, transport net.Conn, env Env, clientName string
 		c.env.ClientServerNegotiationPolicy = ClientServerRequireTLS
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, HandshakeTimeout)
+	if env.HandshakeTimeout <= 0 {
+		return c, c.Handshake(ctx, prompt)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, env.HandshakeTimeout)
 
 	defer cancel()
 
@@ -551,7 +555,7 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:              "pam_interactive",
-		TTL:                 strconv.Itoa(c.env.PamTTL),
+		TTL:                 strconv.Itoa(int(c.env.GeneratedPasswordTimeout.Hours())),
 		ForcePasswordPrompt: true,
 		RecordAuthFile:      true,
 		NextOperation:       "auth_agent_auth_request",
@@ -720,7 +724,7 @@ func (c *conn) authenticatePAMPassword(ctx context.Context) error {
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:        "pam_password",
-		TTL:           strconv.Itoa(c.env.PamTTL),
+		TTL:           strconv.Itoa(int(c.env.GeneratedPasswordTimeout.Hours())),
 		NextOperation: "pam_password_auth_client_request",
 		UserName:      c.env.ProxyUsername,
 		ZoneName:      c.env.ProxyZone,
@@ -742,7 +746,7 @@ func (c *conn) authenticatePAMPasswordDeprecated(ctx context.Context) error {
 	request := msg.PamAuthRequest{
 		Username: c.env.ProxyUsername,
 		Password: c.env.Password,
-		TTL:      c.env.PamTTL,
+		TTL:      int(c.env.GeneratedPasswordTimeout.Hours()),
 	}
 
 	response := msg.PamAuthResponse{}
