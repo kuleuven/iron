@@ -469,3 +469,10 @@ type Checksum struct {
 	XMLName  xml.Name `xml:"STR_PI"`
 	Checksum string   `xml:"myStr"`
 }
+
+type ProcStatRequest struct {
+	XMLName xml.Name `xml:"ProcStatInp_PI"`
+	Addr    string   `xml:"addr"`
+	Zone    string   `xml:"rodsZone"`
+	KeyVals SSKeyVal `xml:"KeyValPair_PI"`
+}

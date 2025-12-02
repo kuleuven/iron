@@ -177,7 +177,7 @@ func (r *Result) Next() bool {
 		return true
 	}
 
-	if r.result.ContinueIndex == 0 {
+	if r.result.ContinueIndex <= 0 {
 		r.cleanup()
 
 		return false
@@ -198,6 +198,16 @@ var ErrAttributeOutOfBound = fmt.Errorf("attribute count out of bound")
 var ErrNoSQLResults = fmt.Errorf("no sql results")
 
 var ErrAttributeIndexMismatch = fmt.Errorf("attribute index mismatch")
+
+func (r *Result) Columns() []msg.ColumnNumber {
+	columns := make([]msg.ColumnNumber, r.result.AttributeCount)
+
+	for i := range r.result.AttributeCount {
+		columns[i] = r.result.SQLResult[i].AttributeIndex
+	}
+
+	return columns
+}
 
 // Scan reads the values in the current row into the values pointed
 // to by dest, in order.  If an error occurs during scanning, the
@@ -279,7 +289,7 @@ func (r *Result) executeQuery() {
 func (r *Result) cleanup() {
 	r.Context = context.Background() // Don't run with a canceled context
 
-	for r.result.ContinueIndex != 0 {
+	for r.result.ContinueIndex > 0 {
 		r.query.ContinueIndex = r.result.ContinueIndex
 		r.query.MaxRows = 0
 

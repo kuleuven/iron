@@ -1042,3 +1042,54 @@ func (a *App) sleep() *cobra.Command {
 		},
 	}
 }
+
+func (a *App) ps() *cobra.Command {
+	return &cobra.Command{
+		Use:    "ps",
+		Short:  "List processes",
+		Args:   cobra.NoArgs,
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result := a.Procs(cmd.Context())
+
+			defer result.Close()
+
+			columns := []string{
+				"PROCESS ID",
+				"START TIME",
+				"PROXY NAME",
+				"PROXY ZONE",
+				"CLIENT NAME",
+				"CLIENT ZONE",
+				"REMOTE ADDR",
+				"SERVER ADDR",
+				"PROGRAM",
+			}
+
+			out := &tabwriter.TabWriter{
+				Writer: cmd.OutOrStdout(),
+			}
+
+			defer out.Flush()
+
+			fmt.Fprintf(out, "%s%s%s\n", Bold, strings.Join(columns, "\t"), Reset)
+
+			values := make([]string, len(columns))
+			ptrs := make([]any, len(values))
+
+			for i := range values {
+				ptrs[i] = &values[i]
+			}
+
+			for result.Next() {
+				if err := result.Scan(ptrs...); err != nil {
+					return err
+				}
+
+				fmt.Fprintf(out, "%s\n", strings.Join(values, "\t"))
+			}
+
+			return result.Err()
+		},
+	}
+}
