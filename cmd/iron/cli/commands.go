@@ -260,7 +260,7 @@ func (a *App) cp() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:               "cp <object path> <target path>",
+		Use:               "cp <path> <target path>",
 		Short:             "Copy a data object or a collection",
 		Args:              cobra.ExactArgs(2),
 		Example:           strings.Join(examples, "\n"),
