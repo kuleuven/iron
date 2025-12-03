@@ -18,6 +18,7 @@ import (
 	"github.com/kuleuven/iron/cmd/iron/tabwriter"
 	"github.com/kuleuven/iron/transfer"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func (a *App) version() *cobra.Command {
@@ -491,7 +492,9 @@ func (a *App) download() *cobra.Command {
 }
 
 func (a *App) cat() *cobra.Command {
-	return &cobra.Command{
+	var maxThreads int
+
+	cmd := &cobra.Command{
 		Use:               "cat <object path>",
 		Short:             "Stream a data object to stdout",
 		Args:              cobra.ExactArgs(1),
@@ -499,31 +502,22 @@ func (a *App) cat() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			source := a.Path(args[0])
 
-			f, err := a.OpenDataObject(cmd.Context(), source, api.O_RDONLY)
-			if err != nil {
-				return err
+			var output io.Writer
+
+			if !term.IsTerminal(int(os.Stdout.Fd())) {
+				output = cmd.ErrOrStderr()
 			}
 
-			defer f.Close()
-
-			size, err := f.Size()
-			if err != nil {
-				return err
-			}
-
-			bufSize := 32 * 1024 * 1024
-
-			if size < int64(bufSize) {
-				bufSize = int(size) + 1
-			}
-
-			buf := make([]byte, bufSize)
-
-			_, err = CopyBuffer(cmd.Context(), cmd.OutOrStdout(), f, buf)
-
-			return err
+			return a.Client.ToWriter(cmd.Context(), cmd.OutOrStdout(), source, transfer.Options{
+				MaxThreads: maxThreads,
+				Output:     output,
+			})
 		},
 	}
+
+	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of download threads to use")
+
+	return cmd
 }
 
 func (a *App) head() *cobra.Command {
@@ -576,7 +570,10 @@ If the data object does not exist, it will be created.
 Use '--append' to append to an existing data object.`
 
 func (a *App) save() *cobra.Command {
-	var appendFlag bool
+	var (
+		appendFlag bool
+		maxThreads int
+	)
 
 	eofMessage := "Press Ctrl+D to end input"
 
@@ -599,32 +596,25 @@ func (a *App) save() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := a.Path(args[0])
 
-			flags := api.O_WRONLY | api.O_CREAT | api.O_TRUNC
-
-			if appendFlag {
-				flags = api.O_WRONLY | api.O_CREAT | api.O_APPEND
-			}
-
-			f, err := a.OpenDataObject(cmd.Context(), target, flags)
-			if err != nil {
-				return err
-			}
-
-			defer f.Close()
-
 			if a.inShell {
 				fmt.Printf("[%s]\n", eofMessage)
 			}
 
-			buf := make([]byte, 32*1024*1024)
+			var output io.Writer
 
-			_, err = CopyBuffer(cmd.Context(), f, cmd.InOrStdin(), buf)
+			if !term.IsTerminal(int(os.Stdin.Fd())) {
+				output = cmd.ErrOrStderr()
+			}
 
-			return err
+			return a.Client.FromReader(cmd.Context(), cmd.InOrStdin(), target, appendFlag, transfer.Options{
+				MaxThreads: maxThreads,
+				Output:     output,
+			})
 		},
 	}
 
 	cmd.Flags().BoolVarP(&appendFlag, "append", "a", false, "Append to existing data object")
+	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use")
 
 	return cmd
 }

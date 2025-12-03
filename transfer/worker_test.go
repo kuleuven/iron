@@ -3,6 +3,7 @@ package transfer
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -171,6 +172,106 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	}
 }
 
+func TestFromStream(t *testing.T) { //nolint:funlen
+	testConn1 := &api.MockConn{}
+	testConn2 := &api.MockConn{}
+
+	var n int
+
+	testTransferAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			n++
+
+			if n%2 == 1 {
+				return testConn1, nil
+			}
+
+			return testConn2, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	kv := msg.SSKeyVal{}
+	kv.Add(msg.DATA_TYPE_KW, "generic")
+	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:       "/test/file2",
+		CreateMode: 420,
+		OpenFlags:  577,
+		KeyVals:    kv,
+	}, msg.FileDescriptor(1))
+	// The order of the next two calls is not defined, but usually it is this
+	testConn1.Add(msg.GET_FILE_DESCRIPTOR_INFO_APN, msg.GetDescriptorInfoRequest{
+		FileDescriptor: 1,
+	}, msg.GetDescriptorInfoResponse{
+		DataObjectInfo: map[string]any{
+			"replica_number":     1,
+			"resource_hierarchy": "blub",
+		},
+		ReplicaToken: "testToken",
+	})
+	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn1.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Offset:         200,
+	}, msg.SeekResponse{Offset: 0})
+	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn1.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+	}, msg.EmptyResponse{})
+
+	kv = msg.SSKeyVal{}
+	kv.Add(msg.RESC_HIER_STR_KW, "blub")
+	kv.Add(msg.REPLICA_TOKEN_KW, "testToken")
+	testConn2.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:      "/test/file2",
+		OpenFlags: 1,
+		KeyVals:   kv,
+	}, msg.FileDescriptor(2))
+	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Offset:         100,
+	}, msg.SeekResponse{Offset: 100})
+	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Offset:         300,
+	}, msg.SeekResponse{Offset: 200})
+	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           100,
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	testConn2.Add(msg.REPLICA_CLOSE_APN, msg.CloseDataObjectReplicaRequest{
+		FileDescriptor: 2,
+	}, msg.EmptyResponse{})
+
+	BufferSize = 100
+	CopyBufferDelay = 500 * time.Millisecond
+
+	worker := New(nil, testTransferAPI, Options{
+		MaxThreads: 2,
+		Output:     os.Stdout,
+		Delete:     true,
+	})
+
+	worker.FromStream(t.Context(), "stream", bytes.NewReader(bytes.Repeat([]byte("test"), 100)), "/test/file2", false)
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestClientDownload(t *testing.T) { //nolint:funlen
 	dir := t.TempDir()
 
@@ -248,6 +349,109 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		} else if string(contents) != "test" {
 			t.Errorf("expected 'test', got '%s'", string(contents))
 		}
+	}
+}
+
+func TestToStream(t *testing.T) { //nolint:funlen
+	testConn1 := &api.MockConn{}
+	testConn2 := &api.MockConn{}
+
+	var n int
+
+	testTransferAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			n++
+
+			if n%2 == 1 {
+				return testConn1, nil
+			}
+
+			return testConn2, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	kv := msg.SSKeyVal{}
+	kv.Add(msg.DATA_TYPE_KW, "generic")
+	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:       "/test/file1",
+		CreateMode: 420,
+		KeyVals:    kv,
+	}, msg.FileDescriptor(1))
+	testConn1.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Whence:         2,
+	}, msg.SeekResponse{Offset: 304})
+	testConn1.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+	}, msg.SeekResponse{Offset: 0})
+	// The following two are run in unspecified order, but usually in this order
+	testConn1.Add(msg.GET_FILE_DESCRIPTOR_INFO_APN, msg.GetDescriptorInfoRequest{
+		FileDescriptor: 1,
+	}, msg.GetDescriptorInfoResponse{
+		DataObjectInfo: map[string]any{
+			"replica_number":     1,
+			"resource_hierarchy": "blub",
+		},
+		ReplicaToken: "testToken",
+	})
+	testConn1.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("test"), 25))
+	testConn1.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Offset:         200,
+	}, msg.SeekResponse{Offset: 200})
+	testConn1.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           100,
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("test"), 25))
+	testConn1.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+	}, msg.EmptyResponse{})
+
+	kv = msg.SSKeyVal{}
+	kv.Add(msg.RESC_HIER_STR_KW, "blub")
+	kv.Add(msg.REPLICA_TOKEN_KW, "testToken")
+	testConn2.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
+		Path:    "/test/file1",
+		KeyVals: kv,
+	}, msg.FileDescriptor(2))
+	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Offset:         100,
+	}, msg.SeekResponse{Offset: 100})
+	testConn2.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           100,
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("test"), 25))
+	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Offset:         300,
+	}, msg.SeekResponse{Offset: 300})
+	testConn2.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           100,
+	}, msg.ReadResponse(4), nil, []byte("stop"))
+	testConn2.Add(msg.REPLICA_CLOSE_APN, msg.CloseDataObjectReplicaRequest{
+		FileDescriptor: 2,
+	}, msg.EmptyResponse{})
+
+	BufferSize = 100
+	CopyBufferDelay = 500 * time.Millisecond
+
+	worker := New(nil, testTransferAPI, Options{
+		MaxThreads: 2,
+	})
+
+	worker.ToStream(t.Context(), "test", io.Discard, "/test/file1")
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
 	}
 }
 

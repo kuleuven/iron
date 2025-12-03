@@ -77,6 +77,12 @@ func (pb *PB) Handler(progress Progress) {
 		}
 
 		pb.actual[progress.Label] = progress
+	case progress.FinishedAt.IsZero() && progress.Size == 0:
+		// FromStream, we don't know the size up front
+		pb.actual[progress.Label] = progress
+
+		pb.bytesTransferred += progress.Increment
+		pb.bytesTotal += progress.Increment
 	case progress.FinishedAt.IsZero():
 		// Transfer ongoing
 		pb.actual[progress.Label] = progress

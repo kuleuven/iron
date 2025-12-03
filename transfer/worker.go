@@ -309,6 +309,54 @@ func (worker *Worker) tryOpenDataObject(ctx context.Context, remote string, mode
 	return nil, err
 }
 
+// FromStream schedules the upload of a io.Reader to the iRODS server using parallel transfers.
+// In contrast to FromReader, FromStream will block until the full file has been uploaded.
+// The remote file refers to an iRODS path.
+func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, remote string, append bool) {
+	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
+
+	if append {
+		mode = api.O_CREAT | api.O_WRONLY | api.O_APPEND
+	}
+
+	if worker.options.Exclusive {
+		mode |= api.O_EXCL
+	}
+
+	w, err := worker.tryOpenDataObject(ctx, remote, mode)
+	if err != nil {
+		worker.Error(name, remote, err)
+
+		return
+	}
+
+	// Schedule the upload
+	pw := &progressWriter{
+		progress: Progress{
+			Action:    TransferFile,
+			Label:     name,
+			Size:      0, // Size is unknown
+			StartedAt: time.Now(),
+		},
+		handler: worker.options.ProgressHandler,
+	}
+
+	ww := &CircularWriter{
+		WriteSeekCloser: w,
+		MaxThreads:      worker.options.MaxThreads,
+		Reopen: func() (WriteSeekCloser, error) {
+			return w.Reopen(nil, api.O_WRONLY)
+		},
+	}
+
+	err = multierr.Append(copyBuffer(ww, r, pw), ww.Close())
+	if err != nil {
+		err = multierr.Append(err, worker.IndexPool.DeleteDataObject(ctx, remote, true))
+
+		worker.Error(name, remote, err)
+	}
+}
+
 // Download schedules the download of a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
@@ -464,6 +512,56 @@ func findSize(r io.Seeker) (int64, error) {
 	}
 
 	return size, nil
+}
+
+// ToStream schedules the download into a io.Writer from the iRODS server.
+// The remote file refers to an iRODS path.
+// The call blocks until the transfer has started.
+func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, remote string) {
+	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
+	if err != nil {
+		worker.Error(name, remote, err)
+
+		return
+	}
+
+	size, err := findSize(r)
+	if err != nil {
+		worker.Error(name, remote, err)
+
+		return
+	}
+
+	// Schedule the download
+	pw := &progressWriter{
+		progress: Progress{
+			Action:    TransferFile,
+			Label:     name,
+			Size:      size,
+			StartedAt: time.Now(),
+		},
+		handler: worker.options.ProgressHandler,
+	}
+
+	pw.handler(pw.progress)
+
+	rr := &CircularReader{
+		ReadSeekCloser: r,
+		MaxThreads:     worker.options.MaxThreads,
+		Reopen: func() (io.ReadSeekCloser, error) {
+			return r.Reopen(nil, api.O_RDONLY)
+		},
+		Size: size,
+	}
+
+	worker.wg.Go(func() error {
+		err = multierr.Append(copyBuffer(w, rr, pw), rr.Close())
+		if err != nil {
+			return worker.options.ErrorHandler(name, remote, err)
+		}
+
+		return nil
+	})
 }
 
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
