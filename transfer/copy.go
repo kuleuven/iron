@@ -150,7 +150,7 @@ func (wt *writeThread) Run() {
 	wt.done <- wt.writer.Close()
 }
 
-func (w *CircularWriter) Close() error {
+func (w *CircularWriter) Close() error { //nolint:dupl
 	if len(w.workers) == 0 {
 		return w.WriteSeekCloser.Close()
 	}
@@ -203,7 +203,7 @@ type readThread struct {
 	done   chan error
 }
 
-func (r *CircularReader) Read(data []byte) (int, error) {
+func (r *CircularReader) Read(data []byte) (int, error) { //nolint:funlen
 	if r.Size == 0 {
 		return 0, io.EOF
 	}
@@ -312,7 +312,7 @@ func (rt *readThread) doRead() {
 	rt.done <- err
 }
 
-func (r *CircularReader) Close() error {
+func (r *CircularReader) Close() error { //nolint:dupl
 	if len(r.workers) == 0 {
 		return r.ReadSeekCloser.Close()
 	}
