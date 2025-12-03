@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kuleuven/iron/msg"
+	"github.com/kuleuven/iron/transfer"
 )
 
 func TestVersion(t *testing.T) {
@@ -380,12 +381,14 @@ func TestCat(t *testing.T) {
 	})
 	app.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
-		Size:           101,
+		Size:           200,
 	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("hello"), 20))
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"cat", "/testzone/obj1"})
+	cmd.SetArgs([]string{"cat", "--threads", "1", "/testzone/obj1"})
+
+	transfer.BufferSize = 200
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -418,9 +421,10 @@ func TestSave(t *testing.T) {
 		FileDescriptor: 1,
 		Size:           6,
 	}, msg.EmptyResponse{}, []byte("hello\n"), nil)
+	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"save", "/testzone/obj1"})
+	cmd.SetArgs([]string{"save", "--threads", "1", "/testzone/obj1"})
 	cmd.SetIn(strings.NewReader("hello\n"))
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {

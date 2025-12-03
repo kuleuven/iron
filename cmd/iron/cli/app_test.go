@@ -231,32 +231,79 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 	}
 }
 
-type mockApp struct {
+type mockConn struct {
 	*api.MockConn
+}
+
+func (c *mockConn) API() *api.API {
+	return &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return c, nil
+		},
+		DefaultResource: "demoResc",
+	}
+}
+
+func (c *mockConn) ConnectedAt() time.Time {
+	return time.Now()
+}
+
+func (c *mockConn) Env() iron.Env {
+	return iron.Env{
+		Zone:            "testzone",
+		DefaultResource: "demoResc",
+	}
+}
+
+func (c *mockConn) SQLErrors() int {
+	return 0
+}
+
+func (c *mockConn) Transport() net.Conn {
+	return nil
+}
+
+func (c *mockConn) TransportErrors() int {
+	return 0
+}
+
+func (c *mockConn) ServerVersion() string {
+	return "rods5.0.1"
+}
+
+type mockApp struct {
+	*mockConn
 	*App
 }
 
 func testApp(t *testing.T) *mockApp {
 	app := New(t.Context())
 
-	testConn := &api.MockConn{}
+	testConn := &mockConn{
+		MockConn: &api.MockConn{},
+	}
 
-	app.Client = &iron.Client{
-		API: &api.API{
-			Username: "testuser",
-			Zone:     "testzone",
-			Connect: func(context.Context) (api.Conn, error) {
-				return testConn, nil
-			},
-			DefaultResource: "demoResc",
+	var err error
+
+	app.Client, err = iron.New(t.Context(), iron.Env{
+		Zone:            "testzone",
+		DefaultResource: "demoResc",
+	}, iron.Option{
+		HandshakeFunc: func(ctx context.Context) (iron.Conn, error) {
+			return testConn, nil
 		},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	WithName("test")(app)
 	WithDefaultWorkdir("")(app)
 
 	return &mockApp{
-		MockConn: testConn,
+		mockConn: testConn,
 		App:      app,
 	}
 }

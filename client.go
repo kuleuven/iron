@@ -52,6 +52,9 @@ type Option struct {
 	// DialFunc is an optional function that overrides the default dial function.
 	DialFunc DialFunc
 
+	// HandshakeFunc is an optional function that overrides the default handshake function.
+	HandshakeFunc HandshakeFunc
+
 	// GeneratedNativePasswordAge is the maximum age of a generated native password before it is discarded.
 	// In case pam authentication is used, this should be put to a value lower than the PAM timeout which is set on the server/in Env.
 	GeneratedNativePasswordAge time.Duration
@@ -59,6 +62,8 @@ type Option struct {
 	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
 	DiscardConnectionAge time.Duration
 }
+
+type HandshakeFunc func(ctx context.Context) (Conn, error)
 
 type Client struct {
 	env                  *Env
@@ -172,14 +177,18 @@ func (c *Client) Close() error {
 	return c.defaultPool.Close()
 }
 
-// Context returns the context used by the client for all of its operations.
-//func (c *Client) Context() context.Context {
-//	return c.ctx
-//}
-
-func (c *Client) newConn(ctx context.Context) (*conn, error) {
+func (c *Client) newConn(ctx context.Context) (Conn, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
+	if c.option.HandshakeFunc != nil {
+		conn, err := c.option.HandshakeFunc(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return conn, nil
+	}
 
 	// If an EnvCallback is provided, use it to retrieve the environment settings
 	if c.needsEnvCallback() {

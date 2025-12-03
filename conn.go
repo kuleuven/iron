@@ -33,8 +33,8 @@ type Conn interface {
 	// Env returns the connection environment
 	Env() Env
 
-	// Conn returns the underlying net.Conn
-	Conn() net.Conn
+	// Transport returns the underlying net.Conn
+	Transport() net.Conn
 
 	// ServerVersion returns the version that the iRODS server reports
 	// e.g. "4.3.2"
@@ -71,6 +71,15 @@ type Conn interface {
 	// about to closed. It is used to clean up state before the connection is closed.
 	// The CloseHandler can be unregistered by calling the returned function.
 	RegisterCloseHandler(handler func() error) context.CancelFunc
+
+	// ConnectedAt returns the time when the connection was established.
+	ConnectedAt() time.Time
+
+	// TransportErrors returns the number of transport errors encountered on this connection.
+	TransportErrors() int
+
+	// SQLErrors returns the number of SQL errors encountered on this connection.
+	SQLErrors() int
 }
 
 type conn struct {
@@ -191,8 +200,8 @@ func (c *conn) Env() Env {
 	return *c.env
 }
 
-// Conn returns the underlying network connection.
-func (c *conn) Conn() net.Conn {
+// Transport returns the underlying network connection.
+func (c *conn) Transport() net.Conn {
 	return c.transport
 }
 
@@ -941,7 +950,7 @@ func (c *conn) Close() error {
 		}
 	}
 
-	c.closeErr = multierr.Append(c.closeErr, c.Conn().Close())
+	c.closeErr = multierr.Append(c.closeErr, c.Transport().Close())
 	c.closed = true
 
 	return c.closeErr
@@ -977,4 +986,16 @@ func (c *conn) CloseOnCancel(ctx context.Context) context.CancelFunc {
 	return func() {
 		close(done)
 	}
+}
+
+func (c *conn) ConnectedAt() time.Time {
+	return c.connectedAt
+}
+
+func (c *conn) TransportErrors() int {
+	return c.transportErrors
+}
+
+func (c *conn) SQLErrors() int {
+	return c.sqlErrors
 }

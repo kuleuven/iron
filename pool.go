@@ -25,9 +25,9 @@ type Pool struct {
 	allowConcurrentUse   bool
 	discardConnectionAge time.Duration
 
-	available, all, reused []*conn
+	available, all, reused []Conn
 	waiting                int
-	ready                  chan *conn
+	ready                  chan Conn
 	closed                 bool
 	closeErr               error
 	lock                   sync.Mutex
@@ -41,7 +41,7 @@ func newPool(client *Client) *Pool {
 		maxConns:             client.option.MaxConns,
 		allowConcurrentUse:   client.option.AllowConcurrentUse,
 		discardConnectionAge: client.option.DiscardConnectionAge,
-		ready:                make(chan *conn),
+		ready:                make(chan Conn),
 	}
 
 	// Register api
@@ -84,6 +84,20 @@ func newChildPool(parent *Pool, size int) *Pool {
 // The call will block until the requested number of connections are available.
 func (c *Client) Pool(size int) (*Pool, error) {
 	return c.defaultPool.Pool(size)
+}
+
+// ReplaceDefaultPool sets the default pool, i.e.
+// the pool from which connections are taken if client.Connect() is called.
+// The previous default pool will be returned.
+// Use with care, it will overwrite the default pool, but subpools of the
+// existing pool will retain their original parent pool, and the caller is
+// responsible for closing the returned original pool.
+func (c *Client) ReplaceDefaultPool(pool *Pool) *Pool {
+	defaultPool := c.defaultPool
+
+	c.defaultPool = pool
+
+	return defaultPool
 }
 
 // Pool returns a subpool of connections
@@ -160,7 +174,7 @@ func (p *Pool) Connect(ctx context.Context) (Conn, error) {
 		// Mark the connection as reused
 		p.reused = append(p.reused, first)
 
-		return &returnOnClose{conn: first, pool: p}, nil
+		return &returnOnClose{Conn: first, pool: p}, nil
 	}
 
 	// None available, block until one becomes available
@@ -168,7 +182,7 @@ func (p *Pool) Connect(ctx context.Context) (Conn, error) {
 	p.lock.Unlock()
 
 	if conn := <-p.ready; conn != nil {
-		return &returnOnClose{conn: conn, pool: p}, nil
+		return &returnOnClose{Conn: conn, pool: p}, nil
 	}
 
 	p.lock.Lock()
@@ -181,7 +195,7 @@ func (p *Pool) Connect(ctx context.Context) (Conn, error) {
 		return nil, err
 	}
 
-	return &returnOnClose{conn: conn, pool: p}, nil
+	return &returnOnClose{Conn: conn, pool: p}, nil
 }
 
 // ConnectAvailable returns a list of available connections to the iRODS server,
@@ -235,7 +249,7 @@ func (p *Pool) tryConnect(ctx context.Context) (Conn, error) {
 			}
 		})
 
-		return &returnOnClose{conn: conn, pool: p}, nil
+		return &returnOnClose{Conn: conn, pool: p}, nil
 	}
 
 	if len(p.all) < p.maxConns {
@@ -250,13 +264,13 @@ func (p *Pool) tryConnect(ctx context.Context) (Conn, error) {
 			}
 		})
 
-		return &returnOnClose{conn: conn, pool: p}, nil
+		return &returnOnClose{Conn: conn, pool: p}, nil
 	}
 
 	return nil, ErrNoConnectionsAvailable
 }
 
-func (p *Pool) newConn(ctx context.Context) (*conn, error) {
+func (p *Pool) newConn(ctx context.Context) (Conn, error) {
 	conn, err := p.client.newConn(ctx)
 	if err != nil {
 		return nil, err
@@ -267,7 +281,7 @@ func (p *Pool) newConn(ctx context.Context) (*conn, error) {
 	return conn, nil
 }
 
-func (p *Pool) returnConn(conn *conn) error {
+func (p *Pool) returnConn(conn Conn) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -288,7 +302,7 @@ func (p *Pool) returnConn(conn *conn) error {
 	}
 
 	// In case of errors, we must discard the connection
-	if conn.transportErrors > 0 || conn.sqlErrors > 0 || p.discardConnectionAge > 0 && time.Since(conn.connectedAt) > p.discardConnectionAge {
+	if conn.TransportErrors() > 0 || conn.SQLErrors() > 0 || p.discardConnectionAge > 0 && time.Since(conn.ConnectedAt()) > p.discardConnectionAge {
 		if p.unregister(conn) {
 			// If someone is waiting for a connection, we must inform them
 			// that it is allowed to call newConn()
@@ -314,7 +328,7 @@ func (p *Pool) returnConn(conn *conn) error {
 	return nil
 }
 
-func (p *Pool) unregister(conn *conn) bool {
+func (p *Pool) unregister(conn Conn) bool {
 	for i := range p.all {
 		if p.all[i] != conn {
 			continue
@@ -346,7 +360,7 @@ func (p *Pool) discardOldConnections() {
 	now := time.Now()
 
 	for _, conn := range p.available {
-		if now.Sub(conn.connectedAt) <= p.discardConnectionAge {
+		if now.Sub(conn.ConnectedAt()) <= p.discardConnectionAge {
 			continue
 		}
 
@@ -415,7 +429,7 @@ func (p *Pool) Close() error {
 }
 
 type returnOnClose struct {
-	*conn
+	Conn
 	once     sync.Once
 	closeErr error
 	pool     *Pool
@@ -423,7 +437,7 @@ type returnOnClose struct {
 
 func (r *returnOnClose) Close() error {
 	r.once.Do(func() {
-		r.closeErr = r.pool.returnConn(r.conn)
+		r.closeErr = r.pool.returnConn(r.Conn)
 	})
 
 	return r.closeErr
