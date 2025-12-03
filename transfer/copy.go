@@ -151,6 +151,10 @@ func (wt *writeThread) Run() {
 }
 
 func (w *CircularWriter) Close() error {
+	if len(w.workers) == 0 {
+		return w.WriteSeekCloser.Close()
+	}
+
 	allErrors := make(chan error, 2*len(w.workers))
 
 	var wg sync.WaitGroup
@@ -200,6 +204,10 @@ type readThread struct {
 }
 
 func (r *CircularReader) Read(data []byte) (int, error) {
+	if r.Size == 0 {
+		return 0, io.EOF
+	}
+
 	for len(r.workers) < r.MaxThreads && r.offset < r.Size {
 		reader := r.ReadSeekCloser
 
@@ -305,6 +313,10 @@ func (rt *readThread) doRead() {
 }
 
 func (r *CircularReader) Close() error {
+	if len(r.workers) == 0 {
+		return r.ReadSeekCloser.Close()
+	}
+
 	allErrors := make(chan error, 2*len(r.workers))
 
 	var wg sync.WaitGroup

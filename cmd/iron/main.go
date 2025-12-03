@@ -31,7 +31,7 @@ func main() {
 
 	config := home + "/.irods/irods_environment.json"
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGPIPE)
 
 	defer stop()
 
