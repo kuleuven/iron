@@ -25,9 +25,9 @@ func (c *Client) UploadDir(ctx context.Context, local, remote string, options tr
 
 // FromReader streams an io.Reader to a remote file on the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
-func (c *Client) FromReader(ctx context.Context, r io.Reader, remote string, append bool, options transfer.Options) error {
+func (c *Client) FromReader(ctx context.Context, r io.Reader, remote string, appendToFile bool, options transfer.Options) error {
 	return c.runWorker(options, func(worker *transfer.Worker) {
-		worker.FromStream(ctx, remote, r, remote, append)
+		worker.FromStream(ctx, remote, r, remote, appendToFile)
 	})
 }
 

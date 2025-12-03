@@ -312,10 +312,10 @@ func (worker *Worker) tryOpenDataObject(ctx context.Context, remote string, mode
 // FromStream schedules the upload of a io.Reader to the iRODS server using parallel transfers.
 // In contrast to FromReader, FromStream will block until the full file has been uploaded.
 // The remote file refers to an iRODS path.
-func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, remote string, append bool) {
+func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, remote string, appendToFile bool) {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
-	if append {
+	if appendToFile {
 		mode = api.O_CREAT | api.O_WRONLY | api.O_APPEND
 	}
 
