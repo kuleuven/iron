@@ -742,8 +742,11 @@ func walkOptions(listACL, listMeta bool) []api.WalkOption {
 	return opts
 }
 
-func (a *App) tree() *cobra.Command {
-	var maxDepth int
+func (a *App) tree() *cobra.Command { //nolint:funlen
+	var (
+		jsonFormat bool
+		maxDepth   int
+	)
 
 	cmd := &cobra.Command{
 		Use:               "tree <collection path>",
@@ -757,6 +760,26 @@ func (a *App) tree() *cobra.Command {
 
 			dir := a.Path(args[0])
 
+			var printer Printer
+
+			if jsonFormat {
+				printer = &JSONPrinter{
+					Writer: cmd.OutOrStdout(),
+				}
+			} else {
+				printer = &TablePrinter{
+					Writer: &tabwriter.StreamWriter{
+						Writer: cmd.OutOrStdout(),
+						Cols:   []int{20, 8, 13, 6},
+					},
+					Zone: a.Zone,
+				}
+			}
+
+			printer.Setup(false, false)
+
+			defer printer.Flush()
+
 			opts := []api.WalkOption{api.LexographicalOrder}
 
 			if maxDepth < 0 {
@@ -766,9 +789,9 @@ func (a *App) tree() *cobra.Command {
 			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
 				depth := strings.Count(strings.TrimPrefix(path, dir), "/")
 
-				fmt.Printf("%s%s\n", strings.Repeat("  ", depth), path)
+				printer.Print(indentString(path, depth, jsonFormat), record)
 
-				if err != nil || !record.IsDir() || maxDepth < 0 {
+				if err != nil || !record.IsDir() || maxDepth < 0 || depth < maxDepth-1 {
 					return err
 				}
 
@@ -776,18 +799,23 @@ func (a *App) tree() *cobra.Command {
 					return api.SkipSubDirs
 				}
 
-				if depth >= maxDepth {
-					return api.SkipDir
-				}
-
-				return nil
+				return api.SkipDir
 			}, opts...)
 		},
 	}
 
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
+	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 
 	return cmd
+}
+
+func indentString(s string, depth int, jsonFormat bool) string {
+	if jsonFormat {
+		return s
+	}
+
+	return fmt.Sprintf("%s%s", strings.Repeat("  ", depth), s)
 }
 
 func (a *App) meta() *cobra.Command {

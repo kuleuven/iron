@@ -8,7 +8,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/kuleuven/iron/api"
-	"github.com/kuleuven/iron/cmd/iron/tabwriter"
 )
 
 type Printer interface {
@@ -18,9 +17,12 @@ type Printer interface {
 }
 
 type TablePrinter struct {
-	Writer *tabwriter.TabWriter
-	Zone   string
-	Items  int
+	Writer interface {
+		io.Writer
+		Flush() error
+	}
+	Zone  string
+	Items int
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta bool) {
@@ -47,8 +49,6 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 	if i.ModTime().Year() == time.Now().Year() {
 		t = i.ModTime().Format("Jan 01 15:04")
 	}
-
-	size := humanize.Bytes(uint64(i.Size()))
 
 	var status, owner, color string
 
@@ -97,7 +97,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s",
 		owner,
-		size,
+		formatSize(i),
 		t,
 		status,
 		color+Bold,
@@ -129,6 +129,14 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 		fmt.Fprintf(tp.Writer, "%s\t\t\t\t%s\n", aclLine, metaLine)
 	}
+}
+
+func formatSize(i api.Record) string {
+	if i.IsDir() {
+		return ""
+	}
+
+	return humanize.Bytes(uint64(i.Size()))
 }
 
 func appendStatus(list, status string) string {
@@ -215,15 +223,26 @@ func (tp *TablePrinter) Flush() {
 }
 
 type JSONPrinter struct {
-	Writer io.Writer
+	Writer          io.Writer
+	hasACL, hasMeta bool
 }
 
-func (jp *JSONPrinter) Setup(asACL, hasMeta bool) {
-	// empty
+func (jp *JSONPrinter) Setup(hasACL, hasMeta bool) {
+	jp.hasACL, jp.hasMeta = hasACL, hasMeta
 }
 
 func (jp *JSONPrinter) Print(name string, i api.Record) {
-	json.NewEncoder(jp.Writer).Encode(toMap(name, i)) //nolint:errcheck,errchkjson
+	m := toMap(name, i)
+
+	if !jp.hasACL {
+		delete(m, "acl")
+	}
+
+	if !jp.hasMeta {
+		delete(m, "metadata")
+	}
+
+	json.NewEncoder(jp.Writer).Encode(m) //nolint:errcheck,errchkjson
 }
 
 func (jp *JSONPrinter) Flush() {
