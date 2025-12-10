@@ -584,10 +584,12 @@ func (a *App) save() *cobra.Command {
 	examples := []string{
 		"  Read from standard input (" + eofMessage + "):\n\t" + a.name + " save object.txt",
 		"  Pipe from other command (does not work inside `" + a.name + " shell`):\n\techo Test | " + a.name + " save --append object.txt",
+		"  Write both to irods and standard output:\n\techo Test | " + a.name + " tee object.txt",
 	}
 
 	cmd := &cobra.Command{
 		Use:               "save <object path>",
+		Aliases:           []string{"tee"},
 		Short:             "Stream the standard input to a data object.",
 		Long:              saveDescription,
 		Example:           strings.Join(examples, "\n"),
@@ -606,7 +608,13 @@ func (a *App) save() *cobra.Command {
 				output = cmd.ErrOrStderr()
 			}
 
-			return a.Client.FromReader(cmd.Context(), cmd.InOrStdin(), target, appendFlag, transfer.Options{
+			input := cmd.InOrStdin()
+
+			if cmd.CalledAs() == "tee" {
+				input = io.TeeReader(input, cmd.OutOrStdout())
+			}
+
+			return a.Client.FromReader(cmd.Context(), input, target, appendFlag, transfer.Options{
 				MaxThreads: maxThreads,
 				Output:     output,
 			})
@@ -1062,7 +1070,7 @@ func (a *App) sleep() *cobra.Command {
 }
 
 func (a *App) query() *cobra.Command {
-	examples := "  Print available column names:\t" + a.name + " query\n  Run a query:                 \t" + a.name + " query \"select DATA_NAME, DATA_SIZE\""
+	examples := "  Print available column names:\n\t" + a.name + " query\n  Run a query:\n\t" + a.name + " query \"select DATA_NAME, DATA_SIZE\""
 
 	cmd := &cobra.Command{
 		Use:     "query [sql]",
@@ -1083,6 +1091,14 @@ func (a *App) query() *cobra.Command {
 				return nil
 			}
 
+			results := a.GenericQuery(args[0]).Execute(cmd.Context())
+
+			defer results.Close()
+
+			if results.Err() != nil {
+				return results.Err()
+			}
+
 			columns := guessColumns(args[0])
 
 			out := &tabwriter.TabWriter{
@@ -1092,10 +1108,6 @@ func (a *App) query() *cobra.Command {
 			defer out.Flush()
 
 			Fprintcolorln(out, Bold, strings.Join(columns, "\t"))
-
-			results := a.GenericQuery(args[0]).Execute(cmd.Context())
-
-			defer results.Close()
 
 			ptrs := make([]any, len(columns))
 
