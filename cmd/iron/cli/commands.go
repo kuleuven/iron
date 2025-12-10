@@ -1084,9 +1084,7 @@ func (a *App) query() *cobra.Command {
 					return err
 				}
 
-				for _, column := range columns {
-					fmt.Println(column)
-				}
+				fmt.Fprintln(cmd.OutOrStdout(), strings.Join(columns, "\n"))
 
 				return nil
 			}
