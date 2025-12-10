@@ -1027,7 +1027,7 @@ func (a *App) local() *cobra.Command { //nolint:funlen
 						color = Blue
 					}
 
-					fmt.Printf("%s%s%s\n", color, name, Reset)
+					Fprintcolorln(cmd.OutOrStdout(), color, name)
 				}
 
 				return nil
@@ -1061,6 +1061,100 @@ func (a *App) sleep() *cobra.Command {
 	}
 }
 
+func (a *App) query() *cobra.Command {
+	examples := "  Print available column names:\t" + a.name + " query\n  Run a query:                 \t" + a.name + " query \"select DATA_NAME, DATA_SIZE\""
+
+	cmd := &cobra.Command{
+		Use:     "query [sql]",
+		Short:   "Run a generic query",
+		Example: examples,
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				columns, err := a.GenericQueryColumns(cmd.Context())
+				if err != nil {
+					return err
+				}
+
+				for _, column := range columns {
+					fmt.Println(column)
+				}
+
+				return nil
+			}
+
+			columns := guessColumns(args[0])
+
+			out := &tabwriter.TabWriter{
+				Writer: cmd.OutOrStdout(),
+			}
+
+			defer out.Flush()
+
+			Fprintcolorln(out, Bold, strings.Join(columns, "\t"))
+
+			results := a.GenericQuery(args[0]).Execute(cmd.Context())
+
+			defer results.Close()
+
+			ptrs := make([]any, len(columns))
+
+			for i := range ptrs {
+				ptrs[i] = new(string)
+			}
+
+			formatting := strings.Repeat("%s\t", len(columns)-1) + "%s\n"
+
+			for results.Next() {
+				if err := results.Scan(ptrs...); err != nil {
+					return err
+				}
+
+				fmt.Fprintf(out, formatting, resolveValues(ptrs)...)
+			}
+
+			return results.Err()
+		},
+	}
+
+	return cmd
+}
+
+func guessColumns(query string) []string {
+	var columns []string
+
+	for field := range strings.FieldsSeq(query) {
+		switch strings.ToLower(field) {
+		case "select":
+		// Ignore
+		case "where", "group", "order", "limit", "offset":
+			return columns
+		default:
+			for col := range strings.SplitSeq(field, ",") {
+				if col == "" {
+					continue
+				}
+
+				columns = append(columns, col)
+			}
+		}
+	}
+
+	return columns
+}
+
+func resolveValues(ptrs []any) []any {
+	values := make([]any, len(ptrs))
+
+	for i, ptr := range ptrs {
+		if casted, ok := ptr.(*string); ok {
+			values[i] = *casted
+		}
+	}
+
+	return values
+}
+
 func (a *App) ps() *cobra.Command {
 	return &cobra.Command{
 		Use:    "ps",
@@ -1090,7 +1184,7 @@ func (a *App) ps() *cobra.Command {
 
 			defer out.Flush()
 
-			fmt.Fprintf(out, "%s%s%s\n", Bold, strings.Join(columns, "\t"), Reset)
+			Fprintcolorln(out, Bold, strings.Join(columns, "\t"))
 
 			values := make([]string, len(columns))
 			ptrs := make([]any, len(values))
@@ -1110,4 +1204,8 @@ func (a *App) ps() *cobra.Command {
 			return result.Err()
 		},
 	}
+}
+
+func Fprintcolorln(w io.Writer, color string, args ...any) {
+	fmt.Fprintf(w, "%s%s%s\n", color, fmt.Sprint(args...), Reset)
 }

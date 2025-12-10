@@ -116,6 +116,13 @@ func (q PreparedQuery) Limit(limit int) PreparedQuery {
 	return q
 }
 
+type QueryResult interface {
+	Err() error
+	Next() bool
+	Scan(dest ...any) error
+	Close() error
+}
+
 // Execute executes the query.
 // This method blocks an irods connection until the result has been closed.
 // If the context is closed, no more results will be returned.
@@ -136,6 +143,8 @@ func (q PreparedQuery) Execute(ctx context.Context) *Result {
 
 	return result
 }
+
+var _ QueryResult = (*Result)(nil)
 
 type Result struct {
 	Conn     Conn

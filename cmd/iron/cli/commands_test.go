@@ -269,8 +269,8 @@ func TestTouch(t *testing.T) {
 func TestChecksum(t *testing.T) {
 	app := testApp(t)
 
-	app.AddResponse(msg.Checksum{
-		Checksum: "sha2:aaaa",
+	app.AddResponse(msg.String{
+		String: "sha2:aaaa",
 	})
 
 	cmd := app.Command()
@@ -485,6 +485,32 @@ func TestPS(t *testing.T) {
 
 	cmd := app.Command()
 	cmd.SetArgs([]string{"ps"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQuery(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponse(msg.String{
+		String: `{"DATA_NAME":{"R_DATA_MAIN":"data_name"}}`,
+	})
+
+	app.AddResponse(msg.String{
+		String: `[["test", "1"]]`,
+	})
+
+	cmd := app.Command()
+
+	cmd.SetArgs([]string{"query"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.SetArgs([]string{"query", "SELECT DATA_NAME, DATA_SIZE"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)

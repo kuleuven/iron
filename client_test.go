@@ -541,8 +541,8 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 				{
 					msg.DATA_OBJ_CHKSUM_AN,
 					&msg.DataObjectRequest{},
-					&msg.Checksum{
-						Checksum: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+					&msg.String{
+						String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
 					},
 				},
 			})

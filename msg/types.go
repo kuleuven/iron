@@ -465,9 +465,9 @@ type AuthPluginResponse struct { // No xml.Name means this is a json struct
 	RequestResult string `json:"request_result,omitempty"`
 }
 
-type Checksum struct {
-	XMLName  xml.Name `xml:"STR_PI"`
-	Checksum string   `xml:"myStr"`
+type String struct {
+	XMLName xml.Name `xml:"STR_PI"`
+	String  string   `xml:"myStr"`
 }
 
 type ProcStatRequest struct {
@@ -475,4 +475,12 @@ type ProcStatRequest struct {
 	Addr    string   `xml:"addr"`
 	Zone    string   `xml:"rodsZone"`
 	KeyVals SSKeyVal `xml:"KeyValPair_PI"`
+}
+
+type GenQuery2Request struct {
+	XMLName        xml.Name `xml:"Genquery2Input_PI"`
+	Query          string   `xml:"query_string"`
+	Zone           string   `xml:"zone"`
+	SQLOnly        int      `xml:"sql_only"`
+	ColumnMappings int      `xml:"column_mappings"`
 }

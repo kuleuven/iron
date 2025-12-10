@@ -158,8 +158,8 @@ func TestCopyDataObject(t *testing.T) {
 func TestChecksum(t *testing.T) {
 	testAPI := newAPI()
 
-	testAPI.AddResponse(msg.Checksum{
-		Checksum: "sha2:aabbaabbaabbaabbaabb",
+	testAPI.AddResponse(msg.String{
+		String: "sha2:aabbaabbaabbaabbaabb",
 	})
 
 	if _, err := testAPI.Checksum(t.Context(), "test", false); err != nil {

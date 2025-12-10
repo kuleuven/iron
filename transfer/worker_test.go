@@ -473,8 +473,8 @@ func TestClientVerify(t *testing.T) {
 	testConn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{
 		Path:    "/test/file1",
 		KeyVals: kv,
-	}, msg.Checksum{
-		Checksum: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+	}, msg.String{
+		String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
 	})
 
 	f, err := os.CreateTemp(t.TempDir(), "test")
@@ -514,8 +514,8 @@ func TestClientVerifyRemote(t *testing.T) {
 	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
 
 	for range 2 {
-		testConn.AddResponse(msg.Checksum{
-			Checksum: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+		testConn.AddResponse(msg.String{
+			String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
 		})
 	}
 

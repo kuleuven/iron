@@ -193,6 +193,8 @@ const (
 	TOUCH_APN                            APINumber = 20007
 	REPLICA_TRUNCATE_AN                  APINumber = 802
 	AUTH_PLUGIN                          APINumber = 110000
+
+	GENQUERY2_AN APINumber = 10221
 )
 
 // response codes

@@ -391,18 +391,18 @@ func (api *API) Checksum(ctx context.Context, path string, force bool) ([]byte, 
 		return nil, err
 	}
 
-	var checksum msg.Checksum
+	var checksum msg.String
 
 	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CHKSUM_AN, request, &checksum, path)
 	if err != nil {
 		return nil, err
 	}
 
-	if !strings.HasPrefix(checksum.Checksum, shaPrefix) {
+	if !strings.HasPrefix(checksum.String, shaPrefix) {
 		return nil, fmt.Errorf("%w: prefix %s missing", ErrChecksumNotFound, shaPrefix)
 	}
 
-	return base64.StdEncoding.DecodeString(strings.TrimPrefix(checksum.Checksum, shaPrefix))
+	return base64.StdEncoding.DecodeString(strings.TrimPrefix(checksum.String, shaPrefix))
 }
 
 // ModifyAccess modifies the access level of a data object or collection.
