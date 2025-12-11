@@ -146,18 +146,16 @@ func (a *App) stat() *cobra.Command {
 				return err
 			}
 
-			var printer Printer
+			var printer Printer = &TablePrinter{
+				Writer: &tabwriter.TabWriter{
+					Writer: cmd.OutOrStdout(),
+				},
+				Zone: a.Zone,
+			}
 
 			if jsonFormat {
 				printer = &JSONPrinter{
 					Writer: cmd.OutOrStdout(),
-				}
-			} else {
-				printer = &TablePrinter{
-					Writer: &tabwriter.TabWriter{
-						Writer: cmd.OutOrStdout(),
-					},
-					Zone: a.Zone,
 				}
 			}
 
@@ -693,19 +691,17 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 
 			dir := a.Path(args[0])
 
-			var printer Printer
+			var printer Printer = &TablePrinter{
+				Writer: &tabwriter.TabWriter{
+					Writer:      cmd.OutOrStdout(),
+					HideColumns: hiddenColumns(columns, "creator", "size", "date", "status", "name"),
+				},
+				Zone: a.Zone,
+			}
 
 			if jsonFormat {
 				printer = &JSONPrinter{
 					Writer: cmd.OutOrStdout(),
-				}
-			} else {
-				printer = &TablePrinter{
-					Writer: &tabwriter.TabWriter{
-						Writer:      cmd.OutOrStdout(),
-						HideColumns: hiddenColumns(columns, "creator", "size", "date", "status", "name"),
-					},
-					Zone: a.Zone,
 				}
 			}
 
@@ -786,20 +782,18 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 			dir := a.Path(args[0])
 
-			var printer Printer
+			var printer Printer = &TablePrinter{
+				Writer: &tabwriter.StreamWriter{
+					Writer:       cmd.OutOrStdout(),
+					ColumnWidths: []int{20, 8, 13, 6},
+					HideColumns:  hiddenColumns(columns, "creator", "size", "date", "status", "name"),
+				},
+				Zone: a.Zone,
+			}
 
 			if jsonFormat {
 				printer = &JSONPrinter{
 					Writer: cmd.OutOrStdout(),
-				}
-			} else {
-				printer = &TablePrinter{
-					Writer: &tabwriter.StreamWriter{
-						Writer:       cmd.OutOrStdout(),
-						ColumnWidths: []int{20, 8, 13, 6},
-						HideColumns:  hiddenColumns(columns, "creator", "size", "date", "status", "name"),
-					},
-					Zone: a.Zone,
 				}
 			}
 
@@ -822,15 +816,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 				printer.Print(indentString(path, depth, jsonFormat), record)
 
-				if err != nil || !record.IsDir() || maxDepth < 0 || depth < maxDepth-1 {
-					return err
-				}
-
-				if depth == maxDepth-1 {
-					return api.SkipSubDirs
-				}
-
-				return api.SkipDir
+				return skipAsNeeded(record, depth, maxDepth)
 			}, opts...)
 		},
 	}
@@ -840,6 +826,18 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name.")
 
 	return cmd
+}
+
+func skipAsNeeded(record api.Record, depth, maxDepth int) error {
+	if !record.IsDir() || maxDepth < 0 || depth < maxDepth-1 {
+		return nil
+	}
+
+	if depth == maxDepth-1 {
+		return api.SkipSubDirs
+	}
+
+	return api.SkipDir
 }
 
 func indentString(s string, depth int, jsonFormat bool) string {
