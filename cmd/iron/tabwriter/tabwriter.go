@@ -61,11 +61,7 @@ func (tw *TabWriter) outputRows(rows [][]string, widths []int) error {
 
 		for j, cell := range row {
 			if slices.Contains(tw.HideColumns, j) {
-				output.WriteString(abbreviate(cell, 0))
-
-				if len(cell) > 0 && (cell[len(cell)-1] == '\n' || cell[len(cell)-1] == '\f') {
-					output.WriteByte(cell[len(cell)-1])
-				}
+				output.WriteString(emptyCell(cell))
 
 				continue
 			}
@@ -89,6 +85,20 @@ func (tw *TabWriter) outputRows(rows [][]string, widths []int) error {
 	_, err := tw.Writer.Write(output.Bytes())
 
 	return err
+}
+
+func emptyCell(cell string) string {
+	if cell == "" {
+		return ""
+	}
+
+	abbr := abbreviate(cell, 0)
+
+	if cell[len(cell)-1] == '\n' || cell[len(cell)-1] == '\f' {
+		abbr += cell[len(cell)-1:]
+	}
+
+	return abbr
 }
 
 func findCell(buf []byte) (string, int, []byte) {
