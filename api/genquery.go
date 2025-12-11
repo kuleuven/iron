@@ -8,8 +8,16 @@ import (
 )
 
 // GenericQuery prepares a genquery2 query
-func (api *API) GenericQuery(query string) *GenericQuery {
-	return &GenericQuery{
+func (api *API) GenericQuery(query string) GenericQuery {
+	return GenericQuery{
+		api:   api,
+		query: query,
+	}
+}
+
+// GenericQuery prepares a genquery2 query
+func (api *API) GenericQueryRow(query string) GenericSingleRowQuery {
+	return GenericSingleRowQuery{
 		api:   api,
 		query: query,
 	}
@@ -48,7 +56,7 @@ type GenericQuery struct {
 	query string
 }
 
-func (gq *GenericQuery) SQL(ctx context.Context) (string, error) {
+func (gq GenericQuery) SQL(ctx context.Context) (string, error) {
 	req := msg.GenQuery2Request{
 		Query:   gq.query,
 		Zone:    gq.api.Zone,
@@ -62,7 +70,7 @@ func (gq *GenericQuery) SQL(ctx context.Context) (string, error) {
 	return resp.String, err
 }
 
-func (gq *GenericQuery) Execute(ctx context.Context) *GenericResult {
+func (gq GenericQuery) Execute(ctx context.Context) *GenericResult {
 	req := msg.GenQuery2Request{
 		Query: gq.query,
 		Zone:  gq.api.Zone,
@@ -134,6 +142,57 @@ func (gr *GenericResult) Scan(dest ...any) error {
 
 func (gr *GenericResult) Close() error {
 	gr.rows = nil
+
+	return nil
+}
+
+type GenericSingleRowQuery GenericQuery
+
+func (gqr GenericSingleRowQuery) SQL(ctx context.Context) (string, error) {
+	return GenericQuery(gqr).SQL(ctx)
+}
+
+func (gqr GenericSingleRowQuery) Execute(ctx context.Context) *GenericSingleRowResult {
+	result := GenericQuery(gqr).Execute(ctx)
+
+	defer result.Close()
+
+	if result.Next() {
+		return &GenericSingleRowResult{
+			row: result.row,
+		}
+	}
+
+	if result.Err() != nil {
+		return &GenericSingleRowResult{
+			err: result.Err(),
+		}
+	}
+
+	return &GenericSingleRowResult{
+		err: ErrNoRowFound,
+	}
+}
+
+type GenericSingleRowResult struct {
+	err error
+	row []string
+}
+
+func (grr *GenericSingleRowResult) Scan(dest ...any) error {
+	if grr.err != nil {
+		return grr.err
+	}
+
+	if len(dest) > len(grr.row) {
+		return ErrAttributeOutOfBound
+	}
+
+	for i := range dest {
+		if err := parseValue(grr.row[i], dest[i]); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

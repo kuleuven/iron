@@ -36,6 +36,7 @@ var responses = []any{
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
 		},
 	},
+
 	msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 15,
@@ -84,18 +85,23 @@ var responses = []any{
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
 	},
+	msg.String{
+		String: `[["100","1"]]`,
+	},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 7},
 	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
+	msg.String{String: `[]`},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 7},
 	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
+	msg.String{String: `[]`},
 	msg.QueryResponse{AttributeCount: 4},
 }
 
@@ -106,7 +112,7 @@ func TestWalk(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata)
+	}, FetchAccess, FetchMetadata, FetchCollectionSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +125,7 @@ func TestWalkL(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, LexographicalOrder)
+	}, FetchAccess, FetchMetadata, LexographicalOrder, FetchCollectionSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +138,7 @@ func TestWalkLS(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, LexographicalOrder, NoSkip)
+	}, FetchAccess, FetchMetadata, FetchCollectionSize, LexographicalOrder, NoSkip)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +151,7 @@ func TestWalkBF(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, BreadthFirst)
+	}, FetchAccess, FetchMetadata, FetchCollectionSize, BreadthFirst)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,8 +160,11 @@ func TestWalkBF(t *testing.T) {
 func TestWalkSkip(t *testing.T) {
 	testAPI := newAPI()
 
-	testAPI.AddResponses(responses[:8])
+	testAPI.AddResponses(responses[:5])
 	testAPI.AddResponses([]any{
+		msg.QueryResponse{AttributeCount: 4},
+		msg.QueryResponse{AttributeCount: 3},
+		msg.QueryResponse{AttributeCount: 4},
 		msg.QueryResponse{AttributeCount: 3},
 		msg.QueryResponse{AttributeCount: 4},
 	})
@@ -179,11 +188,11 @@ func TestWalkSkip(t *testing.T) {
 func TestWalkSkipAll(t *testing.T) {
 	testAPI := newAPI()
 
-	testAPI.AddResponses(responses[:6])
+	testAPI.AddResponses(responses[:7])
 
 	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
 		return SkipAll
-	}, FetchAccess, FetchMetadata)
+	}, FetchAccess, FetchMetadata, FetchCollectionSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,9 +220,12 @@ func TestGetRecord(t *testing.T) {
 		msg.QueryResponse{},
 		msg.QueryResponse{},
 		msg.QueryResponse{},
+		msg.String{
+			String: `[["100"]]`,
+		},
 	})
 
-	_, err := testAPI.GetRecord(t.Context(), "/test/coll", FetchAccess, FetchMetadata)
+	_, err := testAPI.GetRecord(t.Context(), "/test/coll", FetchAccess, FetchMetadata, FetchCollectionSize)
 	if err != nil {
 		t.Fatal(err)
 	}

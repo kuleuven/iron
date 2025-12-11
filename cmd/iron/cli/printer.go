@@ -11,7 +11,7 @@ import (
 )
 
 type Printer interface {
-	Setup(hasACL, hasMeta bool)
+	Setup(hasACL, hasMeta, hasCollectionSize bool)
 	Print(name string, i api.Record)
 	Flush()
 }
@@ -21,11 +21,12 @@ type TablePrinter struct {
 		io.Writer
 		Flush() error
 	}
-	Zone  string
-	Items int
+	Zone string
+
+	hasCollectionSizes bool
 }
 
-func (tp *TablePrinter) Setup(hasACL, hasMeta bool) {
+func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes bool) {
 	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME"
 
 	if hasMeta {
@@ -41,6 +42,8 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta bool) {
 	}
 
 	fmt.Fprintf(tp.Writer, "%s%s%s%s", Bold, header1, header2, Reset)
+
+	tp.hasCollectionSizes = hasCollectionSizes
 }
 
 func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
@@ -97,7 +100,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s",
 		owner,
-		formatSize(i),
+		tp.formatSize(i),
 		t,
 		status,
 		color+Bold,
@@ -131,8 +134,8 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 	}
 }
 
-func formatSize(i api.Record) string {
-	if i.IsDir() {
+func (tp *TablePrinter) formatSize(i api.Record) string {
+	if i.IsDir() && !tp.hasCollectionSizes {
 		return ""
 	}
 
@@ -227,7 +230,7 @@ type JSONPrinter struct {
 	hasACL, hasMeta bool
 }
 
-func (jp *JSONPrinter) Setup(hasACL, hasMeta bool) {
+func (jp *JSONPrinter) Setup(hasACL, hasMeta, _ bool) {
 	jp.hasACL, jp.hasMeta = hasACL, hasMeta
 }
 

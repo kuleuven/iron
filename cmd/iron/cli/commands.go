@@ -141,7 +141,7 @@ func (a *App) stat() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
-			record, err := a.GetRecord(cmd.Context(), path, api.FetchMetadata, api.FetchAccess)
+			record, err := a.GetRecord(cmd.Context(), path, api.FetchMetadata, api.FetchAccess, api.FetchCollectionSize)
 			if err != nil {
 				return err
 			}
@@ -159,7 +159,7 @@ func (a *App) stat() *cobra.Command {
 				}
 			}
 
-			printer.Setup(true, true)
+			printer.Setup(true, true, true)
 
 			defer printer.Flush()
 
@@ -673,8 +673,8 @@ For data objects it indicates the status of the replicas, as follows:
 
 func (a *App) list() *cobra.Command { //nolint:funlen
 	var (
-		jsonFormat, listACL, listMeta bool
-		columns                       []string
+		jsonFormat, listACL, listMeta, collectionSizes bool
+		columns                                        []string
 	)
 
 	cmd := &cobra.Command{
@@ -705,7 +705,7 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 				}
 			}
 
-			printer.Setup(listACL, listMeta)
+			printer.Setup(listACL, listMeta, collectionSizes)
 
 			defer printer.Flush()
 
@@ -725,19 +725,20 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 				}
 
 				return nil
-			}, walkOptions(listACL, listMeta)...)
+			}, walkOptions(listACL, listMeta, collectionSizes)...)
 		},
 	}
 
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
+	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "List collection sizes, i.e. total size of objects that are part of the collection (does not include sub-collections)")
 	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator (and ACL user), size (and ACL access), date, status, name.")
 
 	return cmd
 }
 
-func walkOptions(listACL, listMeta bool) []api.WalkOption {
+func walkOptions(listACL, listMeta, collectionSizes bool) []api.WalkOption {
 	var opts []api.WalkOption
 
 	if listACL {
@@ -746,6 +747,10 @@ func walkOptions(listACL, listMeta bool) []api.WalkOption {
 
 	if listMeta {
 		opts = append(opts, api.FetchMetadata)
+	}
+
+	if collectionSizes {
+		opts = append(opts, api.FetchCollectionSize)
 	}
 
 	return opts
@@ -765,9 +770,10 @@ func hiddenColumns(columns []string, available ...string) []int {
 
 func (a *App) tree() *cobra.Command { //nolint:funlen
 	var (
-		jsonFormat bool
-		maxDepth   int
-		columns    []string
+		jsonFormat      bool
+		maxDepth        int
+		columns         []string
+		collectionSizes bool
 	)
 
 	cmd := &cobra.Command{
@@ -797,7 +803,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 				}
 			}
 
-			printer.Setup(false, false)
+			printer.Setup(false, false, collectionSizes)
 
 			defer printer.Flush()
 
@@ -805,6 +811,10 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 			if maxDepth < 0 {
 				opts = append(opts, api.NoSkip)
+			}
+
+			if collectionSizes {
+				opts = append(opts, api.FetchCollectionSize)
 			}
 
 			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
@@ -824,6 +834,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name.")
+	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "List collection sizes, i.e. total size of objects that are part of the collection (does not include sub-collections)")
 
 	return cmd
 }

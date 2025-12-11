@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/kuleuven/iron/msg"
 )
@@ -17,6 +19,7 @@ type Attributes struct {
 		UserID     int64
 		Permission string
 	}
+	CollectionSize int64
 }
 
 type pathObject interface {
@@ -26,9 +29,10 @@ type pathObject interface {
 
 func (b bulk) Record(object pathObject) Record {
 	return &record{
-		FileInfo: object,
-		metadata: b.Metadata(object.Identifier()),
-		access:   b.Access(object.Identifier()),
+		FileInfo:       object,
+		metadata:       b.Metadata(object.Identifier()),
+		access:         b.Access(object.Identifier()),
+		collectionSize: b.CollectionSize(object.Identifier()),
 	}
 }
 
@@ -64,6 +68,15 @@ func (b bulk) Metadata(key int64) []Metadata {
 	return cached.Metadata
 }
 
+func (b bulk) CollectionSize(key int64) int64 {
+	cached, ok := b[key]
+	if !ok {
+		return 0
+	}
+
+	return cached.CollectionSize
+}
+
 func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys []int64, opts ...WalkOption) error {
 	if len(keys) == 0 {
 		return nil
@@ -75,6 +88,12 @@ func (b bulk) PrefetchCollections(ctx context.Context, api *API, keys []int64, o
 		}
 
 		if err := b.resolveUsers(ctx, api); err != nil {
+			return err
+		}
+	}
+
+	if slices.Contains(opts, FetchCollectionSize) {
+		if err := b.prefetchSizesForCollections(ctx, api, keys...); err != nil {
 			return err
 		}
 	}
@@ -265,6 +284,44 @@ func (b bulk) collectMetadata(result *Result) error {
 		}
 
 		b[objectID].Metadata = append(b[objectID].Metadata, meta)
+	}
+
+	return result.Err()
+}
+
+func (b bulk) prefetchSizesForCollections(ctx context.Context, api *API, keys ...int64) error {
+	for _, batch := range makeBatches(keys) {
+		strList := make([]string, len(batch))
+
+		for i, id := range batch {
+			strList[i] = fmt.Sprintf("%d", id)
+		}
+
+		result := api.GenericQuery(fmt.Sprintf("SELECT SUM(DATA_SIZE), COLL_ID WHERE COLL_ID IN ('%s') GROUP BY COLL_ID", strings.Join(strList, "','"))).Execute(ctx)
+
+		if err := b.collectSizes(result); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (b bulk) collectSizes(result *GenericResult) error {
+	defer result.Close()
+
+	for result.Next() {
+		var size, objectID int64
+
+		if err := result.Scan(&size, &objectID); err != nil {
+			return err
+		}
+
+		if _, ok := b[objectID]; !ok {
+			b[objectID] = &Attributes{}
+		}
+
+		b[objectID].CollectionSize = size
 	}
 
 	return result.Err()

@@ -154,6 +154,9 @@ var statResponses = []any{
 	msg.QueryResponse{},
 	msg.QueryResponse{},
 	msg.QueryResponse{},
+	msg.String{
+		String: `[["100"]]`,
+	},
 }
 
 func TestStat(t *testing.T) {

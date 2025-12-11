@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,8 +21,9 @@ type Record interface {
 
 type record struct {
 	os.FileInfo
-	metadata []Metadata
-	access   []Access
+	metadata       []Metadata
+	access         []Access
+	collectionSize int64
 }
 
 func (r *record) Metadata() []Metadata {
@@ -30,6 +32,14 @@ func (r *record) Metadata() []Metadata {
 
 func (r *record) Access() []Access {
 	return r.access
+}
+
+func (r *record) Size() int64 {
+	if r.IsDir() {
+		return r.collectionSize
+	}
+
+	return r.FileInfo.Size()
 }
 
 func (r *record) Type() ObjectType {
@@ -76,6 +86,10 @@ const (
 	// Note that this option caches at level N, a list of subcollections of level N + 1,
 	// this might require a significant amount of memory for large collections.
 	BreadthFirst
+
+	// If the option FetchCollectionSize is given, Size() will be populated
+	// for collections.
+	FetchCollectionSize
 )
 
 var ErrSkipNotAllowed = errors.New("skip not allowed")
@@ -643,6 +657,10 @@ func (api *API) GetRecord(ctx context.Context, path string, options ...WalkOptio
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if slices.Contains(options, FetchCollectionSize) {
+		return r, api.GenericQueryRow(fmt.Sprintf("SELECT SUM(DATA_SIZE) WHERE COLL_NAME = '%s'", path)).Execute(ctx).Scan(&r.collectionSize)
 	}
 
 	return r, nil

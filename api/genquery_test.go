@@ -80,3 +80,22 @@ func TestGenericQueryColumns(t *testing.T) {
 		t.Fatalf("expected 1 item, got %d", len(results))
 	}
 }
+
+func TestGenericQueryRow(t *testing.T) {
+	testAPI := newAPI()
+
+	testAPI.AddResponse(msg.String{
+		String: `[["test", "1"]]`,
+	})
+
+	result := testAPI.GenericQueryRow("SELECT DATA_NAME, DATA_ID").Execute(t.Context())
+
+	var (
+		dataName string
+		dataID   int64
+	)
+
+	if err := result.Scan(&dataName, &dataID); err != nil {
+		t.Fatal(err)
+	}
+}
