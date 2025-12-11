@@ -11,8 +11,8 @@ func TestNewStreamWriter(t *testing.T) {
 	var buf bytes.Buffer
 
 	writer := &StreamWriter{
-		Writer: &buf,
-		Cols:   []int{15, 20, 25},
+		Writer:       &buf,
+		ColumnWidths: []int{15, 20, 25},
 	}
 
 	if _, err := writer.Write(example); err != nil {

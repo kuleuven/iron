@@ -3,12 +3,14 @@ package tabwriter
 import (
 	"bytes"
 	"io"
+	"slices"
 	"unicode/utf8"
 )
 
 type TabWriter struct {
-	Writer io.Writer
-	buffer bytes.Buffer
+	Writer      io.Writer
+	HideColumns []int
+	buffer      bytes.Buffer
 }
 
 func (tw *TabWriter) Write(p []byte) (int, error) {
@@ -55,8 +57,16 @@ func (tw *TabWriter) outputRows(rows [][]string, widths []int) error {
 
 	// Do actual output
 	for _, row := range rows {
+		var rowStarted bool
+
 		for j, cell := range row {
-			if j > 0 {
+			if slices.Contains(tw.HideColumns, j) {
+				output.WriteString(abbreviate(cell, 0))
+
+				continue
+			}
+
+			if rowStarted {
 				output.WriteString("  ")
 			}
 
@@ -67,6 +77,8 @@ func (tw *TabWriter) outputRows(rows [][]string, widths []int) error {
 			if j < len(row)-1 {
 				output.Write(bytes.Repeat([]byte(" "), widths[j]-width))
 			}
+
+			rowStarted = true
 		}
 	}
 

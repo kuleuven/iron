@@ -673,8 +673,11 @@ For data objects it indicates the status of the replicas, as follows:
 		or an earlier process did not finish properly.
 	…	Replica is in intermediate state, another replica is write-locked.`
 
-func (a *App) list() *cobra.Command {
-	var jsonFormat, listACL, listMeta bool
+func (a *App) list() *cobra.Command { //nolint:funlen
+	var (
+		jsonFormat, listACL, listMeta bool
+		columns                       []string
+	)
 
 	cmd := &cobra.Command{
 		Use:               "ls <collection path>",
@@ -699,7 +702,8 @@ func (a *App) list() *cobra.Command {
 			} else {
 				printer = &TablePrinter{
 					Writer: &tabwriter.TabWriter{
-						Writer: cmd.OutOrStdout(),
+						Writer:      cmd.OutOrStdout(),
+						HideColumns: hiddenColumns(columns, "creator", "size", "date", "status", "name"),
 					},
 					Zone: a.Zone,
 				}
@@ -732,6 +736,7 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator (and ACL user), size (and ACL access), date, status, name.")
 
 	return cmd
 }
@@ -750,10 +755,23 @@ func walkOptions(listACL, listMeta bool) []api.WalkOption {
 	return opts
 }
 
+func hiddenColumns(columns []string, available ...string) []int {
+	var hidden []int
+
+	for i, col := range available {
+		if !slices.Contains(columns, col) {
+			hidden = append(hidden, i)
+		}
+	}
+
+	return hidden
+}
+
 func (a *App) tree() *cobra.Command { //nolint:funlen
 	var (
 		jsonFormat bool
 		maxDepth   int
+		columns    []string
 	)
 
 	cmd := &cobra.Command{
@@ -777,8 +795,9 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 			} else {
 				printer = &TablePrinter{
 					Writer: &tabwriter.StreamWriter{
-						Writer: cmd.OutOrStdout(),
-						Cols:   []int{20, 8, 13, 6},
+						Writer:       cmd.OutOrStdout(),
+						ColumnWidths: []int{20, 8, 13, 6},
+						HideColumns:  hiddenColumns(columns, "creator", "size", "date", "status", "name"),
 					},
 					Zone: a.Zone,
 				}
@@ -795,6 +814,10 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 			}
 
 			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
+				if err != nil {
+					return err
+				}
+
 				depth := strings.Count(strings.TrimPrefix(path, dir), "/")
 
 				printer.Print(indentString(path, depth, jsonFormat), record)
@@ -814,6 +837,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name.")
 
 	return cmd
 }

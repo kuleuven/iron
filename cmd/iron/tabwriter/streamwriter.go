@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
 
 type StreamWriter struct {
-	Writer io.Writer
-	Cols   []int
-	buffer bytes.Buffer
+	Writer       io.Writer
+	ColumnWidths []int
+	HideColumns  []int
+	buffer       bytes.Buffer
 }
 
 func (w *StreamWriter) Write(p []byte) (int, error) {
@@ -49,10 +51,11 @@ func (w *StreamWriter) writeLine(line string) error {
 	buf := []byte(line)
 
 	var (
-		cell  string
-		width int
-		i     int
-		out   bytes.Buffer
+		cell    string
+		width   int
+		i       int
+		out     bytes.Buffer
+		started bool
 	)
 
 	for len(buf) > 0 {
@@ -62,25 +65,37 @@ func (w *StreamWriter) writeLine(line string) error {
 			cell = cell[:len(cell)-1]
 		}
 
-		if i > 0 {
+		if slices.Contains(w.HideColumns, i) {
+			fmt.Fprint(&out, abbreviate(cell, 0))
+
+			i++
+
+			continue
+		}
+
+		if started {
 			fmt.Fprint(&out, "  ")
 		}
 
-		padding := w.Cols[i] - width
+		started = true
+
+		if i >= len(w.ColumnWidths) {
+			fmt.Fprint(&out, cell)
+
+			i++
+
+			continue
+		}
+
+		padding := w.ColumnWidths[i] - width
 
 		if padding >= 0 {
 			fmt.Fprintf(&out, "%s%s", cell, strings.Repeat(" ", padding))
 		} else {
-			fmt.Fprint(&out, abbreviate(cell, w.Cols[i]-1)+"…")
+			fmt.Fprint(&out, abbreviate(cell, w.ColumnWidths[i]-1)+"…")
 		}
 
 		i++
-
-		if i == len(w.Cols) {
-			fmt.Fprintf(&out, "  %s", buf)
-
-			buf = nil
-		}
 	}
 
 	fmt.Fprint(&out, "\n")
