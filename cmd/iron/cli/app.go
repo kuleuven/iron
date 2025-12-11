@@ -262,7 +262,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		// Doesn't make sense to print usage here
 		cmd.SilenceUsage = true
 
-		return InitError{a, err}
+		return InitError{a, env, err}
 	}
 
 	env.GeneratedPasswordTimeout = a.PamTTL
@@ -285,7 +285,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		// Doesn't make sense to print usage here
 		cmd.SilenceUsage = true
 
-		return InitError{a, err}
+		return InitError{a, env, err}
 	}
 
 	if a.Workdir == "" {
@@ -297,17 +297,28 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 
 type InitError struct {
 	App *App
+	Env iron.Env
 	Err error
 }
 
 func (e InitError) Error() string {
 	var instructions string
 
+	appPrefix := fmt.Sprintf("%s ", e.App.name)
+
+	if e.App.inShell {
+		appPrefix = ""
+	}
+
+	if e.Env.Zone != "" {
+		instructions = fmt.Sprintf("\nRun `%sauth` to re-authenticate in zone %s.", appPrefix, e.Env.Zone)
+	}
+
 	if e.App.configStore != nil {
-		if e.App.inShell {
-			instructions = fmt.Sprintf("\nRun `auth <%s>` to authenticate.", strings.Join(e.App.configStoreArgs, "> <"))
+		if instructions != "" {
+			instructions += fmt.Sprintf("\nOr run `%sauth <%s>` to authenticate to another zone.", appPrefix, strings.Join(e.App.configStoreArgs, "> <"))
 		} else {
-			instructions = fmt.Sprintf("\nRun `iron auth <%s>` to authenticate.", strings.Join(e.App.configStoreArgs, "> <"))
+			instructions = fmt.Sprintf("\nRun `%sauth <%s>` to authenticate.", appPrefix, strings.Join(e.App.configStoreArgs, "> <"))
 		}
 	}
 
