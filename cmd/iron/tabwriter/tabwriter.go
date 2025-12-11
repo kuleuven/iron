@@ -63,6 +63,10 @@ func (tw *TabWriter) outputRows(rows [][]string, widths []int) error {
 			if slices.Contains(tw.HideColumns, j) {
 				output.WriteString(abbreviate(cell, 0))
 
+				if len(cell) > 0 && (cell[len(cell)-1] == '\n' || cell[len(cell)-1] == '\f') {
+					output.WriteByte(cell[len(cell)-1])
+				}
+
 				continue
 			}
 

@@ -193,7 +193,7 @@ func resetArgs(cmd *cobra.Command, args []string) {
 		// Reset flag values between runs due to a limitation in Cobra
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			if val, ok := flag.Value.(pflag.SliceValue); ok {
-				assert(val.Replace([]string{}))
+				assert(val.Replace(explode(flag.DefValue)))
 			} else {
 				assert(flag.Value.Set(flag.DefValue))
 			}
@@ -206,6 +206,20 @@ func resetArgs(cmd *cobra.Command, args []string) {
 		cmd.InitDefaultHelpFlag()
 		cmd.SetContext(nil) //nolint:staticcheck //NOSONAR
 	}
+}
+
+func explode(args string) []string {
+	args, ok := strings.CutPrefix(args, "[")
+	if !ok {
+		return nil
+	}
+
+	args, ok = strings.CutSuffix(args, "]")
+	if !ok {
+		return nil
+	}
+
+	return strings.Split(args, ",")
 }
 
 func parseSuggestions(out string) []prompt.Suggest {
