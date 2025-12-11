@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const expectedLengthStreamWriter = 263
+const expectedLengthStreamWriter = 187
 
 func TestNewStreamWriter(t *testing.T) {
 	var buf bytes.Buffer
@@ -13,6 +13,7 @@ func TestNewStreamWriter(t *testing.T) {
 	writer := &StreamWriter{
 		Writer:       &buf,
 		ColumnWidths: []int{15, 20, 25},
+		HideColumns:  []int{2},
 	}
 
 	if _, err := writer.Write(example); err != nil {
