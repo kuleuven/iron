@@ -437,7 +437,7 @@ func TestXOpen(t *testing.T) {
 	cmd := app.Command()
 	cmd.SetContext(t.Context())
 
-	cmd.SetArgs([]string{"x-open", `test://version;local%20fls`})
+	cmd.SetArgs([]string{"x-open", `test://v0/version/local%20pwd`})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)

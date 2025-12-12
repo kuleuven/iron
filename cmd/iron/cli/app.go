@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/c-bata/go-prompt"
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/google/shlex"
@@ -155,27 +156,33 @@ func (a *App) xopen() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			commands, ok := strings.CutPrefix(args[0], a.name+"://")
-			if !ok {
+			uri, err := url.Parse(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid url: %w", err)
+			}
+
+			if uri.Scheme != a.name {
 				return fmt.Errorf("invalid url, can only open %s:// urls", a.name)
 			}
 
-			commands, query, _ := strings.Cut(commands, "?")
-
-			options, err := url.ParseQuery(query)
+			minVersion, err := semver.NewVersion(uri.Host)
 			if err != nil {
-				return err
+				return fmt.Errorf("uri contains invalid minimum version: %w", err)
 			}
 
-			rootCmd := a.root(options.Has("shell"))
+			if curVersion := a.Version(); curVersion.LessThan(minVersion) {
+				return fmt.Errorf("script requires minimum version is %s, but current version is %s. Please update your installation of %s", minVersion, curVersion, a.name)
+			}
 
-			for line := range strings.SplitSeq(strings.TrimSuffix(commands, "/"), ";") {
+			rootCmd := a.root(true)
+
+			for line := range strings.SplitSeq(uri.Path, "/") {
 				if err = a.executeCommand(rootCmd, line); err != nil {
 					goto exit
 				}
 			}
 
-			if options.Has("shell") {
+			if uri.Query().Has("shell") {
 				// Drop to shell
 				hiddenChild := a.root(true)
 				hiddenChild.Hidden = true
@@ -197,7 +204,11 @@ func (a *App) xopen() *cobra.Command {
 }
 
 func (a *App) executeCommand(cmd *cobra.Command, line string) error {
-	line, err := url.QueryUnescape(line)
+	if line == "" {
+		return nil
+	}
+
+	line, err := url.PathUnescape(line)
 	if err != nil {
 		return err
 	}
