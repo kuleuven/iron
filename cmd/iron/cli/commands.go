@@ -136,6 +136,7 @@ func (a *App) stat() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "stat <path>",
 		Short:             "Get information about an object or collection",
+		Long:              "Get information about an object or collection. For collections, the total size of all contained data objects is shown, but this count does not include any sub-collections.",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
