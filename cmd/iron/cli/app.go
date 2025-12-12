@@ -170,20 +170,7 @@ func (a *App) xopen() *cobra.Command {
 			rootCmd := a.root(options.Has("shell"))
 
 			for line := range strings.SplitSeq(strings.TrimSuffix(commands, "/"), ";") {
-				line, err := url.QueryUnescape(line)
-				if err != nil {
-					return err
-				}
-
-				prefix := fmt.Sprintf("%s > %s", a.name, a.Workdir)
-
-				if a.Workdir == "" {
-					prefix = a.name
-				}
-
-				fmt.Fprintf(cmd.OutOrStdout(), "%s%s >%s %s\n", Blue, prefix, Reset, line)
-
-				if err = executeCommand(rootCmd, line); err != nil {
+				if err = a.executeCommand(rootCmd, line); err != nil {
 					goto exit
 				}
 			}
@@ -209,7 +196,20 @@ func (a *App) xopen() *cobra.Command {
 	}
 }
 
-func executeCommand(cmd *cobra.Command, line string) error {
+func (a *App) executeCommand(cmd *cobra.Command, line string) error {
+	line, err := url.QueryUnescape(line)
+	if err != nil {
+		return err
+	}
+
+	prefix := fmt.Sprintf("%s > %s", a.name, a.Workdir)
+
+	if a.Workdir == "" {
+		prefix = a.name
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "%s%s >%s %s\n", Blue, prefix, Reset, line)
+
 	args, err := shlex.Split(line)
 	if err != nil {
 		return err
