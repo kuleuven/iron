@@ -169,7 +169,7 @@ func (a *App) xopen() *cobra.Command {
 
 			rootCmd := a.root(options.Has("shell"))
 
-			for line := range strings.SplitSeq(commands, ";") {
+			for line := range strings.SplitSeq(strings.TrimSuffix(commands, "/"), ";") {
 				line, err := url.QueryUnescape(line)
 				if err != nil {
 					return err
