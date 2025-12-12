@@ -11,6 +11,7 @@ import (
 
 	"github.com/c-bata/go-prompt"
 	"github.com/creativeprojects/go-selfupdate"
+	"github.com/google/shlex"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/shell"
 	"github.com/sirupsen/logrus"
@@ -76,7 +77,7 @@ func (a *App) Command() *cobra.Command {
 	shellCmd.PersistentPreRunE = a.ShellInit
 
 	// Open subcommand
-	openURLCmd := openCmd(rootCmd)
+	openURLCmd := a.xopen()
 
 	rootCmd.AddCommand(shellCmd, openURLCmd)
 
@@ -143,7 +144,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 	return rootCmd
 }
 
-func openCmd(rootCmd *cobra.Command) *cobra.Command {
+func (a *App) xopen() *cobra.Command {
 	return &cobra.Command{
 		Use:   "x-open [url]",
 		Short: "Open a special url, for browser-initiated commands.",
@@ -154,36 +155,71 @@ func openCmd(rootCmd *cobra.Command) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			parts, err := url.Parse(args[0])
+			commands, ok := strings.CutPrefix(args[0], a.name+"://")
+			if !ok {
+				return fmt.Errorf("invalid url, can only open %s:// urls", a.name)
+			}
+
+			commands, query, _ := strings.Cut(commands, "?")
+
+			options, err := url.ParseQuery(query)
 			if err != nil {
 				return err
 			}
 
-			args = []string{"--workdir", parts.Path, parts.Host}
+			rootCmd := a.root(options.Has("shell"))
 
-			for urlarg := range strings.SplitSeq(parts.RawQuery, "&") {
-				if _, value, ok := strings.Cut(urlarg, "="); ok {
-					unescaped, err := url.QueryUnescape(value)
-					if err != nil {
-						return err
-					}
+			for line := range strings.SplitSeq(commands, ";") {
+				line, err := url.QueryUnescape(line)
+				if err != nil {
+					return err
+				}
 
-					args = append(args, unescaped)
+				prefix := fmt.Sprintf("%s > %s", a.name, a.Workdir)
+
+				if a.Workdir == "" {
+					prefix = a.name
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "%s%s >%s %s\n", Blue, prefix, Reset, line)
+
+				if err = executeCommand(rootCmd, line); err != nil {
+					goto exit
 				}
 			}
 
-			rootCmd.SetArgs(args)
+			if options.Has("shell") {
+				// Drop to shell
+				hiddenChild := a.root(true)
+				hiddenChild.Hidden = true
+				rootCmd.AddCommand(hiddenChild)
 
-			err = rootCmd.ExecuteContext(cmd.Context())
+				shell.New(rootCmd, prompt.OptionLivePrefix(a.prefix)).Run(rootCmd, nil)
 
-			if parts.Host != "shell" {
-				fmt.Fprintf(cmd.OutOrStdout(), "[Press enter to exit]\n")
-				fmt.Scanln() //nolint:errcheck
+				return nil
 			}
+
+		exit:
+			fmt.Fprintf(cmd.OutOrStdout(), "[Press enter to exit]\n")
+
+			fmt.Scanln() //nolint:errcheck
 
 			return err
 		},
 	}
+}
+
+func executeCommand(cmd *cobra.Command, line string) error {
+	args, err := shlex.Split(line)
+	if err != nil {
+		return err
+	}
+
+	shell.ResetArgs(cmd, args)
+
+	cmd.SetArgs(args)
+
+	return cmd.ExecuteContext(cmd.Context())
 }
 
 func (a *App) prefix() (string, bool) {

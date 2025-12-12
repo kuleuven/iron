@@ -176,7 +176,7 @@ func assert(err error) {
 }
 
 func execute(cmd *cobra.Command, args []string) error {
-	resetArgs(cmd, args)
+	ResetArgs(cmd, args)
 
 	cmd.SetArgs(args)
 
@@ -188,7 +188,7 @@ func execute(cmd *cobra.Command, args []string) error {
 	return cmd.ExecuteContext(ctx)
 }
 
-func resetArgs(cmd *cobra.Command, args []string) {
+func ResetArgs(cmd *cobra.Command, args []string) {
 	if cmd, _, err := cmd.Find(args); err == nil {
 		// Reset flag values between runs due to a limitation in Cobra
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
