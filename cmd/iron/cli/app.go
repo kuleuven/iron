@@ -158,27 +158,29 @@ func (a *App) xopen() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			uri, err := url.Parse(args[0])
 			if err != nil {
-				return fmt.Errorf("invalid url: %w", err)
+				return xopenError(cmd, fmt.Errorf("invalid url: %w", err))
 			}
 
 			if uri.Scheme != a.name {
-				return fmt.Errorf("invalid url, can only open %s:// urls", a.name)
+				return xopenError(cmd, fmt.Errorf("invalid url, can only open %s:// urls", a.name))
 			}
 
 			minVersion, err := semver.NewVersion(uri.Host)
 			if err != nil {
-				return fmt.Errorf("uri contains invalid minimum version: %w", err)
+				return xopenError(cmd, fmt.Errorf("uri contains invalid minimum version: %w", err))
 			}
 
 			if curVersion := a.Version(); curVersion.LessThan(minVersion) {
-				return fmt.Errorf("script requires minimum version is %s, but current version is %s. Please update your installation of %s", minVersion, curVersion, a.name)
+				err = fmt.Errorf("script requires minimum version is %s, but current version is %s. Please update your installation of %s", minVersion, curVersion, a.name)
+
+				return xopenError(cmd, err)
 			}
 
 			rootCmd := a.root(true)
 
 			for line := range strings.SplitSeq(uri.Path, "/") {
 				if err = a.executeCommand(rootCmd, line); err != nil {
-					goto exit
+					return xopenError(cmd, err)
 				}
 			}
 
@@ -193,14 +195,17 @@ func (a *App) xopen() *cobra.Command {
 				return nil
 			}
 
-		exit:
-			fmt.Fprintf(cmd.OutOrStdout(), "[Press enter to exit]\n")
-
-			fmt.Scanln() //nolint:errcheck
-
-			return err
+			return xopenError(cmd, err)
 		},
 	}
+}
+
+func xopenError(cmd *cobra.Command, err error) error {
+	fmt.Fprintf(cmd.ErrOrStderr(), "Error: %s\n", err.Error())
+	fmt.Fprintf(cmd.OutOrStdout(), "[Press enter to exit]\n")
+	fmt.Fscanln(cmd.InOrStdin()) //nolint:errcheck
+
+	return err
 }
 
 func (a *App) executeCommand(cmd *cobra.Command, line string) error {
