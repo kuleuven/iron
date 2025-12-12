@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -74,7 +75,10 @@ func (a *App) Command() *cobra.Command {
 	shellCmd.Args = cobra.MaximumNArgs(1)
 	shellCmd.PersistentPreRunE = a.ShellInit
 
-	rootCmd.AddCommand(shellCmd)
+	// Open subcommand
+	openURLCmd := openCmd(rootCmd)
+
+	rootCmd.AddCommand(shellCmd, openURLCmd)
 
 	return rootCmd
 }
@@ -137,6 +141,49 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 	}
 
 	return rootCmd
+}
+
+func openCmd(rootCmd *cobra.Command) *cobra.Command {
+	return &cobra.Command{
+		Use:   "x-open [url]",
+		Short: "Open a special url, for browser-initiated commands.",
+		Args:  cobra.ExactArgs(1),
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			parts, err := url.Parse(args[0])
+			if err != nil {
+				return err
+			}
+
+			args = []string{"--workdir", parts.Path, parts.Host}
+
+			for urlarg := range strings.SplitSeq(parts.RawQuery, "&") {
+				if _, value, ok := strings.Cut(urlarg, "="); ok {
+					unescaped, err := url.QueryUnescape(value)
+					if err != nil {
+						return err
+					}
+
+					args = append(args, unescaped)
+				}
+			}
+
+			rootCmd.SetArgs(args)
+
+			err = rootCmd.ExecuteContext(cmd.Context())
+
+			if parts.Host != "shell" {
+				fmt.Fprintf(cmd.OutOrStdout(), "[Press enter to exit]\n")
+				fmt.Scanln() //nolint:errcheck
+			}
+
+			return err
+		},
+	}
 }
 
 func (a *App) prefix() (string, bool) {

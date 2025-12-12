@@ -430,3 +430,16 @@ func TestAutocomplete2(t *testing.T) {
 		t.Fatalf("expected /testzone/home/, got %s", opts[0])
 	}
 }
+
+func TestXOpen(t *testing.T) {
+	app := testApp(t)
+
+	cmd := app.Command()
+	cmd.SetContext(t.Context())
+
+	cmd.SetArgs([]string{"x-open", "iron://version"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
