@@ -201,7 +201,10 @@ func (a *App) xopen() *cobra.Command {
 }
 
 func xopenError(cmd *cobra.Command, err error) error {
-	fmt.Fprintf(cmd.ErrOrStderr(), "Error: %s\n", err.Error())
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %s\n", err.Error())
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "[Press enter to exit]\n")
 	fmt.Fscanln(cmd.InOrStdin()) //nolint:errcheck
 
