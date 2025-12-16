@@ -672,7 +672,7 @@ For data objects it indicates the status of the replicas, as follows:
 		or an earlier process did not finish properly.
 	…	Replica is in intermediate state, another replica is write-locked.`
 
-func (a *App) list() *cobra.Command { //nolint:funlen
+func (a *App) list() *cobra.Command {
 	var (
 		jsonFormat, listACL, listMeta, collectionSizes bool
 		columns                                        []string
