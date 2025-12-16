@@ -203,32 +203,35 @@ func execute(cmd *cobra.Command, args []string) error {
 }
 
 func ResetArgs(cmd *cobra.Command, args []string) {
-	if cmd, _, err := cmd.Find(args); err == nil {
-		// Reset flag values between runs due to a limitation in Cobra
-		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
-			if val, ok := flag.Value.(pflag.SliceValue); ok {
-				assert(val.Replace(explode(flag.DefValue)))
-
-				if o, ok := flag.Value.(*overrideChangedSliceValue); ok {
-					o.ResetChanged()
-				} else {
-					flag.Value = &overrideChangedSliceValue{
-						Value:      flag.Value,
-						SliceValue: val,
-					}
-				}
-			} else {
-				assert(flag.Value.Set(flag.DefValue))
-			}
-
-			assert(cmd.Flags().SetAnnotation(flag.Name, cobra.BashCompOneRequiredFlag, []string{"false"}))
-
-			flag.Changed = false
-		})
-
-		cmd.InitDefaultHelpFlag()
-		cmd.SetContext(nil) //nolint:staticcheck //NOSONAR
+	cmd, _, err := cmd.Find(args)
+	if err != nil {
+		return
 	}
+
+	// Reset flag values between runs due to a limitation in Cobra
+	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if val, ok := flag.Value.(pflag.SliceValue); ok {
+			assert(val.Replace(explode(flag.DefValue)))
+
+			if o, ok := flag.Value.(*overrideChangedSliceValue); ok {
+				o.ResetChanged()
+			} else {
+				flag.Value = &overrideChangedSliceValue{
+					Value:      flag.Value,
+					SliceValue: val,
+				}
+			}
+		} else {
+			assert(flag.Value.Set(flag.DefValue))
+		}
+
+		assert(cmd.Flags().SetAnnotation(flag.Name, cobra.BashCompOneRequiredFlag, []string{"false"}))
+
+		flag.Changed = false
+	})
+
+	cmd.InitDefaultHelpFlag()
+	cmd.SetContext(nil) //nolint:staticcheck //NOSONAR
 }
 
 type overrideChangedSliceValue struct {
