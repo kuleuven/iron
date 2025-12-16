@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/c-bata/go-prompt"
 	"github.com/creativeprojects/go-selfupdate"
+	"github.com/elk-language/go-prompt"
 	"github.com/google/shlex"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/shell"
@@ -72,7 +72,7 @@ func (a *App) Command() *cobra.Command {
 	rootShell.AddCommand(hiddenChild)
 
 	// Shell subcommand
-	shellCmd := shell.New(rootShell, prompt.OptionLivePrefix(a.prefix))
+	shellCmd := shell.New(rootShell, prompt.WithPrefixCallback(a.prefix))
 	shellCmd.Use = "shell [zone]"
 	shellCmd.Args = cobra.MaximumNArgs(1)
 	shellCmd.PersistentPreRunE = a.ShellInit
@@ -190,7 +190,7 @@ func (a *App) xopen() *cobra.Command {
 				hiddenChild.Hidden = true
 				rootCmd.AddCommand(hiddenChild)
 
-				shell.New(rootCmd, prompt.OptionLivePrefix(a.prefix)).Run(rootCmd, nil)
+				shell.New(rootCmd, prompt.WithPrefixCallback(a.prefix)).Run(rootCmd, nil)
 
 				return nil
 			}
@@ -241,8 +241,8 @@ func (a *App) executeCommand(cmd *cobra.Command, line string) error {
 	return cmd.ExecuteContext(cmd.Context())
 }
 
-func (a *App) prefix() (string, bool) {
-	return fmt.Sprintf("%s > %s > ", a.name, a.Workdir), true
+func (a *App) prefix() string {
+	return fmt.Sprintf("%s > %s > ", a.name, a.Workdir)
 }
 
 // ResetClient closes the client and sets it to nil

@@ -10,27 +10,36 @@ github.com/Masterminds/semver/v3
 # github.com/acomagu/bufpipe v1.0.4
 ## explicit; go 1.12
 github.com/acomagu/bufpipe
-# github.com/c-bata/go-prompt v0.2.6
-## explicit; go 1.14
-github.com/c-bata/go-prompt
-github.com/c-bata/go-prompt/internal/bisect
-github.com/c-bata/go-prompt/internal/debug
-github.com/c-bata/go-prompt/internal/strings
-github.com/c-bata/go-prompt/internal/term
 # github.com/c9s/goprocinfo v0.0.0-20210130143923-c95fcf8c64a8
 ## explicit
 github.com/c9s/goprocinfo/linux
+# github.com/clipperhouse/stringish v0.1.1
+## explicit; go 1.18
+github.com/clipperhouse/stringish
+# github.com/clipperhouse/uax29/v2 v2.3.0
+## explicit; go 1.18
+github.com/clipperhouse/uax29/v2/graphemes
+github.com/clipperhouse/uax29/v2/internal/iterators
 # github.com/creativeprojects/go-selfupdate v1.5.1
 ## explicit; go 1.24.6
 github.com/creativeprojects/go-selfupdate
 github.com/creativeprojects/go-selfupdate/internal
 github.com/creativeprojects/go-selfupdate/update
+# github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+## explicit
 # github.com/davidmz/go-pageant v1.0.2
 ## explicit; go 1.16
 github.com/davidmz/go-pageant
 # github.com/dustin/go-humanize v1.0.1
 ## explicit; go 1.16
 github.com/dustin/go-humanize
+# github.com/elk-language/go-prompt v1.3.1 => github.com/kuleuven/go-prompt v0.0.0-20251216171457-68c6646829ac
+## explicit; go 1.24
+github.com/elk-language/go-prompt
+github.com/elk-language/go-prompt/bisect
+github.com/elk-language/go-prompt/debug
+github.com/elk-language/go-prompt/strings
+github.com/elk-language/go-prompt/term
 # github.com/evanphx/json-patch v0.5.2
 ## explicit; go 1.14
 github.com/evanphx/json-patch
@@ -43,6 +52,8 @@ github.com/go-openapi/jsonpointer
 # github.com/go-openapi/swag/jsonname v0.25.4
 ## explicit; go 1.24.0
 github.com/go-openapi/swag/jsonname
+# github.com/google/go-cmp v0.7.0
+## explicit; go 1.21
 # github.com/google/go-github/v30 v30.1.0
 ## explicit; go 1.13
 github.com/google/go-github/v30/github
@@ -67,17 +78,19 @@ github.com/hashicorp/go-version
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/mattn/go-colorable v0.1.13
-## explicit; go 1.15
+# github.com/kr/pretty v0.3.1
+## explicit; go 1.12
+# github.com/mattn/go-colorable v0.1.14
+## explicit; go 1.18
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.15
 github.com/mattn/go-isatty
-# github.com/mattn/go-runewidth v0.0.9
-## explicit; go 1.9
+# github.com/mattn/go-runewidth v0.0.19
+## explicit; go 1.20
 github.com/mattn/go-runewidth
-# github.com/mattn/go-tty v0.0.3
-## explicit; go 1.14
+# github.com/mattn/go-tty v0.0.7
+## explicit; go 1.18
 github.com/mattn/go-tty
 # github.com/mitchellh/go-homedir v1.1.0
 ## explicit
@@ -88,6 +101,13 @@ github.com/pkg/errors
 # github.com/pkg/term v1.2.0-beta.2
 ## explicit; go 1.14
 github.com/pkg/term/termios
+# github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+## explicit
+# github.com/rivo/uniseg v0.4.7
+## explicit; go 1.18
+github.com/rivo/uniseg
+# github.com/rogpeppe/go-internal v1.14.1
+## explicit; go 1.23
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
@@ -131,6 +151,9 @@ golang.org/x/crypto/sha3
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
+# golang.org/x/exp v0.0.0-20251209150349-8475f28825e9
+## explicit; go 1.24.0
+golang.org/x/exp/utf8string
 # golang.org/x/oauth2 v0.30.0
 ## explicit; go 1.23.0
 golang.org/x/oauth2
@@ -150,6 +173,8 @@ golang.org/x/term
 # golang.org/x/time v0.12.0
 ## explicit; go 1.23.0
 golang.org/x/time/rate
+# gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
+## explicit; go 1.11
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3

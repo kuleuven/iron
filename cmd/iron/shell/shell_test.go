@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/c-bata/go-prompt"
+	"github.com/elk-language/go-prompt"
 	"github.com/spf13/cobra"
 )
 
@@ -445,7 +445,7 @@ func TestCobraShellCompleter(t *testing.T) {
 	// Test empty line
 	doc := prompt.Document{Text: ""}
 
-	suggestions := shell.completer(doc)
+	suggestions, _, _ := shell.completer(doc)
 	if suggestions != nil {
 		t.Errorf("Expected nil suggestions for empty line, got %v", suggestions)
 	}

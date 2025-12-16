@@ -10,7 +10,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/c-bata/go-prompt"
+	"github.com/elk-language/go-prompt"
+	istrings "github.com/elk-language/go-prompt/strings"
 	"github.com/google/shlex"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -32,7 +33,14 @@ func New(root *cobra.Command, opts ...prompt.Option) *cobra.Command {
 
 	prefix := fmt.Sprintf("> %s ", root.Name())
 
-	opts = append(opts, prompt.OptionPrefix(prefix))
+	opts = append(
+		[]prompt.Option{
+			prompt.WithCompleter(shell.completer),
+			prompt.WithPrefix(prefix),
+			prompt.WithCompletionOnDown(),
+		},
+		opts...,
+	)
 
 	return &cobra.Command{
 		Use:   "shell",
@@ -42,8 +50,7 @@ func New(root *cobra.Command, opts ...prompt.Option) *cobra.Command {
 
 			shell.editCommandTree(cmd)
 
-			pr := prompt.New(shell.executor, shell.completer, opts...)
-			pr.Run()
+			prompt.New(shell.executor, opts...).Run()
 
 			shell.restoreStdin()
 		},
@@ -87,8 +94,6 @@ func (s *cobraShell) saveStdin() {
 }
 
 func (s *cobraShell) executor(line string) {
-	// Reset window size
-
 	// Allow command to read from stdin
 	s.restoreStdin()
 
@@ -112,14 +117,14 @@ func (s *cobraShell) restoreStdin() {
 	}
 }
 
-func (s *cobraShell) completer(d prompt.Document) []prompt.Suggest {
+func (s *cobraShell) completer(d prompt.Document) ([]prompt.Suggest, istrings.RuneNumber, istrings.RuneNumber) {
 	if d.CurrentLine() == "" {
-		return nil
+		return nil, 0, 0
 	}
 
 	args, err := buildCompletionArgs(d.CurrentLine())
 	if err != nil {
-		return nil
+		return nil, 0, 0
 	}
 
 	key := strings.Join(args, " ")
@@ -128,14 +133,19 @@ func (s *cobraShell) completer(d prompt.Document) []prompt.Suggest {
 	if !ok {
 		out, err := readCommandOutput(s.root, args)
 		if err != nil {
-			return nil
+			return nil, 0, 0
 		}
 
 		suggestions = parseSuggestions(out)
 		s.cache[key] = suggestions
 	}
 
-	return prompt.FilterHasPrefix(suggestions, d.GetWordBeforeCursor(), true)
+	endIndex := d.CurrentRuneIndex()
+	word := d.GetWordBeforeCursor()
+
+	startIndex := endIndex - istrings.RuneCount([]byte(word))
+
+	return prompt.FilterHasPrefix(suggestions, word, true), startIndex, endIndex
 }
 
 func buildCompletionArgs(input string) ([]string, error) {
@@ -198,6 +208,15 @@ func ResetArgs(cmd *cobra.Command, args []string) {
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			if val, ok := flag.Value.(pflag.SliceValue); ok {
 				assert(val.Replace(explode(flag.DefValue)))
+
+				if o, ok := flag.Value.(*overrideChangedSliceValue); ok {
+					o.ResetChanged()
+				} else {
+					flag.Value = &overrideChangedSliceValue{
+						Value:      flag.Value,
+						SliceValue: val,
+					}
+				}
 			} else {
 				assert(flag.Value.Set(flag.DefValue))
 			}
@@ -210,6 +229,26 @@ func ResetArgs(cmd *cobra.Command, args []string) {
 		cmd.InitDefaultHelpFlag()
 		cmd.SetContext(nil) //nolint:staticcheck //NOSONAR
 	}
+}
+
+type overrideChangedSliceValue struct {
+	pflag.Value
+	pflag.SliceValue
+	changed bool
+}
+
+func (o *overrideChangedSliceValue) Set(value string) error {
+	if !o.changed {
+		if err := o.SliceValue.Replace(nil); err != nil {
+			return err
+		}
+	}
+
+	return o.Value.Set(value)
+}
+
+func (o *overrideChangedSliceValue) ResetChanged() {
+	o.changed = false
 }
 
 func explode(args string) []string {
