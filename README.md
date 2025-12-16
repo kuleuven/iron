@@ -151,3 +151,9 @@ func example() error {
 
     return client.Walk(ctx, "/path/to/more/data", fn, api.FetchAccess, api.FetchMetadata)
 }
+
+## Known issues
+
+For the `iron` CLI utility, the following issues are known:
+
+* Windows: The `iron shell` command does not resize properly. If the window is resized, the autocomplete output will be cluttered. Avoid resizing the window, or start a new Command Prompt or Powershell, first resize and then run `iron.exe`.
