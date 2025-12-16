@@ -692,10 +692,15 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 
 			dir := a.Path(args[0])
 
+			hideColumns, err := hiddenColumns(columns, "creator", "size", "date", "status", "name")
+			if err != nil {
+				return err
+			}
+
 			var printer Printer = &TablePrinter{
 				Writer: &tabwriter.TabWriter{
 					Writer:      cmd.OutOrStdout(),
-					HideColumns: hiddenColumns(columns, "creator", "size", "date", "status", "name"),
+					HideColumns: hideColumns,
 				},
 				Zone: a.Zone,
 			}
@@ -757,8 +762,14 @@ func walkOptions(listACL, listMeta, collectionSizes bool) []api.WalkOption {
 	return opts
 }
 
-func hiddenColumns(columns []string, available ...string) []int {
+func hiddenColumns(columns []string, available ...string) ([]int, error) {
 	var hidden []int
+
+	for _, col := range columns {
+		if !slices.Contains(available, col) {
+			return nil, fmt.Errorf("unknown column: %s", col)
+		}
+	}
 
 	for i, col := range available {
 		if !slices.Contains(columns, col) {
@@ -766,7 +777,7 @@ func hiddenColumns(columns []string, available ...string) []int {
 		}
 	}
 
-	return hidden
+	return hidden, nil
 }
 
 func (a *App) tree() *cobra.Command { //nolint:funlen
@@ -789,11 +800,16 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 			dir := a.Path(args[0])
 
+			hideColumns, err := hiddenColumns(columns, "creator", "size", "date", "status", "name")
+			if err != nil {
+				return err
+			}
+
 			var printer Printer = &TablePrinter{
 				Writer: &tabwriter.StreamWriter{
 					Writer:       cmd.OutOrStdout(),
 					ColumnWidths: []int{20, 8, 13, 6},
-					HideColumns:  hiddenColumns(columns, "creator", "size", "date", "status", "name"),
+					HideColumns:  hideColumns,
 				},
 				Zone: a.Zone,
 			}
