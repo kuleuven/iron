@@ -722,8 +722,8 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
-	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "List collection sizes, i.e. total size of objects that are part of the collection (does not include sub-collections)")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator (and ACL user), size (and ACL access), date, status, name, all.")
+	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
 
 	return cmd
 }
@@ -853,7 +853,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
-	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "List collection sizes, i.e. total size of objects that are part of the collection (does not include sub-collections)")
+	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
 
 	return cmd
 }

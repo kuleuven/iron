@@ -41,7 +41,9 @@ func New(root *cobra.Command, opts ...prompt.Option) *cobra.Command {
 			shell.saveStdin()
 
 			shell.editCommandTree(cmd)
-			prompt.New(shell.executor, shell.completer, opts...).Run()
+
+			pr := prompt.New(shell.executor, shell.completer, opts...)
+			pr.Run()
 
 			shell.restoreStdin()
 		},
@@ -85,6 +87,8 @@ func (s *cobraShell) saveStdin() {
 }
 
 func (s *cobraShell) executor(line string) {
+	// Reset window size
+
 	// Allow command to read from stdin
 	s.restoreStdin()
 
