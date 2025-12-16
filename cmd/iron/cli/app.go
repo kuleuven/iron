@@ -377,11 +377,12 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 	}
 
 	a.Client, err = iron.New(cmd.Context(), env, iron.Option{
-		ClientName:        clientName,
-		Admin:             a.Admin,
-		UseNativeProtocol: a.Native,
-		MaxConns:          16,
-		DialFunc:          dialer,
+		ClientName:                 clientName,
+		Admin:                      a.Admin,
+		UseNativeProtocol:          a.Native,
+		MaxConns:                   16,
+		DialFunc:                   dialer,
+		GeneratedNativePasswordAge: env.GeneratedPasswordTimeout,
 	})
 	if err != nil {
 		// Doesn't make sense to print usage here

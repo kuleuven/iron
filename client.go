@@ -56,6 +56,8 @@ type Option struct {
 	HandshakeFunc HandshakeFunc
 
 	// GeneratedNativePasswordAge is the maximum age of a generated native password before it is discarded.
+	// In case an authentication scheme different from "native" is used, this generated native password will
+	// be used in subsequent authentication attempts. If set to 0, the generated native password will never be used.
 	// In case pam authentication is used, this should be put to a value lower than the PAM timeout which is set on the server/in Env.
 	GeneratedNativePasswordAge time.Duration
 
