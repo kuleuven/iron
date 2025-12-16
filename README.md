@@ -151,6 +151,7 @@ func example() error {
 
     return client.Walk(ctx, "/path/to/more/data", fn, api.FetchAccess, api.FetchMetadata)
 }
+```
 
 ## Known issues
 
