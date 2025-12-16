@@ -715,23 +715,7 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 
 			defer printer.Flush()
 
-			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
-				if err != nil {
-					return err
-				}
-
-				if path == dir && record.IsDir() {
-					return api.SkipSubDirs
-				}
-
-				printer.Print(record.Name(), record)
-
-				if record.IsDir() {
-					return api.SkipDir
-				}
-
-				return nil
-			}, walkOptions(listACL, listMeta, collectionSizes)...)
+			return a.Walk(cmd.Context(), dir, listFunc(dir, printer), walkOptions(listACL, listMeta, collectionSizes)...)
 		},
 	}
 
@@ -742,6 +726,26 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator (and ACL user), size (and ACL access), date, status, name, all.")
 
 	return cmd
+}
+
+func listFunc(dir string, printer Printer) func(path string, record api.Record, err error) error {
+	return func(path string, record api.Record, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if path == dir && record.IsDir() {
+			return api.SkipSubDirs
+		}
+
+		printer.Print(record.Name(), record)
+
+		if record.IsDir() {
+			return api.SkipDir
+		}
+
+		return nil
+	}
 }
 
 func walkOptions(listACL, listMeta, collectionSizes bool) []api.WalkOption {
@@ -842,17 +846,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 				opts = append(opts, api.FetchCollectionSize)
 			}
 
-			return a.Walk(cmd.Context(), dir, func(path string, record api.Record, err error) error {
-				if err != nil {
-					return err
-				}
-
-				depth := strings.Count(strings.TrimPrefix(path, dir), "/")
-
-				printer.Print(indentString(path, depth, jsonFormat), record)
-
-				return skipAsNeeded(record, depth, maxDepth)
-			}, opts...)
+			return a.Walk(cmd.Context(), dir, treeFunc(dir, printer, maxDepth, jsonFormat), opts...)
 		},
 	}
 
@@ -864,16 +858,26 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 	return cmd
 }
 
-func skipAsNeeded(record api.Record, depth, maxDepth int) error {
-	if !record.IsDir() || maxDepth < 0 || depth < maxDepth-1 {
-		return nil
-	}
+func treeFunc(dir string, printer Printer, maxDepth int, jsonFormat bool) func(path string, record api.Record, err error) error {
+	return func(path string, record api.Record, err error) error {
+		if err != nil {
+			return err
+		}
 
-	if depth == maxDepth-1 {
-		return api.SkipSubDirs
-	}
+		depth := strings.Count(strings.TrimPrefix(path, dir), "/")
 
-	return api.SkipDir
+		printer.Print(indentString(path, depth, jsonFormat), record)
+
+		if !record.IsDir() || maxDepth < 0 || depth < maxDepth-1 {
+			return nil
+		}
+
+		if depth == maxDepth-1 {
+			return api.SkipSubDirs
+		}
+
+		return api.SkipDir
+	}
 }
 
 func indentString(s string, depth int, jsonFormat bool) string {
