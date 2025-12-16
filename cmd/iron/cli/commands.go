@@ -739,7 +739,7 @@ func (a *App) list() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "List collection sizes, i.e. total size of objects that are part of the collection (does not include sub-collections)")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator (and ACL user), size (and ACL access), date, status, name.")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator (and ACL user), size (and ACL access), date, status, name, all.")
 
 	return cmd
 }
@@ -763,13 +763,21 @@ func walkOptions(listACL, listMeta, collectionSizes bool) []api.WalkOption {
 }
 
 func hiddenColumns(columns []string, available ...string) ([]int, error) {
-	var hidden []int
+	if slices.Contains(columns, "all") {
+		if len(columns) > 1 {
+			return nil, fmt.Errorf("cannot use 'all' with other columns")
+		}
+
+		return nil, nil
+	}
 
 	for _, col := range columns {
 		if !slices.Contains(available, col) {
 			return nil, fmt.Errorf("unknown column: %s", col)
 		}
 	}
+
+	var hidden []int
 
 	for i, col := range available {
 		if !slices.Contains(columns, col) {
@@ -850,7 +858,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name.")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "List collection sizes, i.e. total size of objects that are part of the collection (does not include sub-collections)")
 
 	return cmd
