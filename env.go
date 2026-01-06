@@ -28,10 +28,14 @@ type Env struct {
 	ProxyZone                     string `json:"irods_proxy_zone"` // Authenticate with proxy credentials
 
 	// Advanced dial settings
-	SSLServerName            string        `json:"-"` // If provided, this will be used for server verification, instead of the hostname
-	DialTimeout              time.Duration `json:"-"` // If provided, this will be used for dial timeout
-	HandshakeTimeout         time.Duration `json:"-"` // If provided, this will be used for the handshake timeout
-	GeneratedPasswordTimeout time.Duration `json:"-"` // For pam authentication, the TTL to use for the generated native password
+	SSLServerName    string        `json:"-"` // If provided, this will be used for server verification, instead of the hostname
+	DialTimeout      time.Duration `json:"-"` // If provided, this will be used for dial timeout
+	HandshakeTimeout time.Duration `json:"-"` // If provided, this will be used for the handshake timeout
+
+	// For pam authentication, request to generate a password that is valid for the given TTL.
+	// The server will determine the actual TTL based on the server thresholds.
+	// This value is rounded down to the nearest hour. If zero, the timeout will default to 2m1s.
+	GeneratedPasswordTimeout time.Duration `json:"-"`
 
 	// Persistent state for PAM interactive authentication
 	PersistentState PersistentState `json:"-"` // If provided, this will be used for PAM authentication as persistent store

@@ -140,7 +140,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
 		rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
 		rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
-		rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "TTL in case pam authentication is used")
+		rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "In case pam authentication is used, request a session that is valid for the given duration. This value is rounded down to the nearest hour.")
 	}
 
 	return rootCmd
@@ -384,13 +384,12 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 	}
 
 	a.Client, err = iron.New(cmd.Context(), env, iron.Option{
-		ClientName:                 clientName,
-		Admin:                      a.Admin,
-		UseNativeProtocol:          a.Native,
-		MaxConns:                   16,
-		DialFunc:                   dialer,
-		GeneratedNativePasswordAge: env.GeneratedPasswordTimeout,
-		AuthenticationPrompt:       authPrompt,
+		ClientName:           clientName,
+		Admin:                a.Admin,
+		UseNativeProtocol:    a.Native,
+		MaxConns:             16,
+		DialFunc:             dialer,
+		AuthenticationPrompt: authPrompt,
 	})
 	if err != nil {
 		// Doesn't make sense to print usage here

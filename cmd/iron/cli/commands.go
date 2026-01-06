@@ -32,12 +32,12 @@ func (a *App) version() *cobra.Command {
 }
 
 func (a *App) auth() *cobra.Command {
-	use := "auth [zone]"
+	use := "auth [flags] [zone]"
 	args := cobra.MaximumNArgs(1)
 	preRun := a.ResetInit
 
 	if a.configStore != nil {
-		use += " | {<" + strings.Join(a.configStoreArgs, "> <") + ">}"
+		use += "\n  " + a.name + " auth [flags] <" + strings.Join(a.configStoreArgs, "> <") + ">"
 
 		args = func(cmd *cobra.Command, args []string) error {
 			if len(args) < 2 || len(args) == len(a.configStoreArgs) {

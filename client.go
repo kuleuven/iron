@@ -55,12 +55,6 @@ type Option struct {
 	// HandshakeFunc is an optional function that overrides the default handshake function.
 	HandshakeFunc HandshakeFunc
 
-	// GeneratedNativePasswordAge is the maximum age of a generated native password before it is discarded.
-	// In case an authentication scheme different from "native" is used, this generated native password will
-	// be used in subsequent authentication attempts. If set to 0, the generated native password will never be used.
-	// In case pam authentication is used, this should be put to a value lower than the PAM timeout which is set on the server/in Env.
-	GeneratedNativePasswordAge time.Duration
-
 	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
 	DiscardConnectionAge time.Duration
 }
@@ -227,8 +221,14 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 	// Save pam_password for next connection
 	if env.AuthScheme != native {
 		c.nativePassword = conn.NativePassword()
-		c.nativePasswordExpiry = conn.connectedAt.Add(c.option.GeneratedNativePasswordAge)
+
+		// Calculate actual TTL
+		actualTTL := min(defaultMinimumTTL, time.Duration(determineTTL(conn.env.GeneratedPasswordTimeout))*time.Hour)
+
+		c.nativePasswordExpiry = conn.connectedAt.Add(actualTTL)
 	}
 
 	return conn, nil
 }
+
+const defaultMinimumTTL = 121 * time.Second

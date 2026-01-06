@@ -561,10 +561,12 @@ func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 }
 
 func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
+	ttl := determineTTL(c.env.GeneratedPasswordTimeout)
+
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:              "pam_interactive",
-		TTL:                 strconv.Itoa(int(c.env.GeneratedPasswordTimeout.Hours())),
+		TTL:                 strconv.Itoa(ttl),
 		ForcePasswordPrompt: true,
 		RecordAuthFile:      true,
 		NextOperation:       "auth_agent_auth_request",
@@ -617,6 +619,10 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 			return err
 		}
 	}
+}
+
+func determineTTL(ttl time.Duration) int {
+	return max(0, int(ttl.Hours()))
 }
 
 func getValue(state map[string]any, prompt Prompt, message string, sensitive bool, retrievePath, defaultPath string) (string, error) {
@@ -730,10 +736,12 @@ func (c *conn) authenticatePAMPassword(ctx context.Context) error {
 		return c.authenticatePAMPasswordDeprecated(ctx)
 	}
 
+	ttl := determineTTL(c.env.GeneratedPasswordTimeout)
+
 	// Request challenge
 	request := msg.AuthPluginRequest{
 		Scheme:        "pam_password",
-		TTL:           strconv.Itoa(int(c.env.GeneratedPasswordTimeout.Hours())),
+		TTL:           strconv.Itoa(ttl),
 		NextOperation: "pam_password_auth_client_request",
 		UserName:      c.env.ProxyUsername,
 		ZoneName:      c.env.ProxyZone,
@@ -752,10 +760,12 @@ func (c *conn) authenticatePAMPassword(ctx context.Context) error {
 }
 
 func (c *conn) authenticatePAMPasswordDeprecated(ctx context.Context) error {
+	ttl := determineTTL(c.env.GeneratedPasswordTimeout)
+
 	request := msg.PamAuthRequest{
 		Username: c.env.ProxyUsername,
 		Password: c.env.Password,
-		TTL:      int(c.env.GeneratedPasswordTimeout.Hours()),
+		TTL:      ttl,
 	}
 
 	response := msg.PamAuthResponse{}
