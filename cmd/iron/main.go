@@ -20,6 +20,12 @@ var version string
 var updateSlug = "kuleuven/iron"
 
 func main() {
+	exitCode := 0
+
+	defer func() {
+		os.Exit(exitCode)
+	}()
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		panic(err)
@@ -67,6 +73,6 @@ func main() {
 	}
 
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		os.Exit(1)
+		exitCode = 1
 	}
 }
