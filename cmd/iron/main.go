@@ -66,5 +66,7 @@ func main() {
 		_ = os.Chdir(home) //nolint:errcheck
 	}
 
-	cmd.ExecuteContext(ctx) //nolint:errcheck
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		os.Exit(1)
+	}
 }

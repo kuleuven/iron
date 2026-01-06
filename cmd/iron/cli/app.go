@@ -52,11 +52,12 @@ type App struct {
 	updater        *selfupdate.Updater
 	repo           selfupdate.RepositorySlug
 
-	Admin   bool
-	Debug   int
-	Native  bool
-	Workdir string
-	PamTTL  time.Duration
+	Admin          bool
+	Debug          int
+	Native         bool
+	Workdir        string
+	PamTTL         time.Duration
+	NonInteractive bool
 
 	inShell bool
 }
@@ -376,6 +377,12 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		clientName = fmt.Sprintf("%s-%s", clientName, version.String())
 	}
 
+	var authPrompt iron.Prompt
+
+	if a.NonInteractive {
+		authPrompt = iron.Bot{}
+	}
+
 	a.Client, err = iron.New(cmd.Context(), env, iron.Option{
 		ClientName:                 clientName,
 		Admin:                      a.Admin,
@@ -383,6 +390,7 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		MaxConns:                   16,
 		DialFunc:                   dialer,
 		GeneratedNativePasswordAge: env.GeneratedPasswordTimeout,
+		AuthenticationPrompt:       authPrompt,
 	})
 	if err != nil {
 		// Doesn't make sense to print usage here

@@ -107,6 +107,11 @@ func (p *prompt) Password(message string) (string, error) {
 type Bot map[string]string
 
 func (b Bot) Print(message string) error {
+	// If we need to open an URL, print a newline
+	if result := AuthenticateURL.FindStringSubmatch(message); len(result) > 1 {
+		return errors.New("cannot open URL in bot mode")
+	}
+
 	return nil
 }
 

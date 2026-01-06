@@ -56,7 +56,7 @@ func (a *App) auth() *cobra.Command {
 		}
 	}
 
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:               use,
 		Aliases:           []string{"authenticate", "iinit"},
 		Short:             "Authenticate against the irods server.",
@@ -88,6 +88,10 @@ func (a *App) auth() *cobra.Command {
 			}
 		},
 	}
+
+	cmd.Flags().BoolVar(&a.NonInteractive, "non-interactive", false, "Authenticate non-interactively, don't prompt any user input. Useful to fail gracefully in unattended scripts if the authentication method would unexpectedly request e.g. a password.")
+
+	return cmd
 }
 
 func (a *App) mkdir() *cobra.Command {
