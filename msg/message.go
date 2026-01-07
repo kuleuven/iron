@@ -36,7 +36,7 @@ type Message struct {
 
 // Wait at least a second before canceling a request
 // if the context gets canceled.
-var MinimumRequestWaitTime = time.Second
+var MinimumRequestWaitTime = 10 * time.Second
 
 // WriteContext calls Write with the provided context.
 // Note that Message cannot be reused if this function returns a context error.
@@ -47,18 +47,7 @@ func (msg *Message) WriteContext(ctx context.Context, w io.Writer) error {
 		ch <- msg.Write(w)
 	}()
 
-	select {
-	case err := <-ch:
-		return err
-	case <-time.After(MinimumRequestWaitTime):
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-ch:
-		return err
-	}
+	return waitContext(ctx, ch)
 }
 
 // Write writes an iRODS message to w
@@ -138,18 +127,7 @@ func (msg *Message) ReadContext(ctx context.Context, r io.Reader) error {
 		ch <- msg.Read(r)
 	}()
 
-	select {
-	case err := <-ch:
-		return err
-	case <-time.After(MinimumRequestWaitTime):
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-ch:
-		return err
-	}
+	return waitContext(ctx, ch)
 }
 
 // Read decodes an iRODS message from r.
@@ -219,4 +197,31 @@ func (body *Body) Read(r io.Reader, header Header) error {
 	}
 
 	return nil
+}
+
+func waitContext(ctx context.Context, ch chan error) error {
+	timer := time.NewTimer(MinimumRequestWaitTime)
+
+	defer timer.Stop()
+
+	select {
+	case err := <-ch:
+		return err
+	case <-ctx.Done():
+		logrus.Warnf("%s, but waiting %s for in-flight request to complete...", ctx.Err(), MinimumRequestWaitTime)
+
+		select {
+		case err := <-ch:
+			return err
+		case <-timer.C:
+			return ctx.Err()
+		}
+	case <-timer.C:
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-ch:
+			return err
+		}
+	}
 }
