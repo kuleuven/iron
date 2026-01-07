@@ -20,6 +20,7 @@ func (a *App) update() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          "update",
+		Short:        "Update the binary to the latest version. Might require evelated privileges.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			exe, err := selfupdate.ExecutablePath()
