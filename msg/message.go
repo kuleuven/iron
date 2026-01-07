@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/sirupsen/logrus"
@@ -33,6 +34,10 @@ type Message struct {
 	Bin    []byte
 }
 
+// Wait at least a second before canceling a request
+// if the context gets canceled.
+var MinimumRequestWaitTime = time.Second
+
 // WriteContext calls Write with the provided context.
 // Note that Message cannot be reused if this function returns a context error.
 func (msg *Message) WriteContext(ctx context.Context, w io.Writer) error {
@@ -41,6 +46,12 @@ func (msg *Message) WriteContext(ctx context.Context, w io.Writer) error {
 	go func() {
 		ch <- msg.Write(w)
 	}()
+
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(MinimumRequestWaitTime):
+	}
 
 	select {
 	case <-ctx.Done():
@@ -126,6 +137,12 @@ func (msg *Message) ReadContext(ctx context.Context, r io.Reader) error {
 	go func() {
 		ch <- msg.Read(r)
 	}()
+
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(MinimumRequestWaitTime):
+	}
 
 	select {
 	case <-ctx.Done():
