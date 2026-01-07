@@ -2,6 +2,7 @@ package msg
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/xml"
 	"fmt"
@@ -30,6 +31,23 @@ type Message struct {
 	Header Header
 	Body   Body
 	Bin    []byte
+}
+
+// WriteContext calls Write with the provided context.
+// Note that Message cannot be reused if this function returns a context error.
+func (msg *Message) WriteContext(ctx context.Context, w io.Writer) error {
+	ch := make(chan error, 1)
+
+	go func() {
+		ch <- msg.Write(w)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
 }
 
 // Write writes an iRODS message to w
@@ -98,6 +116,23 @@ func isPrintable(s string) bool {
 	}
 
 	return true
+}
+
+// ReadContext calls Read with the provided context.
+// Note that Message cannot be reused if this function returns a context error.
+func (msg *Message) ReadContext(ctx context.Context, r io.Reader) error {
+	ch := make(chan error, 1)
+
+	go func() {
+		ch <- msg.Read(r)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
 }
 
 // Read decodes an iRODS message from r.

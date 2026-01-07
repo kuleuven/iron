@@ -785,6 +785,8 @@ func (c *conn) Request(ctx context.Context, apiNumber msg.APINumber, request, re
 	return c.RequestWithBuffers(ctx, apiNumber, request, response, nil, nil)
 }
 
+var ErrTransport = errors.New("transport error")
+
 // Request sends an API request to the server and expects a API reply,
 // with possible request and response buffers.
 // If a negative IntInfo is received, an IRODSError is returned.
@@ -797,7 +799,11 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 		return err
 	}
 
-	if err := msg.Write(c.transport, request, requestBuf, c.protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
+	if c.transportErrors > 0 {
+		return fmt.Errorf("%w: %d previous transport errors", ErrTransport, c.transportErrors)
+	}
+
+	if err := msg.WriteContext(ctx, c.transport, request, requestBuf, c.protocol, "RODS_API_REQ", int32(apiNumber)); err != nil {
 		c.transportErrors++
 
 		return err
@@ -807,7 +813,7 @@ func (c *conn) RequestWithBuffers(ctx context.Context, apiNumber msg.APINumber, 
 		Bin: responseBuf,
 	}
 
-	if err := m.Read(c.transport); err != nil {
+	if err := m.ReadContext(ctx, c.transport); err != nil {
 		c.transportErrors++
 
 		return err

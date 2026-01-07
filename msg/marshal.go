@@ -1,6 +1,7 @@
 package msg
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -118,6 +119,22 @@ func Read(r io.Reader, obj any, buf []byte, protocol Protocol, expectedMsgType s
 	return msg.Header.IntInfo, Unmarshal(msg, protocol, obj)
 }
 
+func ReadContext(ctx context.Context, r io.Reader, obj any, buf []byte, protocol Protocol, expectedMsgType string) (int32, error) {
+	msg := Message{
+		Bin: buf,
+	}
+
+	if err := msg.ReadContext(ctx, r); err != nil {
+		return 0, err
+	}
+
+	if msg.Header.Type != expectedMsgType {
+		return 0, fmt.Errorf("%w: expected %s, got %s", ErrUnexpectedMessage, expectedMsgType, msg.Header.Type)
+	}
+
+	return msg.Header.IntInfo, Unmarshal(msg, protocol, obj)
+}
+
 func Write(w io.Writer, obj any, buf []byte, protocol Protocol, msgType string, intInfo int32) error {
 	msg, err := Marshal(obj, protocol, msgType)
 	if err != nil {
@@ -129,4 +146,17 @@ func Write(w io.Writer, obj any, buf []byte, protocol Protocol, msgType string, 
 	msg.Header.IntInfo = intInfo
 
 	return msg.Write(w)
+}
+
+func WriteContext(ctx context.Context, w io.Writer, obj any, buf []byte, protocol Protocol, msgType string, intInfo int32) error {
+	msg, err := Marshal(obj, protocol, msgType)
+	if err != nil {
+		return err
+	}
+
+	msg.Bin = buf
+	msg.Header.BsLen = uint32(len(buf))
+	msg.Header.IntInfo = intInfo
+
+	return msg.WriteContext(ctx, w)
 }
