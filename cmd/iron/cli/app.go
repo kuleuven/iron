@@ -156,6 +156,7 @@ func (a *App) xopen() *cobra.Command {
 		},
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		Hidden:        true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			uri, err := url.Parse(args[0])
 			if err != nil {
