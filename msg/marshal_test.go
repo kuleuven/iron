@@ -104,7 +104,15 @@ func TestReadWrite(t *testing.T) {
 		}
 
 		for i := 0; i < len(objects); i += 2 {
+			testWriteContext(t, buf, objects[i], proto, i)
+		}
+
+		for i := 0; i < len(objects); i += 2 {
 			testRead(t, buf, objects[i+1], proto, i)
+		}
+
+		for i := 0; i < len(objects); i += 2 {
+			testReadContext(t, buf, objects[i+1], proto, i)
 		}
 
 		for i := 0; i < len(objects); i += 2 {
@@ -121,6 +129,20 @@ func testWrite(t *testing.T, w io.Writer, obj any, proto Protocol, i int) {
 
 func testRead(t *testing.T, r io.Reader, ptr any, proto Protocol, i int) {
 	if info, err := Read(r, ptr, nil, proto, "test"); err != nil {
+		t.Fatal(err)
+	} else if info != int32(i) {
+		t.Fatalf("expected %d, got %d", i, info)
+	}
+}
+
+func testWriteContext(t *testing.T, w io.Writer, obj any, proto Protocol, i int) {
+	if err := WriteContext(t.Context(), w, obj, nil, proto, "test", int32(i)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testReadContext(t *testing.T, r io.Reader, ptr any, proto Protocol, i int) {
+	if info, err := ReadContext(t.Context(), r, ptr, nil, proto, "test"); err != nil {
 		t.Fatal(err)
 	} else if info != int32(i) {
 		t.Fatalf("expected %d, got %d", i, info)
