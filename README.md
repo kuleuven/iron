@@ -1,27 +1,22 @@
 # iRODS Native Interface in Go
 
-Replacement for <https://github.com/cyverse/go-irodsclient> that provides a clean, simple and stable interface to iRODS.
-
-It is both a golang library as well as a command line client.
+The `iron` utility is both a golang library and a command line client, that provides a clean, simple and stable interface to iRODS.
 
 [![Quality Gate Status](https://sonarqube.icts.kuleuven.be/api/project_badges/measure?project=coz%3Airon%3Amain&metric=alert_status&token=sqb_f14f2e85edf4f52db70a1b133fb98a805ebe8372)](https://sonarqube.icts.kuleuven.be/dashboard?id=coz%3Airon%3Amain)
 
-## Implementation choices
 
-* The client currently requires 4.3.2 or later. It is relatively easy to extend support to 4.2.9 - 4.3.1, if the truncate and touch operations are not needed.
-* Simplified communication code: types of messages are defined in `msg/types.go`, and are marshaled using the right format (xml, json or binary) by `msg.Marshal`. The binary part (`Bs`) of messages is not marshaled by `msg.Marshal`/`msg.Unmarshal` but directly read or written to the provided buffers in `msg.Read`/`msg.Write`.
-* Clients can choose between `iron.Conn` (one single connection) and `iron.Client` (a pool of connections) to use the provided API.
-* The `Truncate` and `Touch` methods are only available on open file handles, to help identifying the right replica to adjust. Because irods only supports those operations when the file is closed, the operations are actually done on the replica when the file is closed.
-* This client also attempts to support the native protocol, but this should be considered experimental.
+## CLI Installation
 
-## CLI installation
+> This documentation page contains all technical information about the library and contains only generic installation instructions.
+> KU Leuven or VSC users should consult the [RDM documentation pages](https://rdm-docs.icts.kuleuven.be/mango/clients/iron.html) instead for installation instructions.
+> Users from other institutes should contact their respective support staff.
 
-The CLI binary can be downloaded from <https://github.com/kuleuven/iron/releases/latest>. E.g. on a Linux system or Windows WSL:
+The CLI binary can be downloaded directly from <https://github.com/kuleuven/iron/releases/latest>. E.g. on a Linux system or Windows WSL:
 
 ```bash
 VERSION=$(curl -Ls -w %{url_effective} -o /dev/null https://github.com/kuleuven/iron/releases/latest | sed 's/.*\/v//')
-mkdir -p bin/
-curl -L -s "https://github.com/kuleuven/iron/releases/download/v${VERSION}/iron_${VERSION}_linux_amd64.tar.gz" | tar zxvf - -C bin/
+mkdir -p .local/bin/
+curl -L -s "https://github.com/kuleuven/iron/releases/download/v${VERSION}/iron_${VERSION}_linux_amd64.tar.gz" | tar zxvf - -C .local/bin/
 ```
 
 Alternatively, it can be installed with `go install`:
@@ -29,6 +24,8 @@ Alternatively, it can be installed with `go install`:
 ```bash
 go install github.com/kuleuven/iron/cmd/iron@latest
 ```
+
+Note that the released windows binaries are not signed. Signed binaries are available at the KU Leuven RDM documentation pages.
 
 ## CLI usage
 
@@ -152,6 +149,16 @@ func example() error {
     return client.Walk(ctx, "/path/to/more/data", fn, api.FetchAccess, api.FetchMetadata)
 }
 ```
+
+## Implementation choices
+
+* The client currently requires 4.3.2 or later. It is relatively easy to extend support to 4.2.9 - 4.3.1, if the truncate and touch operations are not needed.
+* New features might require a recent version of irods, i.e. support for older versions is not guaranteed.
+* Breaking changes in further versions are avoided as much as possible, but the API might change in the future if it is beneficial.
+* Simplified communication code: types of messages are defined in `msg/types.go`, and are marshaled using the right format (xml, json or binary) by `msg.Marshal`. The binary part (`Bs`) of messages is not marshaled by `msg.Marshal`/`msg.Unmarshal` but directly read or written to the provided buffers in `msg.Read`/`msg.Write`.
+* Clients can choose between `iron.Conn` (one single connection) and `iron.Client` (a pool of connections) to use the provided API.
+* The `Truncate` and `Touch` methods are only available on open file handles, to help identifying the right replica to adjust. Because irods only supports those operations when the file is closed, the operations are actually done on the replica when the file is closed.
+* This client also attempts to support the native protocol, but this should be considered experimental.
 
 ## Known issues
 
