@@ -441,7 +441,7 @@ func (e InitError) Error() string {
 }
 
 func SkipInit(cmd *cobra.Command) bool {
-	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" || cmd.Use == "version" || cmd.Use == "update" || cmd.Use == "local" {
+	if cmd.Use == "__complete [command-line]" || cmd.Use == "help [command]" || cmd.Use == "completion" || cmd.Use == "version" || cmd.Use == "update" || cmd.Use == "local" || cmd.Use == "exit" {
 		return true
 	}
 
