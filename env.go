@@ -18,7 +18,7 @@ type Env struct {
 	EncryptionKeySize             int    `json:"irods_encryption_key_size"`
 	EncryptionNumHashRounds       int    `json:"irods_encryption_num_hash_rounds"`
 	Username                      string `json:"irods_user_name"`
-	Password                      string `json:"irods_password"`
+	Password                      string `json:"irods_password,omitempty"`
 	SSLCACertificateFile          string `json:"irods_ssl_ca_certificate_file"`
 	SSLVerifyServer               string `json:"irods_ssl_verify_server"`
 	ClientServerNegotiation       string `json:"irods_client_server_negotiation"`
