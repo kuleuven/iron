@@ -39,7 +39,7 @@ func (p *prompt) Print(message string) error {
 	// If we need to open an URL, print a newline
 	if result := AuthenticateURL.FindStringSubmatch(message); len(result) > 1 {
 		if err := SystemOpenBrowser(result[1]); err != nil {
-			logrus.Errorf("error opening browser: %s", err)
+			logrus.Debugf("could not open browser: %s", err)
 		}
 	}
 
