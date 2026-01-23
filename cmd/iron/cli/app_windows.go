@@ -5,6 +5,7 @@ package cli
 import (
 	"os"
 	"os/user"
+	"strings"
 )
 
 func uidOfFile(_ os.FileInfo) int {
@@ -14,7 +15,9 @@ func uidOfFile(_ os.FileInfo) int {
 		return 1000
 	}
 
-	return strToOrd(u.Username)
+	parts := strings.Split(u.Username, `\`)
+
+	return strToOrd(parts[len(parts)-1])
 }
 
 func strToOrd(s string) int {

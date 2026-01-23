@@ -186,7 +186,7 @@ func ReadAuthFile(authFile string, uid *int) (string, error) {
 
 	defer f.Close()
 
-	var descrableUID int
+	var descrambleUID int
 
 	if uid == nil {
 		fi, err := f.Stat()
@@ -194,9 +194,9 @@ func ReadAuthFile(authFile string, uid *int) (string, error) {
 			return "", err
 		}
 
-		descrableUID = uidOfFile(fi)
+		descrambleUID = uidOfFile(fi)
 	} else {
-		descrableUID = *uid
+		descrambleUID = *uid
 	}
 
 	encoded, err := io.ReadAll(f)
@@ -204,7 +204,7 @@ func ReadAuthFile(authFile string, uid *int) (string, error) {
 		return "", err
 	}
 
-	return scramble.DecodeIrodsA(encoded, descrableUID)
+	return scramble.DecodeIrodsA(encoded, descrambleUID)
 }
 
 // WriteAuthFile writes the given password to a file using the iRODS
@@ -221,7 +221,7 @@ func WriteAuthFile(authFile, password string, uid *int) error {
 
 	defer f.Close()
 
-	var scrableUID int
+	var scrambleUID int
 
 	if uid == nil {
 		fi, err := f.Stat()
@@ -229,12 +229,12 @@ func WriteAuthFile(authFile, password string, uid *int) error {
 			return err
 		}
 
-		scrableUID = uidOfFile(fi)
+		scrambleUID = uidOfFile(fi)
 	} else {
-		scrableUID = *uid
+		scrambleUID = *uid
 	}
 
-	_, err = f.Write(scramble.EncodeIrodsA(password, scrableUID, time.Now()))
+	_, err = f.Write(scramble.EncodeIrodsA(password, scrambleUID, time.Now()))
 
 	return err
 }
