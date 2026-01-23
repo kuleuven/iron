@@ -41,7 +41,7 @@ func writeConfig(t *testing.T, env iron.Env) (string, error) {
 		return "", err
 	}
 
-	scrambledPassword := scramble.EncodeIrodsA(env.Password, uid(fi), time.Now())
+	scrambledPassword := scramble.EncodeIrodsA(env.Password, uidOfFile(fi), time.Now())
 
 	return f.Name(), os.WriteFile(filepath.Join(filepath.Dir(f.Name()), ".irodsA"), scrambledPassword, 0o600)
 }
@@ -107,7 +107,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 
 	defer os.Remove(envfile)
 
-	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword")
+	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword")
+	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 	linuxproc "github.com/c9s/goprocinfo/linux"
 )
 
-func uid(fi os.FileInfo) int {
+func uidOfFile(fi os.FileInfo) int {
 	if s, ok := fi.Sys().(*syscall.Stat_t); ok {
 		return int(s.Uid)
 	}

@@ -109,7 +109,7 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			authFile, cleanup := tt.setupFile(t)
 			defer cleanup()
 
-			result, err := ReadAuthFile(authFile)
+			result, err := ReadAuthFile(authFile, nil)
 
 			if tt.expectError {
 				if err == nil {
@@ -165,7 +165,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				}
 
 				// Check file content by reading it back
-				result, err := ReadAuthFile(filePath)
+				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
 					return
@@ -189,7 +189,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			expectError: false,
 			validateFile: func(t *testing.T, filePath string) {
 				// Check that content was overwritten
-				result, err := ReadAuthFile(filePath)
+				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
 					return
@@ -206,7 +206,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			setupDir:    func(t *testing.T, tmpDir string) {},
 			expectError: false,
 			validateFile: func(t *testing.T, filePath string) {
-				result, err := ReadAuthFile(filePath)
+				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
 					return
@@ -223,7 +223,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			setupDir:    func(t *testing.T, tmpDir string) {},
 			expectError: false,
 			validateFile: func(t *testing.T, filePath string) {
-				result, err := ReadAuthFile(filePath)
+				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
 					return
@@ -265,7 +265,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				authFile = tt.authFile
 			}
 
-			err := WriteAuthFile(authFile, tt.password)
+			err := WriteAuthFile(authFile, tt.password, nil)
 
 			if tt.expectError {
 				if err == nil {

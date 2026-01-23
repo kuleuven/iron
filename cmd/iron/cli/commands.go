@@ -77,7 +77,7 @@ func (a *App) auth() *cobra.Command {
 				return err
 			}
 
-			return a.passwordStore(cmd.Context(), password)
+			return a.passwordStore(cmd.Context(), a.Client.Env(), password)
 		},
 		PostRun: func(cmd *cobra.Command, args []string) {
 			// Reset the workdir if needed

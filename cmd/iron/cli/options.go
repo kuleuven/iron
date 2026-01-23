@@ -33,7 +33,7 @@ type ConfigStore func(ctx context.Context, args []string) (string, error)
 
 // PasswordStore is a function that can persist an irods password, if wanted,
 // for use in subsequent commands.
-type PasswordStore func(ctx context.Context, password string) error
+type PasswordStore func(ctx context.Context, env iron.Env, password string) error
 
 // WorkdirStore is a function that can persist a workdir, if wanted,
 // for use in subsequent commands.
@@ -83,7 +83,7 @@ func FileLoader(file string) Loader {
 				authFile = f
 			}
 
-			if password, err := ReadAuthFile(authFile); err == nil {
+			if password, err := ReadAuthFile(authFile, env.IrodsAuthenticationUID); err == nil {
 				env.Password = password
 				env.AuthScheme = "native"
 			}
@@ -175,10 +175,10 @@ func FileStore(file string, template iron.Env) ConfigStore {
 }
 
 // ReadAuthFile reads the contents of a file and decodes it according to the
-// iRODS scramble algorithm. The uid of the file owner is used to decode
-// the contents.
+// iRODS scramble algorithm. If no uid is given, the uid of the file is used
+// to decode the contents.
 // The file is expected to have been created with the iRODS `iinit` command.
-func ReadAuthFile(authFile string) (string, error) {
+func ReadAuthFile(authFile string, uid *int) (string, error) {
 	f, err := os.Open(authFile)
 	if err != nil {
 		return "", err
@@ -186,9 +186,17 @@ func ReadAuthFile(authFile string) (string, error) {
 
 	defer f.Close()
 
-	fi, err := f.Stat()
-	if err != nil {
-		return "", err
+	var descrableUID int
+
+	if uid == nil {
+		fi, err := f.Stat()
+		if err != nil {
+			return "", err
+		}
+
+		descrableUID = uidOfFile(fi)
+	} else {
+		descrableUID = *uid
 	}
 
 	encoded, err := io.ReadAll(f)
@@ -196,7 +204,7 @@ func ReadAuthFile(authFile string) (string, error) {
 		return "", err
 	}
 
-	return scramble.DecodeIrodsA(encoded, uid(fi))
+	return scramble.DecodeIrodsA(encoded, descrableUID)
 }
 
 // WriteAuthFile writes the given password to a file using the iRODS
@@ -205,7 +213,7 @@ func ReadAuthFile(authFile string) (string, error) {
 // and the permissions are set to 0600. If the file is already present,
 // the content is overwritten. The uid of the file owner is used to
 // encode the password.
-func WriteAuthFile(authFile, password string) error {
+func WriteAuthFile(authFile, password string, uid *int) error {
 	f, err := os.OpenFile(authFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
@@ -213,12 +221,20 @@ func WriteAuthFile(authFile, password string) error {
 
 	defer f.Close()
 
-	fi, err := f.Stat()
-	if err != nil {
-		return err
+	var scrableUID int
+
+	if uid == nil {
+		fi, err := f.Stat()
+		if err != nil {
+			return err
+		}
+
+		scrableUID = uidOfFile(fi)
+	} else {
+		scrableUID = *uid
 	}
 
-	_, err = f.Write(scramble.EncodeIrodsA(password, uid(fi), time.Now()))
+	_, err = f.Write(scramble.EncodeIrodsA(password, scrableUID, time.Now()))
 
 	return err
 }
@@ -236,10 +252,10 @@ func WithPasswordStore(store PasswordStore) Option {
 }
 
 func FilePasswordStore(file string) PasswordStore {
-	return func(_ context.Context, password string) error {
+	return func(_ context.Context, env iron.Env, password string) error {
 		authFile := filepath.Join(filepath.Dir(file), ".irodsA")
 
-		return WriteAuthFile(authFile, password)
+		return WriteAuthFile(authFile, password, env.IrodsAuthenticationUID)
 	}
 }
 
