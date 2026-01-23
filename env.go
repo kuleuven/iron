@@ -26,7 +26,7 @@ type Env struct {
 	DefaultResource               string `json:"irods_default_resource"`
 	ProxyUsername                 string `json:"irods_proxy_user"` // Authenticate with proxy credentials
 	ProxyZone                     string `json:"irods_proxy_zone"` // Authenticate with proxy credentials
-	IrodsAuthenticationUID        *int    `json:"irods_authentication_uid,omitempty"`
+	IrodsAuthenticationUID        *int   `json:"irods_authentication_uid,omitempty"`
 
 	// For pam authentication, request to generate a password that is valid for the given TTL.
 	// The server will determine the actual TTL based on the server thresholds.
