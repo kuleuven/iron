@@ -137,10 +137,13 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 }
 
 func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
+	uid := 9999
+
 	tests := []struct {
 		skip          bool
 		name          string
 		authFile      string
+		uid           *int
 		password      string
 		setupDir      func(t *testing.T, tmpDir string)
 		expectError   bool
@@ -166,6 +169,36 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 
 				// Check file content by reading it back
 				result, err := ReadAuthFile(filePath, nil)
+				if err != nil {
+					t.Errorf("failed to read back written file: %v", err)
+					return
+				}
+
+				if result != "newpassword" {
+					t.Errorf("expected to read back 'newpassword', got '%s'", result)
+				}
+			},
+		},
+		{
+			name:        "create new file successfully",
+			password:    "newpassword",
+			setupDir:    func(t *testing.T, dir string) {},
+			expectError: false,
+			uid:         &uid,
+			validateFile: func(t *testing.T, filePath string) {
+				// Check file permissions
+				fi, err := os.Stat(filePath)
+				if err != nil {
+					t.Errorf("failed to stat created file: %v", err)
+					return
+				}
+
+				if fi.Mode().Perm() != 0o600 {
+					t.Errorf("expected file permissions 0600, got %o", fi.Mode().Perm())
+				}
+
+				// Check file content by reading it back
+				result, err := ReadAuthFile(filePath, &uid)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
 					return
@@ -265,7 +298,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				authFile = tt.authFile
 			}
 
-			err := WriteAuthFile(authFile, tt.password, nil)
+			err := WriteAuthFile(authFile, tt.password, tt.uid)
 
 			if tt.expectError {
 				if err == nil {
