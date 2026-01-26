@@ -427,7 +427,7 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 			source := filepath.Clean(args[0])
 			target := a.Path(args[1])
 
-			if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") && !strings.HasSuffix(args[0], string(os.PathSeparator)) {
+			if strings.HasSuffix(args[1], "/") && !localPathEndsWithSeparator(args[0]) {
 				target = a.Path(args[1] + filepath.Base(source))
 			}
 
@@ -506,7 +506,7 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 			source := a.Path(args[0])
 			target := filepath.Clean(args[1])
 
-			if (strings.HasSuffix(args[1], "/") || strings.HasSuffix(args[1], string(os.PathSeparator))) && !strings.HasSuffix(args[0], "/") {
+			if localPathEndsWithSeparator(args[1]) && !strings.HasSuffix(args[0], "/") {
 				target = filepath.Join(target, Name(source))
 			}
 
@@ -523,7 +523,7 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 				return a.Download(cmd.Context(), target, source, opts)
 			}
 
-			if !strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[1], string(os.PathSeparator)) {
+			if !localPathEndsWithSeparator(args[1]) {
 				return ErrAmbiguousTarget
 			}
 
@@ -537,6 +537,10 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 
 	return cmd
+}
+
+func localPathEndsWithSeparator(path string) bool {
+	return strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(os.PathSeparator))
 }
 
 func (a *App) cat() *cobra.Command {
