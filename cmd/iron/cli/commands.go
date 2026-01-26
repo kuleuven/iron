@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -250,6 +251,14 @@ func (a *App) mv() *cobra.Command {
 	}
 }
 
+const copyDescription = `Copy a file or directory to the target path.
+
+When copying a collection, this command will compare the source and target, 
+and only copy the missing parts. It can be repeated to keep the target up to date.
+In this case, the target collection must end in a slash to avoid ambiguity.
+If the source collection ends in a slash, files underneath will be placed directly
+in the target collection. Otherwise, a subcollection with the same name will be created.`
+
 func (a *App) cp() *cobra.Command {
 	var (
 		skip       bool
@@ -259,25 +268,24 @@ func (a *App) cp() *cobra.Command {
 	examples := []string{
 		a.name + " cp /path/to/collection1/file.txt /path/to/collection2/file.txt  (target should not exist)",
 		a.name + " cp /path/to/collection1/file.txt /path/to/collection2/          (target should not exist)",
-		a.name + " cp /path/to/collection1 /path/to/collection2                    (target may exist)",
 		a.name + " cp /path/to/collection1 /path/to/collection2/                   (target may exist)",
+		a.name + " cp /path/to/collection1/ /path/to/collection2/                  (target may exist)",
 	}
 
 	cmd := &cobra.Command{
 		Use:               "cp <path> <target path>",
 		Short:             "Copy a data object or a collection",
+		Long:              copyDescription,
 		Args:              cobra.ExactArgs(2),
 		Example:           strings.Join(examples, "\n"),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src := a.Path(args[0])
-			dest := args[1]
+			dest := a.Path(args[1])
 
-			if strings.HasSuffix(dest, "/") {
-				dest += Name(src)
+			if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
+				dest = a.Path(args[1] + Name(src))
 			}
-
-			dest = a.Path(dest)
 
 			obj, err := a.GetRecord(cmd.Context(), src)
 			if err != nil {
@@ -290,6 +298,10 @@ func (a *App) cp() *cobra.Command {
 					MaxThreads: maxThreads,
 					Output:     cmd.OutOrStdout(),
 					SkipTrash:  skip,
+				}
+
+				if !strings.HasSuffix(args[1], "/") {
+					return ErrAmbiguousTarget
 				}
 
 				return a.CopyDir(cmd.Context(), src, dest, opts)
@@ -374,6 +386,16 @@ func (a *App) checksum() *cobra.Command {
 	}
 }
 
+var ErrAmbiguousTarget = errors.New("ambiguous command, please specify a target collection or directory with a trailing slash")
+
+const uploadDescription = `Upload a file or directory to the target path.
+This command will compare the source and target, and only upload the missing parts.
+It can be repeated to keep the target up to date.
+
+When uploading a directory, the target collection must end in a slash to avoid ambiguity.
+If the source directory ends in a slash, files underneath will be placed directly
+in the target collection. Otherwise, a subcollection with the same name will be created.`
+
 func (a *App) upload() *cobra.Command {
 	opts := transfer.Options{
 		SyncModTime: true,
@@ -381,16 +403,19 @@ func (a *App) upload() *cobra.Command {
 	}
 
 	examples := []string{
+		a.name + " upload /local/file.txt",
 		a.name + " upload /local/file.txt /path/to/collection/file.txt",
 		a.name + " upload /local/file.txt /path/to/collection/",
-		a.name + " upload /local/folder /path/to/collection",
+		a.name + " upload /local/folder",
 		a.name + " upload /local/folder /path/to/collection/",
+		a.name + " upload /local/folder/ /path/to/collection/",
 	}
 
 	cmd := &cobra.Command{
 		Use:               "upload <local file> [target path]",
 		Aliases:           []string{"put"},
 		Short:             "Upload a local file or directory to the destination path",
+		Long:              uploadDescription,
 		Example:           strings.Join(examples, "\n"),
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: a.CompleteArgs,
@@ -399,13 +424,14 @@ func (a *App) upload() *cobra.Command {
 				args = append(args, a.Workdir+"/")
 			}
 
-			if strings.HasSuffix(args[1], "/") {
-				args[1] += Name(args[0])
-			}
-
+			source := filepath.Clean(args[0])
 			target := a.Path(args[1])
 
-			fi, err := os.Stat(args[0])
+			if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") && !strings.HasSuffix(args[0], string(os.PathSeparator)) {
+				target = a.Path(args[1] + filepath.Base(source))
+			}
+
+			fi, err := os.Stat(source)
 			if err != nil {
 				return err
 			}
@@ -415,10 +441,14 @@ func (a *App) upload() *cobra.Command {
 			if !fi.IsDir() {
 				opts.SyncModTime = false
 
-				return a.Upload(cmd.Context(), args[0], target, opts)
+				return a.Upload(cmd.Context(), source, target, opts)
 			}
 
-			return a.UploadDir(cmd.Context(), args[0], target, opts)
+			if !strings.HasSuffix(args[1], "/") {
+				return ErrAmbiguousTarget
+			}
+
+			return a.UploadDir(cmd.Context(), source, target, opts)
 		},
 	}
 
@@ -432,6 +462,14 @@ func (a *App) upload() *cobra.Command {
 	return cmd
 }
 
+const downloadDescription = `Download a data object or a collection to the local path.
+This command will compare the source and target, and only download the missing parts.
+It can be repeated to keep the target up to date.
+
+When downloading a collection, the target folder must end in a slash to avoid ambiguity.
+If the source collection ends in a slash, files underneath will be placed directly
+in the target folder. Otherwise, a subfolder with the same name will be created.`
+
 func (a *App) download() *cobra.Command {
 	opts := transfer.Options{
 		SyncModTime: true,
@@ -439,16 +477,19 @@ func (a *App) download() *cobra.Command {
 	}
 
 	examples := []string{
+		a.name + " download /path/to/collection/file.txt",
 		a.name + " download /path/to/collection/file.txt /local/file.txt",
 		a.name + " download /path/to/collection/file.txt /local/folder/",
-		a.name + " download /path/to/collection /local/folder",
+		a.name + " download /path/to/collection",
 		a.name + " download /path/to/collection /local/folder/",
+		a.name + " download /path/to/collection/ /local/folder/",
 	}
 
 	cmd := &cobra.Command{
 		Use:               "download <path> [local file]",
 		Aliases:           []string{"get"},
 		Short:             "Download a data object or a collection to the local path",
+		Long:              downloadDescription,
 		Example:           strings.Join(examples, "\n"),
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: a.CompleteArgs,
@@ -463,10 +504,10 @@ func (a *App) download() *cobra.Command {
 			}
 
 			source := a.Path(args[0])
-			target := args[1]
+			target := filepath.Clean(args[1])
 
-			if strings.HasSuffix(target, "/") {
-				target += Name(source)
+			if (strings.HasSuffix(args[1], "/") || strings.HasSuffix(args[1], string(os.PathSeparator))) && !strings.HasSuffix(args[0], "/") {
+				target = filepath.Join(target, Name(source))
 			}
 
 			record, err := a.GetRecord(cmd.Context(), source)
@@ -480,6 +521,10 @@ func (a *App) download() *cobra.Command {
 				opts.SyncModTime = false
 
 				return a.Download(cmd.Context(), target, source, opts)
+			}
+
+			if !strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[1], string(os.PathSeparator)) {
+				return ErrAmbiguousTarget
 			}
 
 			return a.DownloadDir(cmd.Context(), target, source, opts)
