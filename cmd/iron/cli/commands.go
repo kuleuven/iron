@@ -396,7 +396,7 @@ When uploading a directory, the target collection must end in a slash to avoid a
 If the source directory ends in a slash, files underneath will be placed directly
 in the target collection. Otherwise, a subcollection with the same name will be created.`
 
-func (a *App) upload() *cobra.Command {
+func (a *App) upload() *cobra.Command { //nolint:funlen
 	opts := transfer.Options{
 		SyncModTime: true,
 		MaxQueued:   10000,
@@ -470,7 +470,7 @@ When downloading a collection, the target folder must end in a slash to avoid am
 If the source collection ends in a slash, files underneath will be placed directly
 in the target folder. Otherwise, a subfolder with the same name will be created.`
 
-func (a *App) download() *cobra.Command {
+func (a *App) download() *cobra.Command { //nolint:funlen
 	opts := transfer.Options{
 		SyncModTime: true,
 		MaxQueued:   10000,
@@ -675,12 +675,45 @@ func (a *App) save() *cobra.Command {
 	return cmd
 }
 
+var chmodDescription = `Modify access to data objects and collections.
+
+By default, the original creator of a data object has 'own' permission.
+
+The iRODS Permission Model is linear with 10 levels.
+Access levels can be specified both to data objects and collections.
+A granted access level also includes access to all lower levels.
+
+    'own'
+    'delete_object'
+    'modify_object' (= 'write')
+    'create_object'
+    'delete_metadata'
+    'modify_metadata'
+    'create_metadata'
+    'read_object'   (= 'read')
+    'read_metadata'
+    'null'
+
+The iRODS Permission Model allows for multiple ownership.
+Granting 'own' to another user or group will allow them to grant
+permission to and revoke permission from others (including you).
+
+Setting the access level to 'null' will remove access for that user or group.
+
+Example Operations requiring permissions:
+
+    irm - requires 'delete_object' or greater
+    imv - requires 'delete_object' or greater, due to removal of old name
+    iput - requires 'modify_object' or greater
+    iget - requires 'read_object' or greater`
+
 func (a *App) chmod() *cobra.Command {
 	var recursive bool
 
 	cmd := &cobra.Command{
-		Use:   "chmod <permission> <user> <path>",
+		Use:   "chmod <access level> <user or group> <path>",
 		Short: "Change permissions",
+		Long:  chmodDescription,
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.ModifyAccess(cmd.Context(), a.Path(args[2]), args[1], args[0], recursive)
@@ -692,13 +725,29 @@ func (a *App) chmod() *cobra.Command {
 	return cmd
 }
 
+const inheritDescription = `Change permission inheritance for a collection.
+
+The inherit/noinherit form sets or clears the inheritance attribute of
+a collection. When collections have this attribute set,
+new data objects and subcollections added to the collection inherit the
+access permissions (ACLs) of the collection. 
+
+The inherit status is shown by the + symbol when listing collections.`
+
 func (a *App) inherit() *cobra.Command {
 	var recursive, inherit bool
 
+	examples := []string{
+		"  Enable inheritance for a collection:\n\t" + a.name + " inherit collection",
+		"  Disable inheritance for a collection:\n\t" + a.name + " inherit --enable=false collection",
+	}
+
 	cmd := &cobra.Command{
-		Use:   "inherit <collection path>",
-		Short: "Change permission inheritance",
-		Args:  cobra.ExactArgs(1),
+		Use:     "inherit <collection path>",
+		Short:   "Change permission inheritance",
+		Long:    inheritDescription,
+		Example: strings.Join(examples, "\n"),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.SetCollectionInheritance(cmd.Context(), a.Path(args[0]), inherit, recursive)
 		},
