@@ -82,7 +82,7 @@ func (p *prompt) Ask(message string) (string, error) {
 			break
 		}
 
-		value.WriteString(string(r[0])) //nolint:gosec
+		value.WriteString(string(r[0]))
 	}
 
 	return value.String(), err

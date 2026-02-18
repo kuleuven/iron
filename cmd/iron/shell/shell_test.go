@@ -449,6 +449,7 @@ func TestCobraShellCompleter(t *testing.T) {
 	if suggestions != nil {
 		t.Errorf("Expected nil suggestions for empty line, got %v", suggestions)
 	}
+
 	// Note: Testing actual completion requires the cobra completion system to be working,
 	// which is complex to set up in unit tests. This test verifies the basic structure.
 }

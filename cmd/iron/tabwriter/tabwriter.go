@@ -80,11 +80,16 @@ func (tw *TabWriter) outputRows(rows [][]string, widths []int) error {
 
 			rowStarted = true
 		}
+
+		// Eat all spaces at the end of the line
+		if _, err := tw.Writer.Write(eatSpaces(output.Bytes())); err != nil {
+			return err
+		}
+
+		output.Reset()
 	}
 
-	_, err := tw.Writer.Write(output.Bytes())
-
-	return err
+	return nil
 }
 
 func emptyCell(cell string) string {
@@ -154,4 +159,23 @@ func findControlEscapeSequence(buf []byte) ([]byte, int) {
 	}
 
 	return buf, 0
+}
+
+func eatSpaces(buf []byte) []byte {
+	if len(buf) == 0 {
+		return buf
+	}
+
+	last := buf[len(buf)-1]
+
+	if last != '\n' && last != '\f' {
+		return buf
+	}
+
+	for len(buf) > 1 && (buf[len(buf)-2] == ' ' || buf[len(buf)-2] == '\t') {
+		buf[len(buf)-2] = last
+		buf = buf[:len(buf)-1]
+	}
+
+	return buf
 }
