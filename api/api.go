@@ -93,6 +93,11 @@ type File interface {
 	// If the file was reopened, Close() will block until the additional handles are closed.
 	Close() error
 
+	// CloseReturnConnection closes the file and returns the connection used by the file.
+	// The connection itself is not closed and should be closed by the caller.
+	// The connection is returned regardless of whether an error occurs during closing the file.
+	CloseReturnConnection() (Conn, error)
+
 	// Size returns the size of the file
 	Size() (int64, error)
 

@@ -107,6 +107,12 @@ func (h *handle) Size() (int64, error) {
 }
 
 func (h *handle) Close() error {
+	conn, err := h.CloseReturnConnection()
+
+	return multierr.Append(err, conn.Close())
+}
+
+func (h *handle) CloseReturnConnection() (Conn, error) {
 	h.unregisterEmergencyCloser()
 
 	if h.reopened {
@@ -116,9 +122,8 @@ func (h *handle) Close() error {
 		defer h.object.wg.Done()
 
 		err := h.doCloseReopened()
-		err = multierr.Append(err, h.conn.Close())
 
-		return err
+		return h.conn, err
 	}
 
 	h.object.wg.Wait()
@@ -140,31 +145,24 @@ func (h *handle) Close() error {
 		replicaInfo, err = h.getReplicaAccessInfo()
 		if err != nil {
 			err = multierr.Append(err, h.doCloseHandle())
-			err = multierr.Append(err, h.conn.Close())
 
-			return err
+			return h.conn, err
 		}
 	}
 
 	if err := h.doCloseHandle(); err != nil {
-		err = multierr.Append(err, h.conn.Close())
-
-		return err
+		return h.conn, err
 	}
 
 	if err := h.doTruncate(replicaInfo); err != nil {
-		err = multierr.Append(err, h.conn.Close())
-
-		return err
+		return h.conn, err
 	}
 
 	if err := h.doTouch(replicaInfo); err != nil {
-		err = multierr.Append(err, h.conn.Close())
-
-		return err
+		return h.conn, err
 	}
 
-	return h.conn.Close()
+	return h.conn, nil
 }
 
 func (h *handle) doCloseReopened() error {

@@ -33,4 +33,5 @@ const (
 	FILE_PATH_KW          KeyWord = "filePath"
 	REG_REPL_KW           KeyWord = "regRepl"
 	FORCE_CHKSUM_KW       KeyWord = "forceChksum"
+	VERIFY_CHKSUM_KW      KeyWord = "verifyChksum"
 )

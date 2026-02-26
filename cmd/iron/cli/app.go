@@ -113,6 +113,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.stat(),
 		a.meta(),
 		a.checksum(),
+		a.checksums(),
 		a.version(),
 		a.sleep(),
 		a.ps(),

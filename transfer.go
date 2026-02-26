@@ -71,6 +71,14 @@ func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options t
 	})
 }
 
+// ComputeChecksums computes the checksums of a remote directory on the iRODS server using client recursion.
+// The remote file refers to an iRODS path.
+func (c *Client) ComputeChecksums(ctx context.Context, remote string, options transfer.Options) error {
+	return c.runWorker(options, func(worker *transfer.Worker) {
+		worker.ComputeChecksums(ctx, remote)
+	})
+}
+
 // runWorker creates a new pool with the given number of threads and
 // creates a new transfer.Worker with it. The callback function is called
 // with the created worker. The worker is started and the error returned

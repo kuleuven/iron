@@ -34,6 +34,8 @@ type Options struct {
 	// MaxQueued indicates the maximum number of queued files
 	// when uploading or downloading a directory
 	MaxQueued int
+	// ComputeChecksums indicates whether checksums should be computed after transferring files
+	ComputeChecksums bool
 	// VerifyChecksums indicates whether checksums should be verified
 	// to compare an existing file when syncing (UploadDir, DownloadDir)
 	VerifyChecksums bool
@@ -272,7 +274,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 			err = w.Touch(r.ModTime())
 		}
 
-		err = multierr.Append(err, w.Close())
+		err = multierr.Append(err, worker.closeAndComputeChecksum(ctx, w))
 
 		err = multierr.Append(err, r.Close())
 		if err != nil {
@@ -283,6 +285,27 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 
 		return nil
 	})
+}
+
+func (worker *Worker) closeAndComputeChecksum(ctx context.Context, w api.File) error {
+	conn, err := w.CloseReturnConnection()
+	if err != nil {
+		return multierr.Append(err, conn.Close())
+	}
+
+	if !worker.options.ComputeChecksums {
+		return conn.Close()
+	}
+
+	request := msg.DataObjectRequest{
+		Path: w.Name(),
+	}
+
+	var checksum msg.String
+
+	err = conn.Request(ctx, msg.DATA_OBJ_CHKSUM_AN, request, &checksum)
+
+	return multierr.Append(err, conn.Close())
 }
 
 func (worker *Worker) tryOpenDataObject(ctx context.Context, remote string, mode int) (api.File, error) {
@@ -1103,6 +1126,74 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 
 	for ok {
 		obj, ok = worker.removeAll(ch, obj, queue)
+	}
+}
+
+// ComputeChecksums computes the checksums of all files in a directory on the iRODS server.
+// It handles the recursion client side, but individual files are processed server-side only.
+// The call blocks until the source directory has been completely scanned.
+func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
+	queue := make(chan Task, worker.options.MaxQueued)
+
+	// Execute the deletions
+	worker.wg.Go(func() error {
+		for u := range queue {
+			if ctx.Err() != nil {
+				continue
+			}
+
+			switch u.Action { //nolint:exhaustive
+			case ComputeChecksum:
+				worker.action(u.Path, u.IrodsPath, ComputeChecksum, func() error {
+					_, err := worker.TransferPool.Checksum(ctx, u.IrodsPath, true)
+
+					return err
+				})
+
+			case TransferFile: // Actually we do VerifyChecksums here, but we want to report the progress as a transfer
+				worker.action(u.Path, u.IrodsPath, TransferFile, func() error {
+					return worker.TransferPool.VerifyChecksum(ctx, u.IrodsPath)
+				})
+			}
+		}
+
+		return ctx.Err()
+	})
+
+	// Walk the directory
+	defer close(queue)
+
+	err := worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
+		if err != nil {
+			return worker.options.ErrorHandler("", irodsPath, err)
+		}
+
+		if record.IsDir() {
+			return nil
+		}
+
+		if _, hasChecksum := parseChecksum(record); hasChecksum && worker.options.VerifyChecksums {
+			queue <- Task{
+				Action:    TransferFile, // TransferFile = verify checksum
+				IrodsPath: irodsPath,
+			}
+
+			return nil
+		} else if hasChecksum || !worker.options.ComputeChecksums {
+			return nil
+		}
+
+		queue <- Task{
+			Action:    ComputeChecksum,
+			IrodsPath: irodsPath,
+		}
+
+		return nil
+	}, api.NoSkip)
+	if err != nil {
+		worker.wg.Go(func() error {
+			return err
+		})
 	}
 }
 

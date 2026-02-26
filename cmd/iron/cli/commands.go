@@ -386,6 +386,40 @@ func (a *App) checksum() *cobra.Command {
 	}
 }
 
+func (a *App) checksums() *cobra.Command {
+	var compute, verify bool
+
+	cmd := &cobra.Command{
+		Use:               "checksums <collection path>",
+		Short:             "Compute all checksums of objects in a collection and all subcollections",
+		Long:              `Compute the missing checksums of all data objects in a collection and all subcollections. This command will skip files that already have a checksum.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !compute && !verify {
+				return errors.New("at least one of --compute or --verify must be set")
+			}
+
+			path := a.Path(args[0])
+
+			opts := transfer.Options{
+				MaxQueued:        10000,
+				MaxThreads:       1,
+				Output:           cmd.OutOrStdout(),
+				ComputeChecksums: compute,
+				VerifyChecksums:  verify,
+			}
+
+			return a.ComputeChecksums(cmd.Context(), path, opts)
+		},
+	}
+
+	cmd.Flags().BoolVar(&compute, "compute", false, "Compute missing checksums")
+	cmd.Flags().BoolVar(&verify, "verify", false, "Verify existing checksums")
+
+	return cmd
+}
+
 var ErrAmbiguousTarget = errors.New("ambiguous command, please specify a target collection or directory with a trailing slash")
 
 const uploadDescription = `Upload a file or directory to the target path.

@@ -407,6 +407,37 @@ func (api *API) Checksum(ctx context.Context, path string, force bool) ([]byte, 
 	return base64.StdEncoding.DecodeString(strings.TrimPrefix(checksum.String, shaPrefix))
 }
 
+// VerifyChecksum verifies the checksum of a data object against the checksum stored in the database.
+// If no checksum is present, an error is returned.
+// A target resource can be specified with WithDefaultResource() first if needed.
+// A replica number can be specified with WithReplicaNumber() first if needed.
+func (api *API) VerifyChecksum(ctx context.Context, path string) error {
+	request := msg.DataObjectRequest{
+		Path: path,
+	}
+
+	if api.DefaultResource != "" {
+		request.KeyVals.Add(msg.DEST_RESC_NAME_KW, api.DefaultResource)
+	}
+
+	if api.ReplicaNumber != nil {
+		request.KeyVals.Add(msg.REPL_NUM_KW, strconv.Itoa(*api.ReplicaNumber))
+	}
+
+	request.KeyVals.Add(msg.VERIFY_CHKSUM_KW, "")
+
+	api.setFlags(&request.KeyVals)
+
+	conn, err := api.Connect(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CHKSUM_AN, request, &msg.EmptyResponse{}, path)
+}
+
 // ModifyAccess modifies the access level of a data object or collection.
 // For users of federated zones, specify <name>#<zone> as user.
 func (api *API) ModifyAccess(ctx context.Context, path, user, accessLevel string, recursive bool) error {
