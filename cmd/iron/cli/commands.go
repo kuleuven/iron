@@ -261,8 +261,8 @@ in the target collection. Otherwise, a subcollection with the same name will be 
 
 func (a *App) cp() *cobra.Command {
 	var (
-		skip, newer bool
-		maxThreads  int
+		skip, newer, dryRun bool
+		maxThreads          int
 	)
 
 	examples := []string{
@@ -299,6 +299,7 @@ func (a *App) cp() *cobra.Command {
 					Output:      cmd.OutOrStdout(),
 					SkipTrash:   skip,
 					OnlyIfNewer: newer,
+					DryRun:      dryRun,
 				}
 
 				if !strings.HasSuffix(args[1], "/") {
@@ -315,6 +316,7 @@ func (a *App) cp() *cobra.Command {
 	cmd.Flags().BoolVar(&newer, "newer", false, "Only copy files that are newer than the existing files in the destination")
 	cmd.Flags().BoolVarP(&skip, "delete-skip-trash", "S", false, "Do not move to trash (applies only when copying a collection)")
 	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use (applies only when copying a collection)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Only print the actions that would be taken, without performing any changes")
 
 	return cmd
 }
@@ -483,6 +485,7 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
 	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to upload")
 	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after uploading files, and verify equality to ensure transfer integrity")
+	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Only print the actions that would be taken, without performing any changes")
 
 	return cmd
 }
@@ -562,6 +565,7 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
 	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to download")
 	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after downloading files, and verify equality to ensure transfer integrity")
+	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Only print the actions that would be taken, without performing any changes")
 
 	return cmd
 }

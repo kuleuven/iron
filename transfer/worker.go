@@ -15,6 +15,7 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 )
@@ -37,14 +38,17 @@ type Options struct {
 	// when uploading or downloading a directory
 	MaxQueued int
 	// OnlyIfNewer indicates whether files should only be transferred
-	// when syncing (UploadDir, DownloadDir) if the source file is newer than the destination file
+	// when syncing (UploadDir, DownloadDir, CopyDir) if the source file is newer than the destination file
 	OnlyIfNewer bool
 	// CompareChecksums indicates whether checksums should be verified
-	// to compare an existing file when syncing (UploadDir, DownloadDir)
+	// to compare an existing file when syncing (UploadDir, DownloadDir, CopyDir)
 	CompareChecksums bool
 	// IntegrityChecksums indicates whether checksums should be computed before
 	// and after the transfer to verify the integrity of the transfer
 	IntegrityChecksums bool
+	// DryRun will only print actions for directory operations (UploadDir, DownloadDir, RemoveDir, CopyDir)
+	// It will not apply to file operations (Upload, Download, ToStream, FromStream)!
+	DryRun bool
 	// Output will, if set, display a progress bar and occurring errors
 	// If ErrorHandler or ProgressHandler is set, this option is ignored
 	Output io.Writer
@@ -657,7 +661,7 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
 	// Execute the uploads
-	worker.wg.Go(func() error {
+	worker.wg.Go(func() error { //nolint:dupl
 		for u := range queue {
 			if ctx.Err() != nil {
 				continue
@@ -667,19 +671,19 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case SetModificationTime:
-				worker.action(u.Path, u.IrodsPath, SetModificationTime, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
+				worker.action(u, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
 
 			case TransferFile:
 				worker.uploadAction(ctx, u)
 
 			case RemoveFile:
-				worker.action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.action(u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.action(u.Path, u.IrodsPath, RemoveDirectory, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case CreateDirectory:
-				worker.action(u.Path, u.IrodsPath, CreateDirectory, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
+				worker.action(u, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
 			}
 		}
 
@@ -696,6 +700,12 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 }
 
 func (worker *Worker) uploadAction(ctx context.Context, u Task) {
+	if worker.options.DryRun {
+		worker.log(u)
+
+		return
+	}
+
 	r, err := os.Open(u.Path)
 	if err != nil {
 		worker.Error(u.Path, u.IrodsPath, err)
@@ -757,16 +767,16 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case SetModificationTime:
-				worker.action(u.Path, u.IrodsPath, SetModificationTime, func() error { return os.Chtimes(u.Path, time.Time{}, u.ModTime) })
+				worker.action(u, func() error { return os.Chtimes(u.Path, time.Time{}, u.ModTime) })
 
 			case TransferFile:
-				worker.Download(ctx, u.Path, u.IrodsPath)
+				worker.downloadAction(ctx, u)
 
 			case RemoveFile, RemoveDirectory:
-				worker.action(u.Path, u.IrodsPath, u.Action, func() error { return os.Remove(u.Path) })
+				worker.action(u, func() error { return os.Remove(u.Path) })
 
 			case CreateDirectory:
-				worker.action(u.Path, u.IrodsPath, CreateDirectory, func() error { return os.Mkdir(u.Path, 0o755) })
+				worker.action(u, func() error { return os.Mkdir(u.Path, 0o755) })
 			}
 		}
 
@@ -780,6 +790,16 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 			return err
 		})
 	}
+}
+
+func (worker *Worker) downloadAction(ctx context.Context, u Task) {
+	if worker.options.DryRun {
+		worker.log(u)
+
+		return
+	}
+
+	worker.Download(ctx, u.Path, u.IrodsPath)
 }
 
 type Direction int
@@ -1088,12 +1108,10 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 	}
 
 	if opts.DisableUpdateInPlace {
-		if worker.options.ProgressHandler != nil {
-			worker.options.ProgressHandler(Progress{
-				Action: RemoveFile,
-				Label:  ProgressLabel(left.path, left.irodsPath),
-			})
-		}
+		worker.Progress(Progress{
+			Action: RemoveFile,
+			Label:  ProgressLabel(left.path, left.irodsPath),
+		})
 
 		queue <- Task{
 			Action:    RemoveFile,
@@ -1102,13 +1120,11 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 		}
 	}
 
-	if worker.options.ProgressHandler != nil {
-		worker.options.ProgressHandler(Progress{
-			Action: TransferFile,
-			Label:  ProgressLabel(left.path, left.irodsPath),
-			Size:   left.info.Size(),
-		})
-	}
+	worker.Progress(Progress{
+		Action: TransferFile,
+		Label:  ProgressLabel(left.path, left.irodsPath),
+		Size:   left.info.Size(),
+	})
 
 	queue <- Task{
 		Action:    TransferFile,
@@ -1130,12 +1146,10 @@ func (worker *Worker) removeAll(ch <-chan *object, obj *object, queue chan<- Tas
 			next, ok = worker.removeAll(ch, next, queue)
 		}
 
-		if worker.options.ProgressHandler != nil {
-			worker.options.ProgressHandler(Progress{
-				Action: RemoveDirectory,
-				Label:  ProgressLabel(obj.path, obj.irodsPath),
-			})
-		}
+		worker.Progress(Progress{
+			Action: RemoveDirectory,
+			Label:  ProgressLabel(obj.path, obj.irodsPath),
+		})
 
 		queue <- Task{
 			Action:    RemoveDirectory,
@@ -1146,12 +1160,10 @@ func (worker *Worker) removeAll(ch <-chan *object, obj *object, queue chan<- Tas
 		return next, ok
 	}
 
-	if worker.options.ProgressHandler != nil {
-		worker.options.ProgressHandler(Progress{
-			Action: RemoveFile,
-			Label:  ProgressLabel(obj.path, obj.irodsPath),
-		})
-	}
+	worker.Progress(Progress{
+		Action: RemoveFile,
+		Label:  ProgressLabel(obj.path, obj.irodsPath),
+	})
 
 	queue <- Task{
 		Action:    RemoveFile,
@@ -1178,12 +1190,10 @@ func skipAll(ch <-chan *object, obj *object) (*object, bool) {
 
 func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 	if obj.info.IsDir() {
-		if worker.options.ProgressHandler != nil {
-			worker.options.ProgressHandler(Progress{
-				Action: CreateDirectory,
-				Label:  ProgressLabel(obj.path, obj.irodsPath),
-			})
-		}
+		worker.Progress(Progress{
+			Action: CreateDirectory,
+			Label:  ProgressLabel(obj.path, obj.irodsPath),
+		})
 
 		queue <- Task{
 			Action:    CreateDirectory,
@@ -1199,13 +1209,11 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 		return
 	}
 
-	if worker.options.ProgressHandler != nil {
-		worker.options.ProgressHandler(Progress{
-			Action: TransferFile,
-			Label:  ProgressLabel(obj.path, obj.irodsPath),
-			Size:   obj.info.Size(),
-		})
-	}
+	worker.Progress(Progress{
+		Action: TransferFile,
+		Label:  ProgressLabel(obj.path, obj.irodsPath),
+		Size:   obj.info.Size(),
+	})
 
 	queue <- Task{
 		Action:    TransferFile,
@@ -1233,10 +1241,10 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 
 			switch u.Action { //nolint:exhaustive
 			case RemoveFile:
-				worker.action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.action(u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.action(u.Path, u.IrodsPath, RemoveDirectory, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 			}
 		}
 
@@ -1288,14 +1296,14 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 
 			switch u.Action { //nolint:exhaustive
 			case ComputeChecksum:
-				worker.action(u.Path, u.IrodsPath, ComputeChecksum, func() error {
+				worker.action(u, func() error {
 					_, err := worker.TransferPool.Checksum(ctx, u.IrodsPath, true)
 
 					return err
 				})
 
 			case TransferFile: // Actually we do VerifyChecksums here, but we want to report the progress as a transfer
-				worker.action(u.Path, u.IrodsPath, TransferFile, func() error {
+				worker.action(u, func() error {
 					return worker.TransferPool.VerifyChecksum(ctx, u.IrodsPath)
 				})
 			}
@@ -1358,7 +1366,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
 	// Execute the uploads
-	worker.wg.Go(func() error {
+	worker.wg.Go(func() error { //nolint:dupl
 		for u := range queue {
 			if ctx.Err() != nil {
 				continue
@@ -1368,19 +1376,19 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case SetModificationTime:
-				worker.action(u.Path, u.IrodsPath, SetModificationTime, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
+				worker.action(u, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
 
 			case TransferFile:
-				worker.copy(ctx, u.Path, u.IrodsPath, u.Size)
+				worker.copyAction(ctx, u)
 
 			case RemoveFile:
-				worker.action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.action(u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.action(u.Path, u.IrodsPath, RemoveDirectory, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case CreateDirectory:
-				worker.action(u.Path, u.IrodsPath, CreateDirectory, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
+				worker.action(u, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
 			}
 		}
 
@@ -1396,7 +1404,16 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 	}
 }
 
-func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size int64) {
+func (worker *Worker) copyAction(ctx context.Context, u Task) {
+	if worker.options.DryRun {
+		worker.log(u)
+
+		return
+	}
+
+	remote1 := u.Path
+	remote2 := u.IrodsPath
+
 	conn, err := worker.TransferPool.Connect(ctx)
 	if err != nil {
 		worker.Error(remote1, remote2, err)
@@ -1406,14 +1423,12 @@ func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size in
 
 	startTime := time.Now()
 
-	if worker.options.ProgressHandler != nil {
-		worker.options.ProgressHandler(Progress{
-			Action:    TransferFile,
-			Label:     ProgressLabel(remote1, remote2),
-			Size:      size,
-			StartedAt: startTime,
-		})
-	}
+	worker.Progress(Progress{
+		Action:    TransferFile,
+		Label:     ProgressLabel(remote1, remote2),
+		Size:      u.Size,
+		StartedAt: startTime,
+	})
 
 	worker.wg.Go(func() error {
 		connAPI := *worker.TransferPool
@@ -1423,17 +1438,15 @@ func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size in
 			return worker.options.ErrorHandler(remote1, remote2, err)
 		}
 
-		if worker.options.ProgressHandler != nil {
-			worker.options.ProgressHandler(Progress{
-				Action:      TransferFile,
-				Label:       ProgressLabel(remote1, remote2),
-				Size:        size,
-				Increment:   size,
-				Transferred: size,
-				StartedAt:   startTime,
-				FinishedAt:  time.Now(),
-			})
-		}
+		worker.Progress(Progress{
+			Action:      TransferFile,
+			Label:       ProgressLabel(remote1, remote2),
+			Size:        u.Size,
+			Increment:   u.Size,
+			Transferred: u.Size,
+			StartedAt:   startTime,
+			FinishedAt:  time.Now(),
+		})
 
 		// Verify the checksum after copying if integrity checksums are enabled
 		if worker.options.IntegrityChecksums {
@@ -1447,32 +1460,48 @@ func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size in
 	})
 }
 
+// log logs a task without performing it, for dry-run mode.
+func (worker *Worker) log(u Task) {
+	logrus.Info(u.Action.Format(ProgressLabel(u.Path, u.IrodsPath)))
+
+	worker.Progress(Progress{
+		Action:      u.Action,
+		Label:       ProgressLabel(u.Path, u.IrodsPath),
+		Size:        u.Size,
+		Transferred: u.Size,
+		StartedAt:   time.Now(),
+		FinishedAt:  time.Now(),
+	})
+}
+
 // action runs a simple action and schedules an error
-func (worker *Worker) action(local, remote string, action Action, callback func() error) {
-	startTime := time.Now()
-
-	if worker.options.ProgressHandler != nil {
-		worker.options.ProgressHandler(Progress{
-			Action:    action,
-			Label:     ProgressLabel(local, remote),
-			StartedAt: startTime,
-		})
-	}
-
-	if err := callback(); err != nil {
-		worker.Error(local, remote, err)
+func (worker *Worker) action(u Task, callback func() error) {
+	if worker.options.DryRun {
+		worker.log(u)
 
 		return
 	}
 
-	if worker.options.ProgressHandler != nil {
-		worker.options.ProgressHandler(Progress{
-			Action:     action,
-			Label:      ProgressLabel(local, remote),
-			StartedAt:  startTime,
-			FinishedAt: time.Now(),
-		})
+	startTime := time.Now()
+
+	worker.Progress(Progress{
+		Action:    u.Action,
+		Label:     ProgressLabel(u.Path, u.IrodsPath),
+		StartedAt: startTime,
+	})
+
+	if err := callback(); err != nil {
+		worker.Error(u.Path, u.IrodsPath, err)
+
+		return
 	}
+
+	worker.Progress(Progress{
+		Action:     u.Action,
+		Label:      ProgressLabel(u.Path, u.IrodsPath),
+		StartedAt:  startTime,
+		FinishedAt: time.Now(),
+	})
 }
 
 // Error schedules an error
@@ -1480,4 +1509,11 @@ func (worker *Worker) Error(local, remote string, err error) {
 	worker.wg.Go(func() error {
 		return worker.options.ErrorHandler(local, remote, err)
 	})
+}
+
+// Progress triggers the progress handler with the given progress.
+func (worker *Worker) Progress(progress Progress) {
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(progress)
+	}
 }
