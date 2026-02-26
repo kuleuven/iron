@@ -36,6 +36,9 @@ type Options struct {
 	// MaxQueued indicates the maximum number of queued files
 	// when uploading or downloading a directory
 	MaxQueued int
+	// OnlyIfNewer indicates whether files should only be transferred
+	// when syncing (UploadDir, DownloadDir) if the source file is newer than the destination file
+	OnlyIfNewer bool
 	// CompareChecksums indicates whether checksums should be verified
 	// to compare an existing file when syncing (UploadDir, DownloadDir)
 	CompareChecksums bool
@@ -661,8 +664,10 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 			}
 
 			switch u.Action {
-			case ComputeChecksum:
-				// This is a special case for the progress handler, it doesn't correspond to an actual task
+			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
+
+			case SetModificationTime:
+				worker.action(u.Path, u.IrodsPath, SetModificationTime, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
 
 			case TransferFile:
 				worker.uploadAction(ctx, u)
@@ -749,8 +754,10 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 			}
 
 			switch u.Action {
-			case ComputeChecksum:
-				// This is a special case for the progress handler, it doesn't correspond to an actual task
+			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
+
+			case SetModificationTime:
+				worker.action(u.Path, u.IrodsPath, SetModificationTime, func() error { return os.Chtimes(u.Path, time.Time{}, u.ModTime) })
 
 			case TransferFile:
 				worker.Download(ctx, u.Path, u.IrodsPath)
@@ -790,12 +797,16 @@ const (
 	RemoveFile
 	RemoveDirectory
 	ComputeChecksum
+	SetModificationTime
 )
 
 func (a Action) Format(label string) string {
 	switch a {
 	case ComputeChecksum:
 		return fmt.Sprintf("\x1B[36mc %s\x1B[0m", label)
+
+	case SetModificationTime:
+		return fmt.Sprintf("\x1B[35mt %s\x1B[0m", label)
 
 	case CreateDirectory:
 		return fmt.Sprintf("\x1B[34m+ %s/\x1B[0m", label)
@@ -1027,14 +1038,15 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 }
 
 func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
-	// Ignore non-regular files
-	if left.info.IsDir() || !left.info.Mode().IsRegular() {
-		return nil
-	}
-
 	var checksum []byte
 
 	switch {
+	case left.info.IsDir(), !left.info.Mode().IsRegular():
+		return nil
+
+	case worker.options.OnlyIfNewer && !left.info.ModTime().After(right.info.ModTime()):
+		return nil
+
 	case left.info.Size() != right.info.Size():
 		// Retransfer
 
@@ -1043,6 +1055,18 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 
 		checksum, _, err = opts.ChecksumVerify(ctx, left.path, left.irodsPath, left.info, right.info)
 		if err == nil {
+			if !worker.options.SyncModTime || right.info.ModTime().Truncate(time.Second).Equal(left.info.ModTime().Truncate(time.Second)) {
+				return nil
+			}
+
+			// Still set metadata in sync
+			queue <- Task{
+				Action:    SetModificationTime,
+				Path:      left.path,
+				IrodsPath: left.irodsPath,
+				ModTime:   left.info.ModTime(),
+			}
+
 			return nil
 		}
 
@@ -1341,6 +1365,9 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 
 			switch u.Action {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
+
+			case SetModificationTime:
+				worker.action(u.Path, u.IrodsPath, SetModificationTime, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
 
 			case TransferFile:
 				worker.copy(ctx, u.Path, u.IrodsPath, u.Size)

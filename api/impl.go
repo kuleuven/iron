@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kuleuven/iron/msg"
 	"github.com/sirupsen/logrus"
@@ -356,6 +357,22 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	})
 
 	return &h, err
+}
+
+// TouchDataObject updates the modification time of a data object.
+func (api *API) TouchDataObject(ctx context.Context, path string, t time.Time) error {
+	h, err := api.OpenDataObject(ctx, path, O_CREAT|O_RDWR)
+	if err != nil {
+		return err
+	}
+
+	if err := h.Touch(t); err != nil {
+		defer h.Close()
+
+		return err
+	}
+
+	return h.Close()
 }
 
 const shaPrefix = "sha2:"

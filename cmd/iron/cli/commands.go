@@ -345,20 +345,7 @@ func (a *App) touch() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := api.O_CREAT | api.O_RDWR
-
-			h, err := a.OpenDataObject(cmd.Context(), a.Path(args[0]), mode)
-			if err != nil {
-				return err
-			}
-
-			if err := h.Touch(time.Unix(t, 0)); err != nil {
-				defer h.Close()
-
-				return err
-			}
-
-			return h.Close()
+			return a.TouchDataObject(cmd.Context(), a.Path(args[0]), time.Unix(t, 0))
 		},
 	}
 
