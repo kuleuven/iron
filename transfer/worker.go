@@ -670,7 +670,7 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case SetModificationTime:
-				worker.action(u, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
+				worker.action(u, func() error { return worker.TransferPool.ModifyModificationTime(ctx, u.IrodsPath, u.ModTime) })
 
 			case TransferFile:
 				worker.uploadAction(ctx, u)
@@ -1208,6 +1208,8 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 		return
 	}
 
+	// Ignore files from ignore globs
+
 	worker.Progress(Progress{
 		Action: TransferFile,
 		Label:  ProgressLabel(obj.path, obj.irodsPath),
@@ -1375,7 +1377,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case SetModificationTime:
-				worker.action(u, func() error { return worker.TransferPool.TouchDataObject(ctx, u.IrodsPath, u.ModTime) })
+				worker.action(u, func() error { return worker.TransferPool.ModifyModificationTime(ctx, u.IrodsPath, u.ModTime) })
 
 			case TransferFile:
 				worker.copyAction(ctx, u)

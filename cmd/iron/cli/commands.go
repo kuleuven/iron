@@ -350,8 +350,8 @@ func (a *App) touch() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:               "touch <target path>",
-		Short:             "Touch a data object",
+		Use:               "touch <path>",
+		Short:             "Touch a data object or collection",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -363,7 +363,24 @@ func (a *App) touch() *cobra.Command {
 				t = time.Unix(u, 0)
 			}
 
-			return a.TouchDataObject(cmd.Context(), a.Path(args[0]), t)
+			if _, err := a.GetRecord(cmd.Context(), a.Path(args[0])); errors.Is(err, os.ErrNotExist) {
+				h, err := a.OpenDataObject(cmd.Context(), a.Path(args[0]), api.O_CREAT|api.O_EXCL|api.O_RDWR)
+				if err != nil {
+					return err
+				}
+
+				if err := h.Touch(t); err != nil {
+					defer h.Close()
+
+					return err
+				}
+
+				return h.Close()
+			} else if err != nil {
+				return err
+			}
+
+			return a.ModifyModificationTime(cmd.Context(), a.Path(args[0]), t)
 		},
 	}
 
@@ -1283,7 +1300,7 @@ func (a *App) sleep() *cobra.Command {
 	}
 }
 
-func (a *App) query() *cobra.Command { //nolint:funlen
+func (a *App) query() *cobra.Command {
 	var jsonFormat bool
 
 	examples := "  Print available column names:\n\t" + a.name + " query\n  Run a query:\n\t" + a.name + " query \"select DATA_NAME, DATA_SIZE\""
@@ -1321,39 +1338,43 @@ func (a *App) query() *cobra.Command { //nolint:funlen
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(results.Rows())
 			}
 
-			columns := guessColumns(args[0])
-
-			out := &tabwriter.TabWriter{
-				Writer: cmd.OutOrStdout(),
-			}
-
-			defer out.Flush()
-
-			Fprintcolorln(out, Bold, strings.Join(columns, "\t"))
-
-			ptrs := make([]any, len(columns))
-
-			for i := range ptrs {
-				ptrs[i] = new(string)
-			}
-
-			formatting := strings.Repeat("%s\t", len(columns)-1) + "%s\n"
-
-			for results.Next() {
-				if err := results.Scan(ptrs...); err != nil {
-					return err
-				}
-
-				fmt.Fprintf(out, formatting, resolveValues(ptrs)...)
-			}
-
-			return results.Err()
+			return printQueryResults(cmd, args, results)
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
+	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON ([][]string)")
 
 	return cmd
+}
+
+func printQueryResults(cmd *cobra.Command, args []string, results *api.GenericResult) error {
+	columns := guessColumns(args[0])
+
+	out := &tabwriter.TabWriter{
+		Writer: cmd.OutOrStdout(),
+	}
+
+	defer out.Flush()
+
+	Fprintcolorln(out, Bold, strings.Join(columns, "\t"))
+
+	ptrs := make([]any, len(columns))
+
+	for i := range ptrs {
+		ptrs[i] = new(string)
+	}
+
+	formatting := strings.Repeat("%s\t", len(columns)-1) + "%s\n"
+
+	for results.Next() {
+		if err := results.Scan(ptrs...); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(out, formatting, resolveValues(ptrs)...)
+	}
+
+	return results.Err()
 }
 
 func guessColumns(query string) []string {

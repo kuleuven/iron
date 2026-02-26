@@ -359,20 +359,18 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	return &h, err
 }
 
-// TouchDataObject updates the modification time of a data object.
-func (api *API) TouchDataObject(ctx context.Context, path string, t time.Time) error {
-	h, err := api.OpenDataObject(ctx, path, O_CREAT|O_RDWR)
-	if err != nil {
-		return err
+// ModifyModificationTime updates the modification time of a data object or collection.
+// The object must already exist.
+func (api *API) ModifyModificationTime(ctx context.Context, path string, t time.Time) error {
+	request := msg.TouchDataObjectReplicaRequest{
+		Path: path,
+		Options: msg.TouchOptions{
+			SecondsSinceEpoch: t.Unix(),
+			NoCreate:          true,
+		},
 	}
 
-	if err := h.Touch(t); err != nil {
-		defer h.Close()
-
-		return err
-	}
-
-	return h.Close()
+	return api.Request(ctx, msg.TOUCH_APN, request, &msg.EmptyResponse{})
 }
 
 const shaPrefix = "sha2:"
