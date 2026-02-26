@@ -15,7 +15,6 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
-	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 )
@@ -1462,16 +1461,7 @@ func (worker *Worker) copyAction(ctx context.Context, u Task) {
 
 // log logs a task without performing it, for dry-run mode.
 func (worker *Worker) log(u Task) {
-	logrus.Info(u.Action.Format(ProgressLabel(u.Path, u.IrodsPath)))
-
-	worker.Progress(Progress{
-		Action:      u.Action,
-		Label:       ProgressLabel(u.Path, u.IrodsPath),
-		Size:        u.Size,
-		Transferred: u.Size,
-		StartedAt:   time.Now(),
-		FinishedAt:  time.Now(),
-	})
+	fmt.Printf("\rwould %s\n", u.Action.Format(ProgressLabel(u.Path, u.IrodsPath)))
 }
 
 // action runs a simple action and schedules an error
