@@ -259,7 +259,7 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 	BufferSize = 100
 	CopyBufferDelay = 500 * time.Millisecond
 
-	worker := New(nil, testTransferAPI, Options{
+	worker := New(testTransferAPI, testTransferAPI, Options{
 		MaxThreads: 2,
 		Output:     os.Stdout,
 		Delete:     true,
@@ -502,7 +502,7 @@ func TestClientVerify(t *testing.T) {
 		Replicas: []api.Replica{},
 	}
 
-	if err := Verify(testAPI, nil)(t.Context(), f.Name(), "/test/file1", fi, obj); err != nil {
+	if _, _, err := VerifyLocalToRemote(testAPI, nil)(t.Context(), f.Name(), "/test/file1", fi, obj); err != nil {
 		t.Error(err)
 	}
 }
@@ -532,7 +532,7 @@ func TestClientVerifyRemote(t *testing.T) {
 		Replicas: []api.Replica{},
 	}
 
-	if err := VerifyRemote(testAPI, nil)(t.Context(), "/test/file1", "/test/file2", obj, obj); err != nil {
+	if _, _, err := VerifyRemoteToRemote(testAPI, nil)(t.Context(), "/test/file1", "/test/file2", obj, obj); err != nil {
 		t.Error(err)
 	}
 }

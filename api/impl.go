@@ -400,11 +400,16 @@ func (api *API) Checksum(ctx context.Context, path string, force bool) ([]byte, 
 		return nil, err
 	}
 
-	if !strings.HasPrefix(checksum.String, shaPrefix) {
+	return ParseIrodsChecksum(checksum.String)
+}
+
+func ParseIrodsChecksum(checksum string) ([]byte, error) {
+	suffix, ok := strings.CutPrefix(checksum, shaPrefix)
+	if !ok {
 		return nil, fmt.Errorf("%w: prefix %s missing", ErrChecksumNotFound, shaPrefix)
 	}
 
-	return base64.StdEncoding.DecodeString(strings.TrimPrefix(checksum.String, shaPrefix))
+	return base64.StdEncoding.DecodeString(suffix)
 }
 
 // VerifyChecksum verifies the checksum of a data object against the checksum stored in the database.

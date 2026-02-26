@@ -1,7 +1,9 @@
 package transfer
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -34,11 +36,12 @@ type Options struct {
 	// MaxQueued indicates the maximum number of queued files
 	// when uploading or downloading a directory
 	MaxQueued int
-	// ComputeChecksums indicates whether checksums should be computed after transferring files
-	ComputeChecksums bool
-	// VerifyChecksums indicates whether checksums should be verified
+	// CompareChecksums indicates whether checksums should be verified
 	// to compare an existing file when syncing (UploadDir, DownloadDir)
-	VerifyChecksums bool
+	CompareChecksums bool
+	// IntegrityChecksums indicates whether checksums should be computed before
+	// and after the transfer to verify the integrity of the transfer
+	IntegrityChecksums bool
 	// Output will, if set, display a progress bar and occurring errors
 	// If ErrorHandler or ProgressHandler is set, this option is ignored
 	Output io.Writer
@@ -179,10 +182,23 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) {
 		return
 	}
 
+	var checksum []byte
+
+	// If checksums are computed afterwards, compute the checksum beforehand too to verify
+	if worker.options.IntegrityChecksums {
+		checksum, err = Sha256Checksum(ctx, local)
+		if err != nil {
+			worker.Error(local, remote, multierr.Append(err, r.Close()))
+
+			return
+		}
+	}
+
 	worker.FromReader(ctx, &fileReader{
-		name: local,
-		stat: stat,
-		File: r,
+		name:     local,
+		stat:     stat,
+		checksum: checksum,
+		File:     r,
 	}, remote)
 }
 
@@ -194,10 +210,16 @@ type Reader interface {
 	io.Closer
 }
 
+type ChecksumReader interface {
+	Reader
+	Checksum() []byte
+}
+
 type fileReader struct {
 	name string
 	stat os.FileInfo
 	*os.File
+	checksum []byte
 }
 
 func (r fileReader) Name() string {
@@ -210,6 +232,10 @@ func (r fileReader) Size() int64 {
 
 func (r fileReader) ModTime() time.Time {
 	return r.stat.ModTime()
+}
+
+func (r fileReader) Checksum() []byte {
+	return r.checksum
 }
 
 // FromReader schedules the upload of a reader to the iRODS server using parallel transfers.
@@ -274,7 +300,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 			err = w.Touch(r.ModTime())
 		}
 
-		err = multierr.Append(err, worker.closeAndComputeChecksum(ctx, w))
+		err = multierr.Append(err, worker.closeAndComputeChecksum(ctx, r, w))
 
 		err = multierr.Append(err, r.Close())
 		if err != nil {
@@ -287,13 +313,13 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	})
 }
 
-func (worker *Worker) closeAndComputeChecksum(ctx context.Context, w api.File) error {
+func (worker *Worker) closeAndComputeChecksum(ctx context.Context, r Reader, w api.File) error {
 	conn, err := w.CloseReturnConnection()
 	if err != nil {
 		return multierr.Append(err, conn.Close())
 	}
 
-	if !worker.options.ComputeChecksums {
+	if !worker.options.IntegrityChecksums {
 		return conn.Close()
 	}
 
@@ -301,11 +327,30 @@ func (worker *Worker) closeAndComputeChecksum(ctx context.Context, w api.File) e
 		Path: w.Name(),
 	}
 
-	var checksum msg.String
+	var irodsChecksum msg.String
 
-	err = conn.Request(ctx, msg.DATA_OBJ_CHKSUM_AN, request, &checksum)
+	err = conn.Request(ctx, msg.DATA_OBJ_CHKSUM_AN, request, &irodsChecksum)
 
-	return multierr.Append(err, conn.Close())
+	err = multierr.Append(err, conn.Close())
+	if err != nil {
+		return err
+	}
+
+	wantedChecksum, err := api.ParseIrodsChecksum(irodsChecksum.String)
+	if err != nil {
+		return err
+	}
+
+	// Verify checksum if did compute one on the source
+	if cr, ok := r.(ChecksumReader); ok {
+		actualChecksum := cr.Checksum()
+
+		if !bytes.Equal(actualChecksum, wantedChecksum) {
+			return fmt.Errorf("checksum mismatch: local: %s remote: %s", base64.StdEncoding.EncodeToString(actualChecksum), base64.StdEncoding.EncodeToString(wantedChecksum))
+		}
+	}
+
+	return nil
 }
 
 func (worker *Worker) tryOpenDataObject(ctx context.Context, remote string, mode int) (api.File, error) {
@@ -587,6 +632,23 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 	})
 }
 
+type taskReader struct {
+	task Task
+	*os.File
+}
+
+func (tr *taskReader) Name() string {
+	return tr.task.Path
+}
+
+func (tr *taskReader) Size() int64 {
+	return tr.task.Size
+}
+
+func (tr *taskReader) ModTime() time.Time {
+	return tr.task.ModTime
+}
+
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
@@ -611,7 +673,26 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 				// This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case TransferFile:
-				worker.Upload(ctx, u.Path, u.IrodsPath)
+				r, err := os.Open(u.Path)
+				if err != nil {
+					worker.Error(u.Path, u.IrodsPath, err)
+
+					continue
+				}
+
+				if worker.options.IntegrityChecksums && u.Checksum == nil {
+					u.Checksum, err = Sha256Checksum(ctx, u.Path)
+					if err != nil {
+						worker.Error(u.Path, u.IrodsPath, err)
+
+						continue
+					}
+				}
+
+				worker.FromReader(ctx, &taskReader{
+					task: u,
+					File: r,
+				}, u.IrodsPath)
 
 			case RemoveFile:
 				worker.action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
@@ -725,6 +806,8 @@ type Task struct {
 	Action          Action
 	Path, IrodsPath string
 	Size            int64
+	Checksum        []byte
+	ModTime         time.Time
 }
 
 type object struct {
@@ -796,10 +879,10 @@ func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, 
 	// Process the records
 	wg.Go(func() error {
 		if direction == RemoteToLocal {
-			return worker.merge(ctx, rch, lch, queue, mergeOptions{opts, Verify(worker.IndexPool, worker.options.ProgressHandler)})
+			return worker.merge(ctx, rch, lch, queue, mergeOptions{opts, VerifyRemoteToLocal(worker.IndexPool, worker.options.ProgressHandler)})
 		}
 
-		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, Verify(worker.IndexPool, worker.options.ProgressHandler)})
+		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyLocalToRemote(worker.IndexPool, worker.options.ProgressHandler)})
 	})
 
 	return wg.Wait()
@@ -852,7 +935,7 @@ func (worker *Worker) SynchronizeRemoteDir(ctx context.Context, remote1, remote2
 
 	// Process the records
 	wg.Go(func() error {
-		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyRemote(worker.IndexPool, worker.options.ProgressHandler)})
+		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyRemoteToRemote(worker.IndexPool, worker.options.ProgressHandler)})
 	})
 
 	return wg.Wait()
@@ -874,7 +957,10 @@ func toLocalPath(base, path string) string {
 	return base + strings.Join(strings.Split(path, "/"), string(os.PathSeparator))
 }
 
-type checksumVerifyFunction func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) error
+// Verify checks the checksums of the local and remote file and returns nil if they match,
+// ErrChecksumMismatch if they don't match, or an error if the verification failed.
+// The checksum of the source file is returned
+type checksumVerifyFunction func(ctx context.Context, source, target string, sourceInfo, targetInfo os.FileInfo) ([]byte, []byte, error)
 
 type mergeOptions struct {
 	SynchronizeOptions
@@ -929,16 +1015,21 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 }
 
 func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error {
-	if left.info.IsDir() {
+	// Ignore non-regular files
+	if left.info.IsDir() || !left.info.Mode().IsRegular() {
 		return nil
 	}
 
+	var checksum []byte
+
 	switch {
-	case !left.info.Mode().IsRegular(), left.info.Size() != right.info.Size():
+	case left.info.Size() != right.info.Size():
 		// Retransfer
 
-	case worker.options.VerifyChecksums:
-		err := opts.ChecksumVerify(ctx, left.path, left.irodsPath, left.info, right.info)
+	case worker.options.CompareChecksums:
+		var err error
+
+		checksum, _, err = opts.ChecksumVerify(ctx, left.path, left.irodsPath, left.info, right.info)
 		if err == nil {
 			return nil
 		}
@@ -974,7 +1065,22 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 		}
 	}
 
-	worker.transfer(left, queue)
+	if worker.options.ProgressHandler != nil {
+		worker.options.ProgressHandler(Progress{
+			Action: TransferFile,
+			Label:  ProgressLabel(left.path, left.irodsPath),
+			Size:   left.info.Size(),
+		})
+	}
+
+	queue <- Task{
+		Action:    TransferFile,
+		Path:      left.path,
+		IrodsPath: left.irodsPath,
+		Size:      left.info.Size(),
+		ModTime:   left.info.ModTime(),
+		Checksum:  checksum,
+	}
 
 	return nil
 }
@@ -1069,6 +1175,7 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 		Path:      obj.path,
 		IrodsPath: obj.irodsPath,
 		Size:      obj.info.Size(),
+		ModTime:   obj.info.ModTime(),
 	}
 }
 
@@ -1172,14 +1279,14 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 			return nil
 		}
 
-		if _, hasChecksum := parseChecksum(record); hasChecksum && worker.options.VerifyChecksums {
+		if _, hasChecksum := parseChecksum(record); hasChecksum && worker.options.CompareChecksums {
 			queue <- Task{
 				Action:    TransferFile, // TransferFile = verify checksum
 				IrodsPath: irodsPath,
 			}
 
 			return nil
-		} else if hasChecksum || !worker.options.ComputeChecksums {
+		} else if hasChecksum || !worker.options.IntegrityChecksums {
 			return nil
 		}
 

@@ -18,8 +18,8 @@ import (
 var ErrChecksumMismatch = errors.New("checksum mismatch")
 
 // Verify checks the checksum of a local file against the checksum of a remote file
-func Verify(a *api.API, progressHandler func(Progress)) func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) error {
-	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) error {
+func VerifyLocalToRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
+	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
 		g, ctx := errgroup.WithContext(ctx)
 
 		var localHash, remoteHash []byte
@@ -55,20 +55,28 @@ func Verify(a *api.API, progressHandler func(Progress)) func(ctx context.Context
 		})
 
 		if err := g.Wait(); err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		if !bytes.Equal(localHash, remoteHash) {
-			return fmt.Errorf("%w: local: %s remote: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(localHash), base64.StdEncoding.EncodeToString(remoteHash))
+			return localHash, remoteHash, fmt.Errorf("%w: local: %s remote: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(localHash), base64.StdEncoding.EncodeToString(remoteHash))
 		}
 
-		return nil
+		return localHash, remoteHash, nil
+	}
+}
+
+func VerifyRemoteToLocal(a *api.API, progressHandler func(Progress)) func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
+	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
+		l, r, err := VerifyLocalToRemote(a, progressHandler)(ctx, local, remote, localInfo, remoteInfo)
+
+		return r, l, err
 	}
 }
 
 // VerifyRemote checks the checksum of two remote files
-func VerifyRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) error {
-	return func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) error {
+func VerifyRemoteToRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
+	return func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
 		g, ctx := errgroup.WithContext(ctx)
 
 		var remote1Hash, remote2Hash []byte
@@ -118,14 +126,14 @@ func VerifyRemote(a *api.API, progressHandler func(Progress)) func(ctx context.C
 		})
 
 		if err := g.Wait(); err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		if !bytes.Equal(remote1Hash, remote2Hash) {
-			return fmt.Errorf("%w: remote1: %s remote2: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(remote1Hash), base64.StdEncoding.EncodeToString(remote2Hash))
+			return remote1Hash, remote2Hash, fmt.Errorf("%w: remote1: %s remote2: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(remote1Hash), base64.StdEncoding.EncodeToString(remote2Hash))
 		}
 
-		return nil
+		return remote1Hash, remote2Hash, nil
 	}
 }
 

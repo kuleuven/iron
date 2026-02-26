@@ -403,11 +403,11 @@ func (a *App) checksums() *cobra.Command {
 			path := a.Path(args[0])
 
 			opts := transfer.Options{
-				MaxQueued:        10000,
-				MaxThreads:       1,
-				Output:           cmd.OutOrStdout(),
-				ComputeChecksums: compute,
-				VerifyChecksums:  verify,
+				MaxQueued:          10000,
+				MaxThreads:         1,
+				Output:             cmd.OutOrStdout(),
+				IntegrityChecksums: compute,
+				CompareChecksums:   verify,
 			}
 
 			return a.ComputeChecksums(cmd.Context(), path, opts)
@@ -491,7 +491,8 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
 	cmd.Flags().BoolVar(&opts.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
-	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
+	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to upload")
+	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after uploading files, and verify equality to ensure transfer integrity")
 
 	return cmd
 }
@@ -568,7 +569,7 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
 	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
-	cmd.Flags().BoolVar(&opts.VerifyChecksums, "checksum", false, "Verify checksums instead of size and modtime")
+	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Verify checksums instead of size and modtime")
 
 	return cmd
 }
