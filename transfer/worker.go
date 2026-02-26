@@ -1040,11 +1040,13 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
 	var checksum []byte
 
+	modTimeCompare := left.info.ModTime().Truncate(time.Second).Compare(right.info.ModTime().Truncate(time.Second))
+
 	switch {
 	case left.info.IsDir(), !left.info.Mode().IsRegular():
 		return nil
 
-	case worker.options.OnlyIfNewer && !left.info.ModTime().After(right.info.ModTime()):
+	case worker.options.OnlyIfNewer && modTimeCompare < 0:
 		return nil
 
 	case left.info.Size() != right.info.Size():
@@ -1055,7 +1057,7 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 
 		checksum, _, err = opts.ChecksumVerify(ctx, left.path, left.irodsPath, left.info, right.info)
 		if err == nil {
-			if !worker.options.SyncModTime || right.info.ModTime().Truncate(time.Second).Equal(left.info.ModTime().Truncate(time.Second)) {
+			if !worker.options.SyncModTime || modTimeCompare == 0 {
 				return nil
 			}
 
@@ -1080,10 +1082,9 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 		}
 
 		return err
-	default:
-		if right.info.ModTime().Truncate(time.Second).Equal(left.info.ModTime().Truncate(time.Second)) {
-			return nil
-		}
+
+	case modTimeCompare == 0:
+		return nil
 	}
 
 	if opts.DisableUpdateInPlace {
