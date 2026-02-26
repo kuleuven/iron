@@ -581,6 +581,60 @@ func TestClientRemoveDir(t *testing.T) {
 	}
 }
 
+func TestClientComputeChecksums(t *testing.T) {
+	testConn0 := &api.MockConn{}
+
+	testIndexAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn0, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	testConn0.AddResponses(responses) // walk
+
+	testConn1 := &api.MockConn{}
+
+	testTransferAPI := &api.API{
+		Username: "testuser",
+		Zone:     "testzone",
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn1, nil
+		},
+		DefaultResource: "demoResc",
+	}
+
+	testConn1.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{
+		Path: "/test/file1",
+		KeyVals: msg.SSKeyVal{
+			Length: 2,
+			Keys: []msg.KeyWord{
+				"destRescName",
+				"forceChksum",
+			},
+			Values: []string{
+				"demoResc",
+				"",
+			},
+		},
+	}, msg.String{
+		String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+	})
+
+	worker := New(testIndexAPI, testTransferAPI, Options{
+		MaxThreads:         1,
+		IntegrityChecksums: true,
+	})
+
+	worker.ComputeChecksums(t.Context(), "/test")
+
+	if err := worker.Wait(); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestClientCopyDir(t *testing.T) {
 	for range 10 {
 		testConn0 := &api.MockConn{}
