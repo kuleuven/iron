@@ -261,8 +261,8 @@ in the target collection. Otherwise, a subcollection with the same name will be 
 
 func (a *App) cp() *cobra.Command {
 	var (
-		skip       bool
-		maxThreads int
+		skip, newer bool
+		maxThreads  int
 	)
 
 	examples := []string{
@@ -294,10 +294,11 @@ func (a *App) cp() *cobra.Command {
 
 			if obj.IsDir() {
 				opts := transfer.Options{
-					MaxQueued:  10000,
-					MaxThreads: maxThreads,
-					Output:     cmd.OutOrStdout(),
-					SkipTrash:  skip,
+					MaxQueued:   10000,
+					MaxThreads:  maxThreads,
+					Output:      cmd.OutOrStdout(),
+					SkipTrash:   skip,
+					OnlyIfNewer: newer,
 				}
 
 				if !strings.HasSuffix(args[1], "/") {
@@ -311,6 +312,7 @@ func (a *App) cp() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&newer, "newer", false, "Only copy files that are newer than the existing files in the destination")
 	cmd.Flags().BoolVarP(&skip, "delete-skip-trash", "S", false, "Do not move to trash (applies only when copying a collection)")
 	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use (applies only when copying a collection)")
 
@@ -474,6 +476,7 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 	}
 
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
+	cmd.Flags().BoolVar(&opts.OnlyIfNewer, "newer", false, "Only upload files that are newer than the existing files in the destination")
 	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
 	cmd.Flags().BoolVar(&opts.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
@@ -554,6 +557,7 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	}
 
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
+	cmd.Flags().BoolVar(&opts.OnlyIfNewer, "newer", false, "Only download files that are newer than the existing files in the destination")
 	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
 	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to download")
