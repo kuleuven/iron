@@ -266,10 +266,10 @@ func (a *App) cp() *cobra.Command {
 	)
 
 	examples := []string{
-		a.name + " cp /path/to/collection1/file.txt /path/to/collection2/file.txt  (target should not exist)",
-		a.name + " cp /path/to/collection1/file.txt /path/to/collection2/          (target should not exist)",
-		a.name + " cp /path/to/collection1 /path/to/collection2/                   (target may exist)",
-		a.name + " cp /path/to/collection1/ /path/to/collection2/                  (target may exist)",
+		"  " + a.name + " cp /path/to/collection1/file.txt /path/to/collection2/file.txt  (target file should not exist)",
+		"  " + a.name + " cp /path/to/collection1/file.txt /path/to/collection2/          (target file should not exist in target collection)",
+		"  " + a.name + " cp /path/to/collection1 /path/to/collection2/                   (copy source collection to target collection as a subcollection, target collection may exist)",
+		"  " + a.name + " cp /path/to/collection1/ /path/to/collection2/                  (copy contents of source collection to target collection, target collection may exist)",
 	}
 
 	cmd := &cobra.Command{
@@ -437,12 +437,12 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 	}
 
 	examples := []string{
-		a.name + " upload /local/file.txt",
-		a.name + " upload /local/file.txt /path/to/collection/file.txt",
-		a.name + " upload /local/file.txt /path/to/collection/",
-		a.name + " upload /local/folder",
-		a.name + " upload /local/folder /path/to/collection/",
-		a.name + " upload /local/folder/ /path/to/collection/",
+		"  " + a.name + " upload /local/file.txt",
+		"  " + a.name + " upload /local/file.txt /path/to/collection/file.txt",
+		"  " + a.name + " upload /local/file.txt /path/to/collection/",
+		"  " + a.name + " upload /local/folder",
+		"  " + a.name + " upload /local/folder /path/to/collection/            (upload local folder to target collection as a subcollection)",
+		"  " + a.name + " upload /local/folder/ /path/to/collection/           (upload local folder contents to target collection)",
 	}
 
 	cmd := &cobra.Command{
