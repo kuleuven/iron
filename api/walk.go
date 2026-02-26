@@ -360,13 +360,13 @@ func (api *API) walkLexographicalNoSkipBatch(ctx context.Context, fn WalkFunc, p
 	}
 
 	slices.SortFunc(queue, func(a, b result) int {
-		return strings.Compare(a.path, b.path)
+		return ComparePaths(a.path, b.path)
 	})
 
 	var skipAll bool
 
 	err = api.walkLexographicalNoSkip(ctx, func(path string, record Record, err error) error {
-		for len(queue) > 0 && queue[0].path < path {
+		for len(queue) > 0 && ComparePaths(queue[0].path, path) < 0 {
 			switch err := fn(queue[0].path, queue[0].record, queue[0].err); err {
 			case SkipAll:
 				skipAll = true
@@ -403,6 +403,19 @@ func (api *API) walkLexographicalNoSkipBatch(ctx context.Context, fn WalkFunc, p
 	}
 
 	return nil
+}
+
+func ComparePaths(a, b string) int {
+	aParts := strings.Split(a, "/")
+	bParts := strings.Split(b, "/")
+
+	for i := 0; i < len(aParts) && i < len(bParts); i++ {
+		if aParts[i] != bParts[i] {
+			return strings.Compare(aParts[i], bParts[i])
+		}
+	}
+
+	return len(aParts) - len(bParts)
 }
 
 // walkCollections runs the walk function on each given collection, its containing

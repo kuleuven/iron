@@ -988,14 +988,14 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 		case !hasLeft && !hasRight:
 			return nil
 
-		case !hasLeft, hasRight && leftObject.irodsPath > rightObject.irodsPath:
+		case !hasLeft, hasRight && api.ComparePaths(leftObject.irodsPath, rightObject.irodsPath) > 0:
 			if worker.options.Delete {
 				rightObject, hasRight = worker.removeAll(right, rightObject, queue)
 			} else {
 				rightObject, hasRight = skipAll(right, rightObject)
 			}
 
-		case !hasRight, leftObject.irodsPath < rightObject.irodsPath:
+		case !hasRight, api.ComparePaths(leftObject.irodsPath, rightObject.irodsPath) < 0:
 			worker.transfer(leftObject, queue)
 
 			leftObject, hasLeft = <-left
