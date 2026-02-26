@@ -251,6 +251,9 @@ func TestCopy(t *testing.T) {
 func TestTouch(t *testing.T) {
 	app := testApp(t)
 
+	app.AddResponse(msg.QueryResponse{})
+	app.AddResponse(msg.QueryResponse{})
+
 	app.AddResponse(msg.FileDescriptor(1))
 	app.AddResponse(msg.GetDescriptorInfoResponse{
 		DataObjectInfo: map[string]any{
