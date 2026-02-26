@@ -16,26 +16,27 @@ func TestCheckVersionValid(t *testing.T) {
 		release        int
 		expectedResult bool
 	}{
-		{"rods4.3.2", 4, 3, 2, true},   // equal
-		{"rods4.3.3", 4, 3, 2, true},   // release greater
-		{"rods4.4.0", 4, 3, 2, true},   // minor greater
-		{"rods5.0.0", 4, 3, 2, true},   // major greater
-		{"rods4.3.1", 4, 3, 2, false},  // release less
-		{"rods4.2.9", 4, 3, 2, false},  // minor less
-		{"rods3.9.9", 4, 3, 2, false},  // major less
-		{"rods4.3.2", 4, 3, 3, false},  // equal major/minor, release less
-		{"rods4.3.2", 4, 4, 0, false},  // equal major, minor less
-		{"rods10.0.0", 4, 3, 2, true},  // large major
-		{"rods4.3.2", 5, 0, 0, false},  // major less than required
-		{"rods5.0.0", 5, 0, 0, true},   // exact match v5
-		{"rods4.3.10", 4, 3, 2, true},  // multi-digit release
-		{"rods4.10.0", 4, 3, 0, true},  // multi-digit minor
-		{"rods0.0.0", 0, 0, 0, true},   // zero version
+		{"rods4.3.2", 4, 3, 2, true},  // equal
+		{"rods4.3.3", 4, 3, 2, true},  // release greater
+		{"rods4.4.0", 4, 3, 2, true},  // minor greater
+		{"rods5.0.0", 4, 3, 2, true},  // major greater
+		{"rods4.3.1", 4, 3, 2, false}, // release less
+		{"rods4.2.9", 4, 3, 2, false}, // minor less
+		{"rods3.9.9", 4, 3, 2, false}, // major less
+		{"rods4.3.2", 4, 3, 3, false}, // equal major/minor, release less
+		{"rods4.3.2", 4, 4, 0, false}, // equal major, minor less
+		{"rods10.0.0", 4, 3, 2, true}, // large major
+		{"rods4.3.2", 5, 0, 0, false}, // major less than required
+		{"rods5.0.0", 5, 0, 0, true},  // exact match v5
+		{"rods4.3.10", 4, 3, 2, true}, // multi-digit release
+		{"rods4.10.0", 4, 3, 0, true}, // multi-digit minor
+		{"rods0.0.0", 0, 0, 0, true},  // zero version
 	}
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s>=%d.%d.%d", tt.version, tt.major, tt.minor, tt.release), func(t *testing.T) {
 			v := msg.Version{ReleaseVersion: tt.version}
+
 			result := checkVersion(v, tt.major, tt.minor, tt.release)
 			if result != tt.expectedResult {
 				t.Errorf("checkVersion(%q, %d, %d, %d) = %v, want %v", tt.version, tt.major, tt.minor, tt.release, result, tt.expectedResult)
@@ -128,11 +129,14 @@ func TestRetrieveValue(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if result != tt.expected {
 				t.Errorf("retrieveValue(state, %q) = %q, want %q", tt.path, result, tt.expected)
 			}
@@ -162,6 +166,7 @@ func TestRetrieveValueNonStringValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if result != "" {
 		t.Errorf("expected empty string for non-string value, got %q", result)
 	}
@@ -170,6 +175,7 @@ func TestRetrieveValueNonStringValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if result != "" {
 		t.Errorf("expected empty string for non-string value, got %q", result)
 	}
@@ -183,6 +189,7 @@ func TestPatchStateEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if dirty {
 		t.Error("dirty should remain false for empty patch")
 	}
@@ -191,6 +198,7 @@ func TestPatchStateEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if dirty {
 		t.Error("dirty should remain false for empty patch slice")
 	}
@@ -381,6 +389,7 @@ func TestGetValue(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if result != "testuser" {
 			t.Errorf("expected 'testuser', got %q", result)
 		}
@@ -388,10 +397,12 @@ func TestGetValue(t *testing.T) {
 
 	t.Run("prompt with default from state", func(t *testing.T) {
 		p := &mockPrompt{askResponse: ""}
+
 		result, err := getValue(state, p, "Enter value", false, "", "/username")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if result != "testuser" {
 			t.Errorf("expected 'testuser' as default, got %q", result)
 		}
@@ -399,10 +410,12 @@ func TestGetValue(t *testing.T) {
 
 	t.Run("prompt without default", func(t *testing.T) {
 		p := &mockPrompt{askResponse: "custom"}
+
 		result, err := getValue(state, p, "Enter value", false, "", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if result != "custom" {
 			t.Errorf("expected 'custom', got %q", result)
 		}

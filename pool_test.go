@@ -1,3 +1,4 @@
+//nolint:forcetypeassert
 package iron
 
 import (
@@ -46,7 +47,9 @@ func (m *mockPoolConn) API() *api.API { return nil }
 func (m *mockPoolConn) Close() error {
 	m.closeMu.Lock()
 	defer m.closeMu.Unlock()
+
 	m.closed = true
+
 	return nil
 }
 
@@ -601,7 +604,9 @@ func TestPoolBlockingConnect(t *testing.T) {
 			done <- err
 			return
 		}
+
 		conn2.Close()
+
 		done <- nil
 	}()
 
@@ -664,6 +669,7 @@ func TestClientOption(t *testing.T) {
 	if opt.MaxConns != 2 {
 		t.Errorf("expected MaxConns=2, got %d", opt.MaxConns)
 	}
+
 	if opt.ClientName != "test" {
 		t.Errorf("expected ClientName='test', got %q", opt.ClientName)
 	}
