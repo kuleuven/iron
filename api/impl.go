@@ -391,6 +391,8 @@ func (api *API) Checksum(ctx context.Context, path string, force bool) ([]byte, 
 		return nil, err
 	}
 
+	defer conn.Close()
+
 	var checksum msg.String
 
 	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CHKSUM_AN, request, &checksum, path)

@@ -489,11 +489,20 @@ func TestClientVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	fi, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := Verify(t.Context(), testAPI, f.Name(), "/test/file1"); err != nil {
+	obj := &api.DataObject{
+		Replicas: []api.Replica{},
+	}
+
+	if err := Verify(testAPI, nil)(t.Context(), f.Name(), "/test/file1", fi, obj); err != nil {
 		t.Error(err)
 	}
 }
@@ -519,7 +528,11 @@ func TestClientVerifyRemote(t *testing.T) {
 		})
 	}
 
-	if err := VerifyRemote(t.Context(), testAPI, "/test/file1", "/test/file2"); err != nil {
+	obj := &api.DataObject{
+		Replicas: []api.Replica{},
+	}
+
+	if err := VerifyRemote(testAPI, nil)(t.Context(), "/test/file1", "/test/file2", obj, obj); err != nil {
 		t.Error(err)
 	}
 }

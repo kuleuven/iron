@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/kuleuven/iron/api"
 	"golang.org/x/sync/errgroup"
@@ -17,69 +18,145 @@ import (
 var ErrChecksumMismatch = errors.New("checksum mismatch")
 
 // Verify checks the checksum of a local file against the checksum of a remote file
-func Verify(ctx context.Context, a *api.API, local, remote string) error {
-	g, ctx := errgroup.WithContext(ctx)
+func Verify(a *api.API, progressHandler func(Progress)) func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) error {
+	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) error {
+		g, ctx := errgroup.WithContext(ctx)
 
-	var localHash, remoteHash []byte
+		var localHash, remoteHash []byte
 
-	g.Go(func() error {
-		var err error
+		g.Go(func() error {
+			var err error
 
-		localHash, err = Sha256Checksum(ctx, local)
+			localHash, err = Sha256Checksum(ctx, local)
 
-		return err
-	})
+			return err
+		})
 
-	g.Go(func() error {
-		var err error
+		g.Go(func() error {
+			if progressHandler != nil {
+				progressHandler(Progress{
+					Action: ComputeChecksum,
+					Label:  local,
+				})
+			}
 
-		remoteHash, err = a.Checksum(ctx, remote, false)
+			// Try to get checksum from remoteInfo
+			if checksum, ok := parseChecksum(remoteInfo); ok {
+				remoteHash = checksum
 
-		return err
-	})
+				return nil
+			}
 
-	if err := g.Wait(); err != nil {
-		return err
+			var err error
+
+			remoteHash, err = a.Checksum(ctx, remote, false)
+
+			return err
+		})
+
+		if err := g.Wait(); err != nil {
+			return err
+		}
+
+		if !bytes.Equal(localHash, remoteHash) {
+			return fmt.Errorf("%w: local: %s remote: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(localHash), base64.StdEncoding.EncodeToString(remoteHash))
+		}
+
+		return nil
 	}
-
-	if !bytes.Equal(localHash, remoteHash) {
-		return fmt.Errorf("%w: local: %s remote: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(localHash), base64.StdEncoding.EncodeToString(remoteHash))
-	}
-
-	return nil
 }
 
 // VerifyRemote checks the checksum of two remote files
-func VerifyRemote(ctx context.Context, a *api.API, remote1, remote2 string) error {
-	g, ctx := errgroup.WithContext(ctx)
+func VerifyRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) error {
+	return func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) error {
+		g, ctx := errgroup.WithContext(ctx)
 
-	var remote1Hash, remote2Hash []byte
+		var remote1Hash, remote2Hash []byte
 
-	g.Go(func() error {
-		var err error
+		g.Go(func() error {
+			// Try to get checksum from remoteInfo
+			if checksum, ok := parseChecksum(remote1Info); ok {
+				remote1Hash = checksum
 
-		remote1Hash, err = a.Checksum(ctx, remote1, false)
+				return nil
+			}
 
-		return err
-	})
+			if progressHandler != nil {
+				progressHandler(Progress{
+					Action: ComputeChecksum,
+					Label:  remote1,
+				})
+			}
 
-	g.Go(func() error {
-		var err error
+			var err error
 
-		remote2Hash, err = a.Checksum(ctx, remote2, false)
+			remote1Hash, err = a.Checksum(ctx, remote1, false)
 
-		return err
-	})
+			return err
+		})
 
-	if err := g.Wait(); err != nil {
-		return err
+		g.Go(func() error {
+			// Try to get checksum from remoteInfo
+			if checksum, ok := parseChecksum(remote2Info); ok {
+				remote2Hash = checksum
+
+				return nil
+			}
+
+			if progressHandler != nil {
+				progressHandler(Progress{
+					Action: ComputeChecksum,
+					Label:  remote2,
+				})
+			}
+
+			var err error
+
+			remote2Hash, err = a.Checksum(ctx, remote2, false)
+
+			return err
+		})
+
+		if err := g.Wait(); err != nil {
+			return err
+		}
+
+		if !bytes.Equal(remote1Hash, remote2Hash) {
+			return fmt.Errorf("%w: remote1: %s remote2: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(remote1Hash), base64.StdEncoding.EncodeToString(remote2Hash))
+		}
+
+		return nil
+	}
+}
+
+const shaPrefix = "sha2:"
+
+func parseChecksum(info os.FileInfo) ([]byte, bool) {
+	if info == nil {
+		return nil, false
 	}
 
-	if !bytes.Equal(remote1Hash, remote2Hash) {
-		return fmt.Errorf("%w: remote1: %s remote2: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(remote1Hash), base64.StdEncoding.EncodeToString(remote2Hash))
+	obj, ok := info.(*api.DataObject)
+	if !ok {
+		return nil, false
 	}
 
-	return nil
+	for _, replica := range obj.Replicas {
+		if replica.Status != "1" {
+			continue
+		}
+
+		suffix, ok := strings.CutPrefix(replica.Checksum, shaPrefix)
+		if !ok {
+			continue
+		}
+
+		if decoded, err := base64.StdEncoding.DecodeString(suffix); err == nil {
+			return decoded, true
+		}
+	}
+
+	return nil, false
 }
 
 // Sha256Checksum computes the sha256 checksum of a local file in a goroutine, so that it can be canceled with the context.

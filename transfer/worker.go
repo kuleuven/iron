@@ -584,6 +584,9 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 			}
 
 			switch u.Action {
+			case ComputeChecksum:
+				// This is a special case for the progress handler, it doesn't correspond to an actual task
+
 			case TransferFile:
 				worker.Upload(ctx, u.Path, u.IrodsPath)
 
@@ -630,6 +633,9 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 			}
 
 			switch u.Action {
+			case ComputeChecksum:
+				// This is a special case for the progress handler, it doesn't correspond to an actual task
+
 			case TransferFile:
 				worker.Download(ctx, u.Path, u.IrodsPath)
 
@@ -667,10 +673,14 @@ const (
 	TransferFile
 	RemoveFile
 	RemoveDirectory
+	ComputeChecksum
 )
 
 func (a Action) Format(label string) string {
 	switch a {
+	case ComputeChecksum:
+		return fmt.Sprintf("\x1B[36mc %s\x1B[0m", label)
+
 	case CreateDirectory:
 		return fmt.Sprintf("\x1B[34m+ %s/\x1B[0m", label)
 
@@ -763,10 +773,10 @@ func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, 
 	// Process the records
 	wg.Go(func() error {
 		if direction == RemoteToLocal {
-			return worker.merge(ctx, rch, lch, queue, mergeOptions{opts, Verify})
+			return worker.merge(ctx, rch, lch, queue, mergeOptions{opts, Verify(worker.IndexPool, worker.options.ProgressHandler)})
 		}
 
-		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, Verify})
+		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, Verify(worker.IndexPool, worker.options.ProgressHandler)})
 	})
 
 	return wg.Wait()
@@ -819,7 +829,7 @@ func (worker *Worker) SynchronizeRemoteDir(ctx context.Context, remote1, remote2
 
 	// Process the records
 	wg.Go(func() error {
-		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyRemote})
+		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyRemote(worker.IndexPool, worker.options.ProgressHandler)})
 	})
 
 	return wg.Wait()
@@ -841,7 +851,7 @@ func toLocalPath(base, path string) string {
 	return base + strings.Join(strings.Split(path, "/"), string(os.PathSeparator))
 }
 
-type checksumVerifyFunction func(ctx context.Context, a *api.API, local, remote string) error
+type checksumVerifyFunction func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) error
 
 type mergeOptions struct {
 	SynchronizeOptions
@@ -905,7 +915,7 @@ func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *objec
 		// Retransfer
 
 	case worker.options.VerifyChecksums:
-		err := opts.ChecksumVerify(ctx, worker.IndexPool, left.path, left.irodsPath)
+		err := opts.ChecksumVerify(ctx, left.path, left.irodsPath, left.info, right.info)
 		if err == nil {
 			return nil
 		}
@@ -1116,6 +1126,8 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 			}
 
 			switch u.Action {
+			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
+
 			case TransferFile:
 				worker.copy(ctx, u.Path, u.IrodsPath, u.Size)
 

@@ -92,5 +92,5 @@ func (c *Client) runWorker(options transfer.Options, callback func(worker *trans
 
 // Verify checks the checksum of a local file against the checksum of a remote file
 func (c *Client) Verify(ctx context.Context, local, remote string) error {
-	return transfer.Verify(ctx, c.API, local, remote)
+	return transfer.Verify(c.API, nil)(ctx, local, remote, nil, nil)
 }

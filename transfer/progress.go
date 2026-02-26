@@ -67,6 +67,11 @@ func (pb *PB) Handler(progress Progress) {
 	defer pb.Unlock()
 
 	switch {
+	case progress.Action == ComputeChecksum:
+		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
+
+		return
+
 	case progress.StartedAt.IsZero(),
 		progress.FinishedAt.IsZero() && progress.Transferred == 0:
 		// Registration
