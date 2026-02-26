@@ -343,7 +343,10 @@ func (a *App) create() *cobra.Command {
 }
 
 func (a *App) touch() *cobra.Command {
-	var t int64
+	var (
+		t time.Time
+		u int64
+	)
 
 	cmd := &cobra.Command{
 		Use:               "touch <target path>",
@@ -351,11 +354,24 @@ func (a *App) touch() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.TouchDataObject(cmd.Context(), a.Path(args[0]), time.Unix(t, 0))
+			if cmd.Flags().Changed("time") && cmd.Flags().Changed("unix-time") {
+				return errors.New("cannot specify both --time and --unix-time")
+			}
+
+			if cmd.Flags().Changed("unix-time") {
+				t = time.Unix(u, 0)
+			}
+
+			return a.TouchDataObject(cmd.Context(), a.Path(args[0]), t)
 		},
 	}
 
-	cmd.Flags().Int64Var(&t, "time", time.Now().Unix(), "Unix timestamp")
+	formats := []string{
+		time.RFC3339,
+	}
+
+	cmd.Flags().TimeVarP(&t, "time", "t", time.Now().Truncate(time.Second), formats, "Time to set as modification time in RFC3339 format")
+	cmd.Flags().Int64Var(&u, "unix", time.Now().Truncate(time.Second).Unix(), "Unix timestamp")
 
 	return cmd
 }
