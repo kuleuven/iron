@@ -101,6 +101,10 @@ type GenericResult struct {
 	err  error
 }
 
+func (gr *GenericResult) Rows() [][]string {
+	return gr.rows
+}
+
 func (gr *GenericResult) Err() error {
 	return gr.err
 }
@@ -177,6 +181,14 @@ func (gqr GenericSingleRowQuery) Execute(ctx context.Context) *GenericSingleRowR
 type GenericSingleRowResult struct {
 	err error
 	row []string
+}
+
+func (grr *GenericSingleRowResult) Row() []string {
+	return grr.row
+}
+
+func (grr *GenericSingleRowResult) Err() error {
+	return grr.err
 }
 
 func (grr *GenericSingleRowResult) Scan(dest ...any) error {

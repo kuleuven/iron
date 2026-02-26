@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1283,6 +1284,8 @@ func (a *App) sleep() *cobra.Command {
 }
 
 func (a *App) query() *cobra.Command {
+	var jsonFormat bool
+
 	examples := "  Print available column names:\n\t" + a.name + " query\n  Run a query:\n\t" + a.name + " query \"select DATA_NAME, DATA_SIZE\""
 
 	cmd := &cobra.Command{
@@ -1297,6 +1300,10 @@ func (a *App) query() *cobra.Command {
 					return err
 				}
 
+				if jsonFormat {
+					return json.NewEncoder(cmd.OutOrStdout()).Encode(columns)
+				}
+
 				fmt.Fprintln(cmd.OutOrStdout(), strings.Join(columns, "\n"))
 
 				return nil
@@ -1308,6 +1315,10 @@ func (a *App) query() *cobra.Command {
 
 			if results.Err() != nil {
 				return results.Err()
+			}
+
+			if jsonFormat {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(results.Rows())
 			}
 
 			columns := guessColumns(args[0])
@@ -1339,6 +1350,8 @@ func (a *App) query() *cobra.Command {
 			return results.Err()
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
 
 	return cmd
 }
