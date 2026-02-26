@@ -1254,7 +1254,7 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
-	// Execute the deletions
+	// Execute the tasks
 	worker.wg.Go(func() error {
 		for u := range queue {
 			if ctx.Err() != nil {
@@ -1287,25 +1287,7 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 			return worker.options.ErrorHandler("", irodsPath, err)
 		}
 
-		if record.IsDir() {
-			return nil
-		}
-
-		if _, hasChecksum := parseChecksum(record); hasChecksum && worker.options.CompareChecksums {
-			queue <- Task{
-				Action:    TransferFile, // TransferFile = verify checksum
-				IrodsPath: irodsPath,
-			}
-
-			return nil
-		} else if hasChecksum || !worker.options.IntegrityChecksums {
-			return nil
-		}
-
-		queue <- Task{
-			Action:    ComputeChecksum,
-			IrodsPath: irodsPath,
-		}
+		worker.computeChecksum(irodsPath, record, queue)
 
 		return nil
 	}, api.NoSkip)
@@ -1313,6 +1295,28 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 		worker.wg.Go(func() error {
 			return err
 		})
+	}
+}
+
+func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue chan<- Task) {
+	if record.IsDir() {
+		return
+	}
+
+	if _, hasChecksum := parseChecksum(record); hasChecksum && worker.options.CompareChecksums {
+		queue <- Task{
+			Action:    TransferFile, // TransferFile = verify checksum
+			IrodsPath: irodsPath,
+		}
+
+		return
+	} else if hasChecksum || !worker.options.IntegrityChecksums {
+		return
+	}
+
+	queue <- Task{
+		Action:    ComputeChecksum,
+		IrodsPath: irodsPath,
 	}
 }
 
