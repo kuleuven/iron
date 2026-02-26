@@ -76,53 +76,39 @@ func VerifyRemoteToLocal(a *api.API, progressHandler func(Progress)) func(ctx co
 
 // VerifyRemote checks the checksum of two remote files
 func VerifyRemoteToRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
+	parseOrComputeChecksum := func(ctx context.Context, path string, info os.FileInfo, result *[]byte) error {
+		// Try to get checksum from remoteInfo
+		if checksum, ok := parseChecksum(info); ok {
+			*result = checksum
+
+			return nil
+		}
+
+		if progressHandler != nil {
+			progressHandler(Progress{
+				Action: ComputeChecksum,
+				Label:  path,
+			})
+		}
+
+		var err error
+
+		*result, err = a.Checksum(ctx, path, false)
+
+		return err
+	}
+
 	return func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
 		g, ctx := errgroup.WithContext(ctx)
 
 		var remote1Hash, remote2Hash []byte
 
 		g.Go(func() error {
-			// Try to get checksum from remoteInfo
-			if checksum, ok := parseChecksum(remote1Info); ok {
-				remote1Hash = checksum
-
-				return nil
-			}
-
-			if progressHandler != nil {
-				progressHandler(Progress{
-					Action: ComputeChecksum,
-					Label:  remote1,
-				})
-			}
-
-			var err error
-
-			remote1Hash, err = a.Checksum(ctx, remote1, false)
-
-			return err
+			return parseOrComputeChecksum(ctx, remote1, remote1Info, &remote1Hash)
 		})
 
 		g.Go(func() error {
-			// Try to get checksum from remoteInfo
-			if checksum, ok := parseChecksum(remote2Info); ok {
-				remote2Hash = checksum
-
-				return nil
-			}
-
-			if progressHandler != nil {
-				progressHandler(Progress{
-					Action: ComputeChecksum,
-					Label:  remote2,
-				})
-			}
-
-			var err error
-
-			remote2Hash, err = a.Checksum(ctx, remote2, false)
-
-			return err
+			return parseOrComputeChecksum(ctx, remote2, remote2Info, &remote2Hash)
 		})
 
 		if err := g.Wait(); err != nil {

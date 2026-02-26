@@ -1405,18 +1405,9 @@ func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size in
 
 		// Verify the checksum after copying if integrity checksums are enabled
 		if worker.options.IntegrityChecksums {
-			checksum1, err := connAPI.Checksum(ctx, remote1, false)
+			_, _, err := VerifyRemoteToRemote(worker.TransferPool, worker.options.ProgressHandler)(ctx, remote1, remote2, nil, nil)
 			if err != nil {
 				return worker.options.ErrorHandler(remote1, remote2, err)
-			}
-
-			checksum2, err := connAPI.Checksum(ctx, remote2, false)
-			if err != nil {
-				return worker.options.ErrorHandler(remote1, remote2, err)
-			}
-
-			if !bytes.Equal(checksum1, checksum2) {
-				return worker.options.ErrorHandler(remote1, remote2, fmt.Errorf("%w after copy: %s != %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(checksum1), base64.StdEncoding.EncodeToString(checksum2)))
 			}
 		}
 
