@@ -33,18 +33,18 @@ func Verify(a *api.API, progressHandler func(Progress)) func(ctx context.Context
 		})
 
 		g.Go(func() error {
-			if progressHandler != nil {
-				progressHandler(Progress{
-					Action: ComputeChecksum,
-					Label:  local,
-				})
-			}
-
 			// Try to get checksum from remoteInfo
 			if checksum, ok := parseChecksum(remoteInfo); ok {
 				remoteHash = checksum
 
 				return nil
+			}
+
+			if progressHandler != nil {
+				progressHandler(Progress{
+					Action: ComputeChecksum,
+					Label:  local,
+				})
 			}
 
 			var err error
@@ -136,7 +136,7 @@ func parseChecksum(info os.FileInfo) ([]byte, bool) {
 		return nil, false
 	}
 
-	obj, ok := info.(*api.DataObject)
+	obj, ok := info.Sys().(*api.DataObject)
 	if !ok {
 		return nil, false
 	}
