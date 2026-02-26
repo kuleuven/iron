@@ -569,7 +569,8 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
 	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
 	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
-	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Verify checksums instead of size and modtime")
+	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to download")
+	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after downloading files, and verify equality to ensure transfer integrity")
 
 	return cmd
 }

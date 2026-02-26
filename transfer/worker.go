@@ -182,23 +182,10 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) {
 		return
 	}
 
-	var checksum []byte
-
-	// If checksums are computed afterwards, compute the checksum beforehand too to verify
-	if worker.options.IntegrityChecksums {
-		checksum, err = Sha256Checksum(ctx, local)
-		if err != nil {
-			worker.Error(local, remote, multierr.Append(err, r.Close()))
-
-			return
-		}
-	}
-
 	worker.FromReader(ctx, &fileReader{
-		name:     local,
-		stat:     stat,
-		checksum: checksum,
-		File:     r,
+		name: local,
+		stat: stat,
+		File: r,
 	}, remote)
 }
 
@@ -212,7 +199,7 @@ type Reader interface {
 
 type ChecksumReader interface {
 	Reader
-	Checksum() []byte
+	Checksum(ctx context.Context) ([]byte, error)
 }
 
 type fileReader struct {
@@ -234,8 +221,12 @@ func (r fileReader) ModTime() time.Time {
 	return r.stat.ModTime()
 }
 
-func (r fileReader) Checksum() []byte {
-	return r.checksum
+func (r fileReader) Checksum(ctx context.Context) ([]byte, error) {
+	if len(r.checksum) > 0 {
+		return r.checksum, nil
+	}
+
+	return Sha256Checksum(ctx, r.name)
 }
 
 // FromReader schedules the upload of a reader to the iRODS server using parallel transfers.
@@ -300,7 +291,11 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 			err = w.Touch(r.ModTime())
 		}
 
-		err = multierr.Append(err, worker.closeAndComputeChecksum(ctx, r, w))
+		if cr, ok := r.(ChecksumReader); ok {
+			err = multierr.Append(err, worker.verifyChecksumAndClose(ctx, cr.Checksum, w))
+		} else {
+			err = multierr.Append(err, w.Close())
+		}
 
 		err = multierr.Append(err, r.Close())
 		if err != nil {
@@ -313,8 +308,8 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	})
 }
 
-func (worker *Worker) closeAndComputeChecksum(ctx context.Context, r Reader, w api.File) error {
-	conn, err := w.CloseReturnConnection()
+func (worker *Worker) verifyChecksumAndClose(ctx context.Context, callback func(ctx context.Context) ([]byte, error), remote api.File) error {
+	conn, err := remote.CloseReturnConnection()
 	if err != nil {
 		return multierr.Append(err, conn.Close())
 	}
@@ -324,7 +319,7 @@ func (worker *Worker) closeAndComputeChecksum(ctx context.Context, r Reader, w a
 	}
 
 	request := msg.DataObjectRequest{
-		Path: w.Name(),
+		Path: remote.Name(),
 	}
 
 	var irodsChecksum msg.String
@@ -336,18 +331,18 @@ func (worker *Worker) closeAndComputeChecksum(ctx context.Context, r Reader, w a
 		return err
 	}
 
-	wantedChecksum, err := api.ParseIrodsChecksum(irodsChecksum.String)
+	remoteChecksum, err := api.ParseIrodsChecksum(irodsChecksum.String)
 	if err != nil {
 		return err
 	}
 
-	// Verify checksum if did compute one on the source
-	if cr, ok := r.(ChecksumReader); ok {
-		actualChecksum := cr.Checksum()
+	localChecksum, err := callback(ctx)
+	if err != nil {
+		return err
+	}
 
-		if !bytes.Equal(actualChecksum, wantedChecksum) {
-			return fmt.Errorf("checksum mismatch: local: %s remote: %s", base64.StdEncoding.EncodeToString(actualChecksum), base64.StdEncoding.EncodeToString(wantedChecksum))
-		}
+	if !bytes.Equal(localChecksum, remoteChecksum) {
+		return fmt.Errorf("%w: local: %s remote: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(localChecksum), base64.StdEncoding.EncodeToString(remoteChecksum))
 	}
 
 	return nil
@@ -460,6 +455,11 @@ type Writer interface {
 	Touch(mtime time.Time) error
 }
 
+type ChecksumWriter interface {
+	Writer
+	Checksum(ctx context.Context) ([]byte, error)
+}
+
 type fileWriter struct {
 	name string
 	*os.File
@@ -475,6 +475,10 @@ func (w fileWriter) Remove() error {
 
 func (w fileWriter) Touch(mtime time.Time) error {
 	return os.Chtimes(w.name, time.Time{}, mtime)
+}
+
+func (w fileWriter) Checksum(ctx context.Context) ([]byte, error) {
+	return Sha256Checksum(ctx, w.name)
 }
 
 // Download schedules the download of a remote file from the iRODS server using parallel transfers.
@@ -541,9 +545,14 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 
 		err := wg.Wait()
 		err = multierr.Append(err, rr.Close())
-		err = multierr.Append(err, r.Close())
-
 		err = multierr.Append(err, w.Close())
+
+		if cw, ok := w.(ChecksumWriter); ok {
+			err = multierr.Append(err, worker.verifyChecksumAndClose(ctx, cw.Checksum, r))
+		} else {
+			err = multierr.Append(err, r.Close())
+		}
+
 		if err != nil {
 			err = multierr.Append(err, w.Remove())
 
@@ -632,23 +641,6 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 	})
 }
 
-type taskReader struct {
-	task Task
-	*os.File
-}
-
-func (tr *taskReader) Name() string {
-	return tr.task.Path
-}
-
-func (tr *taskReader) Size() int64 {
-	return tr.task.Size
-}
-
-func (tr *taskReader) ModTime() time.Time {
-	return tr.task.ModTime
-}
-
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
@@ -673,26 +665,7 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 				// This is a special case for the progress handler, it doesn't correspond to an actual task
 
 			case TransferFile:
-				r, err := os.Open(u.Path)
-				if err != nil {
-					worker.Error(u.Path, u.IrodsPath, err)
-
-					continue
-				}
-
-				if worker.options.IntegrityChecksums && u.Checksum == nil {
-					u.Checksum, err = Sha256Checksum(ctx, u.Path)
-					if err != nil {
-						worker.Error(u.Path, u.IrodsPath, err)
-
-						continue
-					}
-				}
-
-				worker.FromReader(ctx, &taskReader{
-					task: u,
-					File: r,
-				}, u.IrodsPath)
+				worker.uploadAction(ctx, u)
 
 			case RemoveFile:
 				worker.action(u.Path, u.IrodsPath, RemoveFile, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.IrodsPath, worker.options.SkipTrash) })
@@ -715,6 +688,45 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 			return err
 		})
 	}
+}
+
+func (worker *Worker) uploadAction(ctx context.Context, u Task) {
+	r, err := os.Open(u.Path)
+	if err != nil {
+		worker.Error(u.Path, u.IrodsPath, err)
+
+		return
+	}
+
+	worker.FromReader(ctx, &taskReader{
+		task: u,
+		File: r,
+	}, u.IrodsPath)
+}
+
+type taskReader struct {
+	task Task
+	*os.File
+}
+
+func (tr *taskReader) Name() string {
+	return tr.task.Path
+}
+
+func (tr *taskReader) Size() int64 {
+	return tr.task.Size
+}
+
+func (tr *taskReader) ModTime() time.Time {
+	return tr.task.ModTime
+}
+
+func (tr *taskReader) Checksum(ctx context.Context) ([]byte, error) {
+	if len(tr.task.Checksum) > 0 {
+		return tr.task.Checksum, nil
+	}
+
+	return Sha256Checksum(ctx, tr.task.Path)
 }
 
 // DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
@@ -1014,7 +1026,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 	}
 }
 
-func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error {
+func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
 	// Ignore non-regular files
 	if left.info.IsDir() || !left.info.Mode().IsRegular() {
 		return nil
@@ -1389,6 +1401,23 @@ func (worker *Worker) copy(ctx context.Context, remote1, remote2 string, size in
 				StartedAt:   startTime,
 				FinishedAt:  time.Now(),
 			})
+		}
+
+		// Verify the checksum after copying if integrity checksums are enabled
+		if worker.options.IntegrityChecksums {
+			checksum1, err := connAPI.Checksum(ctx, remote1, false)
+			if err != nil {
+				return worker.options.ErrorHandler(remote1, remote2, err)
+			}
+
+			checksum2, err := connAPI.Checksum(ctx, remote2, false)
+			if err != nil {
+				return worker.options.ErrorHandler(remote1, remote2, err)
+			}
+
+			if !bytes.Equal(checksum1, checksum2) {
+				return worker.options.ErrorHandler(remote1, remote2, fmt.Errorf("%w after copy: %s != %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(checksum1), base64.StdEncoding.EncodeToString(checksum2)))
+			}
 		}
 
 		return nil
