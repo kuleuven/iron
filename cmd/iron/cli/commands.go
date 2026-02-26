@@ -1283,7 +1283,7 @@ func (a *App) sleep() *cobra.Command {
 	}
 }
 
-func (a *App) query() *cobra.Command {
+func (a *App) query() *cobra.Command { //nolint:funlen
 	var jsonFormat bool
 
 	examples := "  Print available column names:\n\t" + a.name + " query\n  Run a query:\n\t" + a.name + " query \"select DATA_NAME, DATA_SIZE\""
