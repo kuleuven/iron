@@ -109,6 +109,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.chmod(),
 		a.inherit(),
 		a.list(),
+		a.find(),
 		a.tree(),
 		a.stat(),
 		a.meta(),

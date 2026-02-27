@@ -1098,6 +1098,70 @@ func indentString(s string, depth int, jsonFormat bool) string {
 	return fmt.Sprintf("%s%s", strings.Repeat("  ", depth), s)
 }
 
+func (a *App) find() *cobra.Command {
+	var (
+		jsonFormat, listACL, listMeta, collectionSizes bool
+		columns                                        []string
+	)
+
+	cmd := &cobra.Command{
+		Use:               "find <collection path>",
+		Aliases:           []string{"search"},
+		Short:             "Find collections or data objects based on globs",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				args = []string{"."}
+			}
+
+			pattern := a.Path(args[0])
+
+			hideColumns, err := hiddenColumns(columns, "creator", "size", "date", "status", "name")
+			if err != nil {
+				return err
+			}
+
+			var printer Printer = &TablePrinter{
+				Writer: &tabwriter.TabWriter{
+					Writer:      cmd.OutOrStdout(),
+					HideColumns: hideColumns,
+				},
+				Zone: a.Zone,
+			}
+
+			if jsonFormat {
+				printer = &JSONPrinter{
+					Writer: cmd.OutOrStdout(),
+				}
+			}
+
+			printer.Setup(listACL, listMeta, collectionSizes)
+
+			defer printer.Flush()
+
+			return a.Glob(cmd.Context(), a.Workdir, pattern, findFunc(printer))
+		},
+	}
+
+	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
+
+	return cmd
+}
+
+func findFunc(printer Printer) func(path string, record api.Record, err error) error {
+	return func(path string, record api.Record, err error) error {
+		if err != nil {
+			return err
+		}
+
+		printer.Print(path, record)
+
+		return nil
+	}
+}
+
 func (a *App) meta() *cobra.Command {
 	meta := &cobra.Command{
 		Use:   "meta",
