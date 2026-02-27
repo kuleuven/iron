@@ -37,17 +37,21 @@ type Options struct {
 	// when uploading or downloading a directory
 	MaxQueued int
 	// OnlyIfNewer indicates whether files should only be transferred
-	// when syncing (UploadDir, DownloadDir, CopyDir) if the source file is newer than the destination file
+	// if the source file is newer than the destination file,
+	// based on the modification time, when syncing directories (UploadDir, DownloadDir, CopyDir).
 	OnlyIfNewer bool
 	// CompareChecksums indicates whether checksums should be verified
-	// to compare an existing file when syncing (UploadDir, DownloadDir, CopyDir)
+	// to compare two existing file when syncing directories (UploadDir, DownloadDir, CopyDir).
 	CompareChecksums bool
 	// IntegrityChecksums indicates whether checksums should be computed before
-	// and after the transfer to verify the integrity of the transfer
+	// and after the transfer to verify the integrity of the transfer (Upload, Download, UploadDir, DownloadDir, CopyDir).
 	IntegrityChecksums bool
-	// DryRun will only print actions for directory operations (UploadDir, DownloadDir, RemoveDir, CopyDir)
-	// It will not apply to file operations (Upload, Download, ToStream, FromStream)!
+	// DryRun will only print actions for directory operations (UploadDir, DownloadDir, RemoveDir, CopyDir).
+	// It does not apply to file operations (Upload, Download, ToStream, FromStream)!
 	DryRun bool
+	// IgnorePatterns indicates patterns to ignore when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
+	// The pattern syntax is the same as filepath.Match.
+	IgnorePatterns []string
 	// Output will, if set, display a progress bar and occurring errors
 	// If ErrorHandler or ProgressHandler is set, this option is ignored
 	Output io.Writer
@@ -1018,6 +1022,12 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 		case !hasLeft && !hasRight:
 			return nil
 
+		case hasLeft && worker.shouldIgnore(leftObject):
+			leftObject, hasLeft = skipAll(left, leftObject)
+
+		case hasRight && worker.shouldIgnore(rightObject):
+			rightObject, hasRight = skipAll(right, rightObject)
+
 		case !hasLeft, hasRight && api.ComparePaths(leftObject.irodsPath, rightObject.irodsPath) > 0:
 			if worker.options.Delete {
 				rightObject, hasRight = worker.removeAll(right, rightObject, queue)
@@ -1026,7 +1036,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 			}
 
 		case !hasRight, api.ComparePaths(leftObject.irodsPath, rightObject.irodsPath) < 0:
-			worker.transfer(leftObject, queue)
+			worker.transferNewCollectionOrObject(leftObject, queue)
 
 			leftObject, hasLeft = <-left
 
@@ -1046,7 +1056,7 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 			rightObject, hasRight = worker.removeAll(right, rightObject, queue)
 
 		default:
-			if err := worker.compareAndTransfer(ctx, leftObject, rightObject, queue, opts); err != nil {
+			if err := worker.compareAndTransferObject(ctx, leftObject, rightObject, queue, opts); err != nil {
 				return err
 			}
 
@@ -1056,7 +1066,20 @@ func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue
 	}
 }
 
-func (worker *Worker) compareAndTransfer(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
+func (worker *Worker) shouldIgnore(obj *object) bool {
+	// Ignore files from ignore globs
+	for _, pattern := range worker.options.IgnorePatterns {
+		if matched, matchErr := filepath.Match(pattern, obj.info.Name()); matchErr != nil {
+			continue
+		} else if matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (worker *Worker) compareAndTransferObject(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
 	var checksum []byte
 
 	modTimeCompare := left.info.ModTime().Truncate(time.Second).Compare(right.info.ModTime().Truncate(time.Second))
@@ -1187,7 +1210,7 @@ func skipAll(ch <-chan *object, obj *object) (*object, bool) {
 	return next, ok
 }
 
-func (worker *Worker) transfer(obj *object, queue chan<- Task) {
+func (worker *Worker) transferNewCollectionOrObject(obj *object, queue chan<- Task) {
 	if obj.info.IsDir() {
 		worker.Progress(Progress{
 			Action: CreateDirectory,
@@ -1207,8 +1230,6 @@ func (worker *Worker) transfer(obj *object, queue chan<- Task) {
 	if !obj.info.Mode().IsRegular() {
 		return
 	}
-
-	// Ignore files from ignore globs
 
 	worker.Progress(Progress{
 		Action: TransferFile,
