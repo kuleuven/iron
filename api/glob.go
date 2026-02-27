@@ -62,6 +62,10 @@ func (api *API) globMatch(ctx context.Context, root, dir string, parts []string,
 		return api.globMatch(ctx, root, dir+"/"+pattern, remaining, abs, walkFn)
 	}
 
+	if len(remaining) == 0 {
+		return api.globMatchLast(ctx, root, dir, pattern, abs, walkFn)
+	}
+
 	likePattern := globToLike(pattern)
 
 	subcols, err := api.ListCollections(ctx,
@@ -77,19 +81,35 @@ func (api *API) globMatch(ctx context.Context, root, dir string, parts []string,
 			continue
 		}
 
-		if len(remaining) > 0 {
-			err = api.globMatch(ctx, root, subcols[i].Path, remaining, abs, walkFn)
-		} else {
-			err = walkFn(globPath(root, subcols[i].Path, abs), &record{FileInfo: &subcols[i]}, nil)
-		}
-
+		err = api.globMatch(ctx, root, subcols[i].Path, remaining, abs, walkFn)
 		if err != nil {
 			return err
 		}
 	}
 
-	if len(remaining) > 0 {
-		return nil
+	return nil
+}
+
+func (api *API) globMatchLast(ctx context.Context, root, dir, pattern string, abs bool, walkFn WalkFunc) error {
+	likePattern := globToLike(pattern)
+
+	subcols, err := api.ListCollections(ctx,
+		Equal(msg.ICAT_COLUMN_COLL_PARENT_NAME, dir),
+		Like(msg.ICAT_COLUMN_COLL_NAME, dir+"/"+likePattern),
+	)
+	if err != nil {
+		return err
+	}
+
+	for i := range subcols {
+		if matched, _ := filepath.Match(pattern, subcols[i].Name()); !matched { //nolint:errcheck
+			continue
+		}
+
+		err = walkFn(globPath(root, subcols[i].Path, abs), &record{FileInfo: &subcols[i]}, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	objects, err := api.ListDataObjects(ctx,
@@ -138,6 +158,7 @@ func globToLike(pattern string) string {
 			b.WriteByte('%')
 
 			for i++; i < len(pattern) && pattern[i] != ']'; i++ {
+				// Skip
 			}
 		case '\\':
 			// Escaped character in glob — emit literally, but escape if it is a LIKE metachar

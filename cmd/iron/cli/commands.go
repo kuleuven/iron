@@ -882,6 +882,8 @@ For data objects it indicates the status of the replicas, as follows:
 		or an earlier process did not finish properly.
 	…	Replica is in intermediate state, another replica is write-locked.`
 
+var columnsDisplayDescription = "Columns to display. Available options: creator, size, date, status, name, all."
+
 func (a *App) list() *cobra.Command {
 	var (
 		jsonFormat, listACL, listMeta, collectionSizes bool
@@ -933,7 +935,7 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, columnsDisplayDescription)
 
 	return cmd
 }
@@ -1061,8 +1063,8 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 	}
 
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
-	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
+	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON (no indentation)")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, columnsDisplayDescription)
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
 
 	return cmd
@@ -1145,7 +1147,7 @@ func (a *App) find() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, "Columns to display. Available options: creator, size, date, status, name, all.")
+	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, columnsDisplayDescription)
 
 	return cmd
 }

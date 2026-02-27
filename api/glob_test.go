@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -25,7 +24,7 @@ func collectionsResponse(paths ...string) msg.QueryResponse {
 	for i := range paths {
 		ids[i] = "1"
 		owners[i] = "rods"
-		zones[i] = "zone"
+		zones[i] = "zone1"
 		ctimes[i] = "10000"
 		mtimes[i] = "10000"
 		inherits[i] = "0"
@@ -82,7 +81,7 @@ func dataObjectsResponse(items ...struct{ coll, name string }) msg.QueryResponse
 		replNums[i] = "0"
 		sizes[i] = "1024"
 		owners[i] = "rods"
-		ownerZones[i] = "zone"
+		ownerZones[i] = "zone1"
 		checksums[i] = ""
 		statuses[i] = ""
 		rescs[i] = "demoResc"
@@ -296,7 +295,7 @@ func TestGlobNoWildcard(t *testing.T) {
 			SQLResult: []msg.SQLResult{
 				{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
 				{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
-				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone1"}},
 				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 509, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
