@@ -1425,7 +1425,7 @@ func guessColumns(query string) []string {
 		switch strings.ToLower(field) {
 		case "select":
 		// Ignore
-		case "where", "group", "order", "limit", "offset":
+		case "where", "group", "order", "limit", "offset", "distinct":
 			return columns
 		default:
 			for col := range strings.SplitSeq(field, ",") {
