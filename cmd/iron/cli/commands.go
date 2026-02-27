@@ -541,8 +541,6 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 			opts.Output = cmd.OutOrStdout()
 
 			if !fi.IsDir() {
-				opts.SyncModTime = false
-
 				return a.Upload(cmd.Context(), source, target, opts)
 			}
 
@@ -564,6 +562,7 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after uploading files, and verify equality to ensure transfer integrity")
 	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Server side checksums are still computed and stored, even if this flag is used.")
 	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", nil, "Comma separated list of patterns to ignore when uploading a directory. The pattern is applied to filenames only, not the complete path.")
+	cmd.Flags().BoolVar(&opts.SyncModTime, "sync-modtime", true, "Use the modification time of the destination file to match the source file. Disable with --sync-modtime=false.")
 
 	return cmd
 }
@@ -624,8 +623,6 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 			opts.Output = cmd.OutOrStdout()
 
 			if !record.IsDir() {
-				opts.SyncModTime = false
-
 				return a.Download(cmd.Context(), target, source, opts)
 			}
 
@@ -645,6 +642,7 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after downloading files, and verify equality to ensure transfer integrity")
 	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Server side checksums are still computed and stored, even if this flag is used.")
 	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", nil, "Comma separated list of patterns to ignore when downloading a directory. The pattern is applied to filenames only, not the complete path.")
+	cmd.Flags().BoolVar(&opts.SyncModTime, "sync-modtime", true, "Use the modification time of the destination file to match the source file. Disable with --sync-modtime=false.")
 
 	return cmd
 }
