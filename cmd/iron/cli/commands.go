@@ -225,12 +225,29 @@ func (a *App) rm() *cobra.Command {
 }
 
 func (a *App) mv() *cobra.Command {
+	examples := []string{
+		"  " + a.name + " mv /path/to/collection1/file.txt /path/to/collection2/file.txt",
+		"  " + a.name + " mv /path/to/collection1/file.txt /path/to/collection2/",
+		"  " + a.name + " mv /path/to/collection1 /path/to/collection2/          (move collection1 to /path/to/collection2/collection1)",
+		"  " + a.name + " mv /path/to/collection1/ /path/to/collection2/         (move contents of collection1 into collection2)",
+	}
+
 	return &cobra.Command{
 		Use:               "mv <path> <target path>",
-		Short:             "Move a data object or a collection",
+		Short:             "Move a data object or a collection, or move all contents of a collection to the target collection",
+		Example:           strings.Join(examples, "\n"),
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.HasSuffix(args[0], "/") {
+				if !strings.HasSuffix(args[1], "/") {
+					return ErrAmbiguousTarget
+				}
+
+				// Move all contents of the source collection into the target collection
+				return a.moveDir(cmd.Context(), a.Path(args[0]), a.Path(args[1]))
+			}
+
 			src := a.Path(args[0])
 			dest := args[1]
 
@@ -252,6 +269,30 @@ func (a *App) mv() *cobra.Command {
 			return a.RenameDataObject(cmd.Context(), src, dest)
 		},
 	}
+}
+
+func (a *App) moveDir(ctx context.Context, src, dest string) error {
+	return a.Walk(ctx, src, func(path string, record api.Record, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if path == src {
+			return api.SkipSubDirs
+		}
+
+		target := dest + "/" + Name(path)
+
+		if record.IsDir() {
+			if err := a.RenameCollection(ctx, path, target); err != nil {
+				return err
+			}
+
+			return api.SkipDir
+		}
+
+		return a.RenameDataObject(ctx, path, target)
+	})
 }
 
 const copyDescription = `Copy a file or directory to the target path.
