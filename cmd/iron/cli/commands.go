@@ -232,7 +232,9 @@ func (a *App) mv() *cobra.Command {
 		"  " + a.name + " mv /path/to/collection1/ /path/to/collection2/         (move contents of collection1 into collection2)",
 	}
 
-	return &cobra.Command{
+	var preserveMtime bool
+
+	cmd := &cobra.Command{
 		Use:               "mv <path> <target path>",
 		Short:             "Move a data object or a collection, or move all contents of a collection to the target collection",
 		Example:           strings.Join(examples, "\n"),
@@ -263,12 +265,22 @@ func (a *App) mv() *cobra.Command {
 			}
 
 			if obj.IsDir() {
-				return a.RenameCollection(cmd.Context(), src, dest)
+				err = a.RenameCollection(cmd.Context(), src, dest)
+			} else {
+				err = a.RenameDataObject(cmd.Context(), src, dest)
 			}
 
-			return a.RenameDataObject(cmd.Context(), src, dest)
+			if err != nil || !preserveMtime {
+				return err
+			}
+
+			return a.ModifyModificationTime(cmd.Context(), dest, obj.ModTime())
 		},
 	}
+
+	cmd.Flags().BoolVar(&preserveMtime, "preserve-mtime", false, "Preserve modification time of files when moving. By default, the modification time is updated to the current time.")
+
+	return cmd
 }
 
 func (a *App) moveDir(ctx context.Context, src, dest string) error {
