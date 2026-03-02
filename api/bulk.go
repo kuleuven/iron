@@ -297,7 +297,7 @@ func (b bulk) prefetchSizesForCollections(ctx context.Context, api *API, keys ..
 			strList[i] = fmt.Sprintf("%d", id)
 		}
 
-		result := api.GenericQuery(fmt.Sprintf("SELECT SUM(DATA_SIZE), COLL_ID WHERE COLL_ID IN ('%s') GROUP BY COLL_ID", strings.Join(strList, "','"))).Execute(ctx)
+		result := api.GenericQuery(fmt.Sprintf("SELECT SUM(DATA_SIZE), COLL_ID WHERE COLL_ID IN ('%s') AND COLL_ACCESS_USER_NAME = '%s' GROUP BY COLL_ID", strings.Join(strList, "','"), api.Username)).Execute(ctx)
 
 		if err := b.collectSizes(result); err != nil {
 			return err

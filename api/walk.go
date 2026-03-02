@@ -673,7 +673,7 @@ func (api *API) GetRecord(ctx context.Context, path string, options ...WalkOptio
 	}
 
 	if slices.Contains(options, FetchCollectionSize) {
-		return r, api.GenericQueryRow(fmt.Sprintf("SELECT SUM(DATA_SIZE) WHERE COLL_NAME = '%s'", path)).Execute(ctx).Scan(&r.collectionSize)
+		return r, api.GenericQueryRow(fmt.Sprintf("SELECT SUM(DATA_SIZE) WHERE COLL_NAME = '%s' AND COLL_ACCESS_USER_NAME = '%s'", path, api.Username)).Execute(ctx).Scan(&r.collectionSize)
 	}
 
 	return r, nil
