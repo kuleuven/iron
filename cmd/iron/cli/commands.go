@@ -1072,7 +1072,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 			var printer Printer = &TablePrinter{
 				Writer: &tabwriter.StreamWriter{
 					Writer:       cmd.OutOrStdout(),
-					ColumnWidths: []int{20, 8, 13, 6},
+					ColumnWidths: []int{20, 8, 13, 6, 49},
 					HideColumns:  hideColumns,
 				},
 				Zone: a.Zone,

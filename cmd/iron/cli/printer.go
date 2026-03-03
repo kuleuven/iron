@@ -27,7 +27,7 @@ type TablePrinter struct {
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes bool) {
-	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME\tCHECKSUM"
+	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tCHECKSUM\tNAME"
 
 	if hasMeta {
 		header1 += "\t─── METADATA KEY\tVALUE\tUNITS\n"
@@ -99,15 +99,15 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		))
 	}
 
-	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s\t%s",
+	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s%s%s",
 		owner,
 		tp.formatSize(i),
 		t,
 		status,
+		checksum,
 		color+Bold,
 		name,
 		NoColor+NoBold,
-		checksum,
 	)
 
 	if len(meta) > 0 {
