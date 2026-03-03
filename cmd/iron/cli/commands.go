@@ -894,13 +894,15 @@ For data objects it indicates the status of the replicas, as follows:
 		or an earlier process did not finish properly.
 	…	Replica is in intermediate state, another replica is write-locked.`
 
-var columnsDisplayDescription = "Columns to display. Available options: creator, size, date, status, name, all."
+var columnsDisplayDescription = "Columns to display. Available options: creator, size, date, status, name, checksum, all."
 
 func (a *App) list() *cobra.Command {
 	var (
 		jsonFormat, listACL, listMeta, collectionSizes bool
 		columns                                        []string
 	)
+
+	defaultColumns := []string{"creator", "size", "date", "status", "name"}
 
 	cmd := &cobra.Command{
 		Use:               "ls <collection path>",
@@ -916,7 +918,7 @@ func (a *App) list() *cobra.Command {
 
 			dir := a.Path(args[0])
 
-			hideColumns, err := hiddenColumns(columns, "creator", "size", "date", "status", "name")
+			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "name", "checksum")
 			if err != nil {
 				return err
 			}
@@ -947,7 +949,7 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, columnsDisplayDescription)
+	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 
 	return cmd
 }
@@ -990,7 +992,7 @@ func walkOptions(listACL, listMeta, collectionSizes bool) []api.WalkOption {
 	return opts
 }
 
-func hiddenColumns(columns []string, available ...string) ([]int, error) {
+func hiddenColumns(columns, defaultColumns []string, available ...string) ([]int, error) {
 	if slices.Contains(columns, "all") {
 		if len(columns) > 1 {
 			return nil, fmt.Errorf("cannot use 'all' with other columns")
@@ -999,7 +1001,31 @@ func hiddenColumns(columns []string, available ...string) ([]int, error) {
 		return nil, nil
 	}
 
-	for _, col := range columns {
+	var selection []string
+
+	if strings.ContainsAny(strings.Join(columns, ""), "+-") {
+		selection = defaultColumns
+
+		for _, col := range columns {
+			if col, add := strings.CutPrefix(col, "+"); add {
+				selection = append(selection, col)
+
+				continue
+			}
+
+			if col, del := strings.CutPrefix(col, "-"); del {
+				selection = slices.Delete(selection, slices.Index(selection, col), slices.Index(selection, col)+1)
+
+				continue
+			}
+
+			return nil, fmt.Errorf("invalid column format: %s", col)
+		}
+	} else {
+		selection = columns
+	}
+
+	for _, col := range selection {
 		if !slices.Contains(available, col) {
 			return nil, fmt.Errorf("unknown column: %s", col)
 		}
@@ -1008,7 +1034,7 @@ func hiddenColumns(columns []string, available ...string) ([]int, error) {
 	var hidden []int
 
 	for i, col := range available {
-		if !slices.Contains(columns, col) {
+		if !slices.Contains(selection, col) {
 			hidden = append(hidden, i)
 		}
 	}
@@ -1024,6 +1050,8 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 		collectionSizes bool
 	)
 
+	defaultColumns := []string{"name"}
+
 	cmd := &cobra.Command{
 		Use:               "tree <collection path>",
 		Short:             "Print the full tree structure beneath a collection",
@@ -1036,7 +1064,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 			dir := a.Path(args[0])
 
-			hideColumns, err := hiddenColumns(columns, "creator", "size", "date", "status", "name")
+			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "name", "checksum")
 			if err != nil {
 				return err
 			}
@@ -1076,7 +1104,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON (no indentation)")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"name"}, columnsDisplayDescription)
+	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
 
 	return cmd
@@ -1118,6 +1146,8 @@ func (a *App) find() *cobra.Command {
 		columns                                        []string
 	)
 
+	defaultColumns := []string{"creator", "size", "date", "status", "name"}
+
 	cmd := &cobra.Command{
 		Use:               "find <collection path>",
 		Aliases:           []string{"search"},
@@ -1131,7 +1161,7 @@ func (a *App) find() *cobra.Command {
 
 			pattern := a.Path(args[0])
 
-			hideColumns, err := hiddenColumns(columns, "creator", "size", "date", "status", "name")
+			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "name", "checksum")
 			if err != nil {
 				return err
 			}
@@ -1159,7 +1189,7 @@ func (a *App) find() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
-	cmd.Flags().StringSliceVar(&columns, "columns", []string{"creator", "size", "date", "status", "name"}, columnsDisplayDescription)
+	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 
 	return cmd
 }

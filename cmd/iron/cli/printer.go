@@ -27,7 +27,7 @@ type TablePrinter struct {
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes bool) {
-	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME"
+	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tNAME\tCHECKSUM"
 
 	if hasMeta {
 		header1 += "\t─── METADATA KEY\tVALUE\tUNITS\n"
@@ -53,13 +53,14 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		t = i.ModTime().Format("Jan 01 15:04")
 	}
 
-	var status, owner, color string
+	var status, owner, checksum, color string
 
 	switch v := i.Sys().(type) {
 	case *api.DataObject:
 		for _, r := range v.Replicas {
 			status = appendStatus(status, r.Status)
 			owner = tp.formatUser(r.Owner, r.OwnerZone, false)
+			checksum = r.Checksum
 			color = NoColor
 		}
 
@@ -98,7 +99,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		))
 	}
 
-	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s",
+	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s%s%s\t%s",
 		owner,
 		tp.formatSize(i),
 		t,
@@ -106,6 +107,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		color+Bold,
 		name,
 		NoColor+NoBold,
+		checksum,
 	)
 
 	if len(meta) > 0 {
@@ -130,7 +132,7 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 			metaLine = meta[i]
 		}
 
-		fmt.Fprintf(tp.Writer, "%s\t\t\t\t%s\n", aclLine, metaLine)
+		fmt.Fprintf(tp.Writer, "%s\t\t\t\t\t%s\n", aclLine, metaLine)
 	}
 }
 
@@ -254,21 +256,23 @@ func (jp *JSONPrinter) Flush() {
 
 func toMap(name string, i api.Record) map[string]any {
 	var (
-		creator string
-		id      int64
+		creator  string
+		checksum *string
+		id       int64
 	)
 
 	switch v := i.Sys().(type) {
 	case *api.DataObject:
 		id = v.ID
 		creator = v.Replicas[0].Owner
+		checksum = &v.Replicas[0].Checksum
 
 	case *api.Collection:
 		id = v.ID
 		creator = v.Owner
 	}
 
-	return map[string]any{
+	m := map[string]any{
 		"name":     name,
 		"size":     i.Size(),
 		"modified": i.ModTime().Format(time.RFC3339),
@@ -277,4 +281,10 @@ func toMap(name string, i api.Record) map[string]any {
 		"acl":      i.Access(),
 		"metadata": i.Metadata(),
 	}
+
+	if checksum != nil {
+		m["checksum"] = *checksum
+	}
+
+	return m
 }
