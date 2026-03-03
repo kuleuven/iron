@@ -312,13 +312,9 @@ func (r *Result) cleanup() {
 }
 
 func parseValue(value string, dest any) error {
-	if value == "" {
-		return nil
-	}
-
 	switch reflect.ValueOf(dest).Elem().Kind() { //nolint:exhaustive
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		i, err := strconv.ParseInt(value, 10, 64)
+		i, err := strconv.ParseInt(pick(value, "0"), 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: %s (int)", err, value)
 		}
@@ -326,7 +322,7 @@ func parseValue(value string, dest any) error {
 		reflect.ValueOf(dest).Elem().SetInt(i)
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		u, err := strconv.ParseUint(value, 10, 64)
+		u, err := strconv.ParseUint(pick(value, "0"), 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: %s (uint)", err, value)
 		}
@@ -334,7 +330,7 @@ func parseValue(value string, dest any) error {
 		reflect.ValueOf(dest).Elem().SetUint(u)
 
 	case reflect.Float32, reflect.Float64:
-		f, err := strconv.ParseFloat(value, 64)
+		f, err := strconv.ParseFloat(pick(value, "0"), 64)
 		if err != nil {
 			return fmt.Errorf("%w: %s (float)", err, value)
 		}
@@ -345,7 +341,7 @@ func parseValue(value string, dest any) error {
 		reflect.ValueOf(dest).Elem().SetString(value)
 
 	case reflect.Bool:
-		b, err := strconv.ParseBool(value)
+		b, err := strconv.ParseBool(pick(value, "false"))
 		if err != nil {
 			return fmt.Errorf("%w: %s (bool)", err, value)
 		}
@@ -372,7 +368,19 @@ func parseValue(value string, dest any) error {
 	return nil
 }
 
+func pick(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+
+	return value
+}
+
 func parseTime(timestring string) (time.Time, error) {
+	if timestring == "" {
+		return time.Time{}, nil
+	}
+
 	i64, err := strconv.ParseInt(timestring, 10, 64)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("cannot parse IRODS time string '%s'", timestring)
