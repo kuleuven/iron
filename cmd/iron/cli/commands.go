@@ -1001,28 +1001,10 @@ func hiddenColumns(columns, defaultColumns []string, available ...string) ([]int
 		return nil, nil
 	}
 
-	var selection []string
+	selection := columns
 
 	if strings.ContainsAny(strings.Join(columns, ""), "+-") {
-		selection = defaultColumns
-
-		for _, col := range columns {
-			if col, add := strings.CutPrefix(col, "+"); add {
-				selection = append(selection, col)
-
-				continue
-			}
-
-			if col, del := strings.CutPrefix(col, "-"); del {
-				selection = slices.Delete(selection, slices.Index(selection, col), slices.Index(selection, col)+1)
-
-				continue
-			}
-
-			return nil, fmt.Errorf("invalid column format: %s", col)
-		}
-	} else {
-		selection = columns
+		selection = hiddenColumnsSelection(columns, defaultColumns)
 	}
 
 	for _, col := range selection {
@@ -1040,6 +1022,22 @@ func hiddenColumns(columns, defaultColumns []string, available ...string) ([]int
 	}
 
 	return hidden, nil
+}
+
+func hiddenColumnsSelection(columns, defaultColumns []string) []string {
+	selection := defaultColumns
+
+	for _, col := range columns {
+		if col, del := strings.CutPrefix(col, "-"); del {
+			selection = slices.Delete(selection, slices.Index(selection, col), slices.Index(selection, col)+1)
+
+			continue
+		}
+
+		selection = append(selection, strings.TrimPrefix(col, "+"))
+	}
+
+	return selection
 }
 
 func (a *App) tree() *cobra.Command { //nolint:funlen
