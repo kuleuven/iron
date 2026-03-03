@@ -60,7 +60,11 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		for _, r := range v.Replicas {
 			status = appendStatus(status, r.Status)
 			owner = tp.formatUser(r.Owner, r.OwnerZone, false)
-			checksum = r.Checksum
+
+			if chs, err := api.ParseIrodsChecksum(r.Checksum); err == nil {
+				checksum = fmt.Sprintf("%0x", chs)
+			}
+
 			color = NoColor
 		}
 
@@ -265,7 +269,11 @@ func toMap(name string, i api.Record) map[string]any {
 	case *api.DataObject:
 		id = v.ID
 		creator = v.Replicas[0].Owner
-		checksum = &v.Replicas[0].Checksum
+
+		if chs, err := api.ParseIrodsChecksum(v.Replicas[0].Checksum); err == nil {
+			str := fmt.Sprintf("%0x", chs)
+			checksum = &str
+		}
 
 	case *api.Collection:
 		id = v.ID
