@@ -918,7 +918,7 @@ func (a *App) list() *cobra.Command {
 
 			dir := a.Path(args[0])
 
-			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "name", "checksum")
+			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "checksum", "name")
 			if err != nil {
 				return err
 			}
@@ -1062,7 +1062,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 
 			dir := a.Path(args[0])
 
-			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "name", "checksum")
+			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "checksum", "name")
 			if err != nil {
 				return err
 			}
@@ -1159,7 +1159,7 @@ func (a *App) find() *cobra.Command {
 
 			pattern := a.Path(args[0])
 
-			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "name", "checksum")
+			hideColumns, err := hiddenColumns(columns, defaultColumns, "creator", "size", "date", "status", "checksum", "name")
 			if err != nil {
 				return err
 			}
