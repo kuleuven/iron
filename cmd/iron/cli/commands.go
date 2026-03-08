@@ -1527,24 +1527,52 @@ func printQueryResults(cmd *cobra.Command, args []string, results *api.GenericRe
 func guessColumns(query string) []string {
 	var columns []string
 
-	for field := range strings.FieldsSeq(query) {
+	for _, field := range tokenize(query) {
 		switch strings.ToLower(field) {
 		case "select", "distinct":
 		// Ignore
 		case "where", "group", "order", "limit", "offset":
 			return columns
 		default:
-			for col := range strings.SplitSeq(field, ",") {
-				if col == "" {
-					continue
-				}
-
-				columns = append(columns, col)
-			}
+			columns = append(columns, field)
 		}
 	}
 
 	return columns
+}
+
+func tokenize(query string) []string {
+	var (
+		tokens []string
+		token  string
+		depth  int
+	)
+
+	for i := range len(query) {
+		switch query[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ',', ' ':
+			if depth == 0 && strings.TrimSpace(token) != "" {
+				tokens = append(tokens, strings.TrimSpace(token))
+				token = ""
+
+				continue
+			}
+
+		default:
+		}
+
+		token += string(query[i])
+	}
+
+	if strings.TrimSpace(token) != "" {
+		tokens = append(tokens, strings.TrimSpace(token))
+	}
+
+	return tokens
 }
 
 func resolveValues(ptrs []any) []any {

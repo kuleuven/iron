@@ -528,3 +528,175 @@ func TestQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+var tokenizeTests = []struct {
+	name     string
+	query    string
+	expected []string
+}{
+	{
+		name:     "simple spaces",
+		query:    "SELECT col1 col2 col3",
+		expected: []string{"SELECT", "col1", "col2", "col3"},
+	},
+	{
+		name:     "commas without parentheses",
+		query:    "col1,col2,col3",
+		expected: []string{"col1", "col2", "col3"},
+	},
+	{
+		name:     "mixed spaces and commas",
+		query:    "SELECT col1, col2, col3",
+		expected: []string{"SELECT", "col1", "col2", "col3"},
+	},
+	{
+		name:     "parentheses preserve contents",
+		query:    "SELECT func(col1, col2) col3",
+		expected: []string{"SELECT", "func(col1, col2)", "col3"},
+	},
+	{
+		name:     "nested parentheses",
+		query:    "SELECT func(nested(a, b), c) col3",
+		expected: []string{"SELECT", "func(nested(a, b), c)", "col3"},
+	},
+	{
+		name:     "empty string",
+		query:    "",
+		expected: []string{},
+	},
+	{
+		name:     "single token",
+		query:    "SELECT",
+		expected: []string{"SELECT"},
+	},
+	{
+		name:     "only spaces",
+		query:    "   ",
+		expected: []string{},
+	},
+	{
+		name:     "complex query",
+		query:    "SELECT DISTINCT col1, func(col2, col3) WHERE col4",
+		expected: []string{"SELECT", "DISTINCT", "col1", "func(col2, col3)", "WHERE", "col4"},
+	},
+}
+
+func TestTokenize(t *testing.T) {
+	for _, tt := range tokenizeTests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tokenize(tt.query)
+
+			if len(result) != len(tt.expected) {
+				t.Fatalf("expected %d tokens, got %d\nexpected: %v\ngot: %v",
+					len(tt.expected), len(result), tt.expected, result)
+			}
+
+			for i := range result {
+				if result[i] != tt.expected[i] {
+					t.Errorf("token %d: expected %q, got %q", i, tt.expected[i], result[i])
+				}
+			}
+		})
+	}
+}
+
+var guessColumnsTests = []struct {
+	name     string
+	query    string
+	expected []string
+}{
+	{
+		name:     "simple select",
+		query:    "SELECT col1",
+		expected: []string{"col1"},
+	},
+	{
+		name:     "select multiple columns",
+		query:    "SELECT col1 col2 col3",
+		expected: []string{"col1", "col2", "col3"},
+	},
+	{
+		name:     "select distinct",
+		query:    "SELECT DISTINCT col1 col2",
+		expected: []string{"col1", "col2"},
+	},
+	{
+		name:     "comma separated columns",
+		query:    "SELECT col1,col2,col3",
+		expected: []string{"col1", "col2", "col3"},
+	},
+	{
+		name:     "stops at WHERE",
+		query:    "SELECT col1 col2 WHERE col3",
+		expected: []string{"col1", "col2"},
+	},
+	{
+		name:     "stops at GROUP",
+		query:    "SELECT col1 col2 GROUP BY col3",
+		expected: []string{"col1", "col2"},
+	},
+	{
+		name:     "stops at ORDER",
+		query:    "SELECT col1 col2 ORDER BY col3",
+		expected: []string{"col1", "col2"},
+	},
+	{
+		name:     "stops at LIMIT",
+		query:    "SELECT col1 col2 LIMIT 10",
+		expected: []string{"col1", "col2"},
+	},
+	{
+		name:     "stops at OFFSET",
+		query:    "SELECT col1 col2 OFFSET 5",
+		expected: []string{"col1", "col2"},
+	},
+	{
+		name:     "function with parentheses",
+		query:    "SELECT func(col1, col2) col3",
+		expected: []string{"func(col1, col2)", "col3"},
+	},
+	{
+		name:     "mixed commas in tokens",
+		query:    "SELECT col1, col2, col3",
+		expected: []string{"col1", "col2", "col3"},
+	},
+	{
+		name:     "empty query",
+		query:    "",
+		expected: []string{},
+	},
+	{
+		name:     "only keywords",
+		query:    "SELECT DISTINCT",
+		expected: []string{},
+	},
+	{
+		name:     "case insensitive keywords",
+		query:    "select col1 where col2",
+		expected: []string{"col1"},
+	},
+	{
+		name:     "trailing commas",
+		query:    "SELECT col1,col2,",
+		expected: []string{"col1", "col2"},
+	},
+}
+
+func TestGuessColumns(t *testing.T) {
+	for _, tt := range guessColumnsTests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := guessColumns(tt.query)
+
+			if len(result) != len(tt.expected) {
+				t.Fatalf("expected %d columns, got %d\nexpected: %v\ngot: %v",
+					len(tt.expected), len(result), tt.expected, result)
+			}
+
+			for i := range result {
+				if result[i] != tt.expected[i] {
+					t.Errorf("column %d: expected %q, got %q", i, tt.expected[i], result[i])
+				}
+			}
+		})
+	}
+}
