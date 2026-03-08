@@ -16,8 +16,62 @@ type PreparedQuery struct {
 	api         *API
 	resultLimit int
 	maxRows     int
-	columns     []msg.ColumnNumber
+	columns     []Column
 	conditions  map[msg.ColumnNumber]string
+}
+
+type Column interface {
+	Int() int
+	AggregationLevel() int
+}
+
+type col struct {
+	columnNumber msg.ColumnNumber
+	aggregationLevel int
+}
+
+func (c col) Int() int {
+	return int(c.columnNumber)
+}
+
+func (c col) AggregationLevel() int {
+	return c.aggregationLevel
+}
+
+func Min(column msg.ColumnNumber) Column {
+	return col{
+		columnNumber: column,
+		aggregationLevel:  2,
+	}
+}
+
+func Max(column msg.ColumnNumber) Column {
+	return col{
+		columnNumber: column,
+		aggregationLevel:  3,
+	}
+}
+
+
+func Sum(column msg.ColumnNumber) Column {
+	return col{
+		columnNumber: column,
+		aggregationLevel:  4,
+	}
+}
+
+func Avg(column msg.ColumnNumber) Column {
+	return col{
+		columnNumber: column,
+		aggregationLevel:  5,
+	}
+}
+
+func Count(column msg.ColumnNumber) Column {
+	return col{
+		columnNumber: column,
+		aggregationLevel:  6,
+	}
 }
 
 // Condition defines a condition
@@ -77,8 +131,9 @@ func In[V string | int | int64](column msg.ColumnNumber, values []V) Condition {
 	}
 }
 
-// Query prepares a query to read from the irods catalog.
-func (api *API) Query(columns ...msg.ColumnNumber) PreparedQuery {
+// Query prepares a query to read from the irods catalog,
+// with the specified columns and their aggregation levels.
+func (api *API) Query(columns ...Column) PreparedQuery {
 	return PreparedQuery{
 		api:        api,
 		columns:    columns,
@@ -86,6 +141,7 @@ func (api *API) Query(columns ...msg.ColumnNumber) PreparedQuery {
 		conditions: make(map[msg.ColumnNumber]string),
 	}
 }
+
 
 // Where adds a condition to the query for the specified column.
 // The condition is a string that will be used to filter results
@@ -241,8 +297,8 @@ func (r *Result) Scan(dest ...any) error {
 			return fmt.Errorf("%w: row %d is missing from column %d", ErrNoSQLResults, r.row, attr)
 		}
 
-		if col.AttributeIndex != r.Query.columns[attr] {
-			return fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, r.Query.columns[attr], col.AttributeIndex)
+		if col.AttributeIndex.Int() != r.Query.columns[attr].Int() {
+			return fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, r.Query.columns[attr].Int(), col.AttributeIndex.Int())
 		}
 
 		value := col.Values[r.row]
@@ -274,11 +330,11 @@ func (r *Result) buildQuery() {
 	}
 
 	for _, col := range r.Query.columns {
-		r.query.Selects.Add(int(col), 1)
+		r.query.Selects.Add(col.Int(), col.AggregationLevel())
 	}
 
 	for col, condition := range r.Query.conditions {
-		r.query.Conditions.Add(int(col), condition)
+		r.query.Conditions.Add(col.Int(), condition)
 	}
 
 	r.Query.api.setFlags(&r.query.KeyVals)
@@ -395,8 +451,9 @@ func parseTime(timestring string) (time.Time, error) {
 
 type PreparedSingleRowQuery PreparedQuery
 
-// QueryRow prepares a query to read a single row from the irods catalog.
-func (api *API) QueryRow(columns ...msg.ColumnNumber) PreparedSingleRowQuery {
+// QueryRow prepares a query to read a single row from the irods catalog,
+// with the specified columns and their aggregation levels.
+func (api *API) QueryRow(columns ...Column) PreparedSingleRowQuery {
 	return PreparedSingleRowQuery{
 		api:         api,
 		columns:     columns,
@@ -478,8 +535,8 @@ func (r *SingleRowResult) Scan(dest ...any) error {
 			return fmt.Errorf("%w: row 1 is missing from column %d", ErrNoSQLResults, attr)
 		}
 
-		if col.AttributeIndex != r.Query.columns[attr] {
-			return fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, r.Query.columns[attr], col.AttributeIndex)
+		if col.AttributeIndex.Int() != r.Query.columns[attr].Int() {
+			return fmt.Errorf("%w: expected %d, got %d", ErrAttributeIndexMismatch, r.Query.columns[attr].Int(), col.AttributeIndex.Int())
 		}
 
 		value := col.Values[0]

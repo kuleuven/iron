@@ -4,6 +4,15 @@ package msg
 // ColumnNumber is an ICAT Column number type
 type ColumnNumber int
 
+func (c ColumnNumber) Int() int {
+	return int(c)
+}
+
+// AggregationLevel helper method to implement api.Column interface
+func (c ColumnNumber) AggregationLevel() int {
+	return 1
+}
+
 // column numbers
 const (
 	// User

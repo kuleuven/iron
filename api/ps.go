@@ -26,7 +26,17 @@ func (api *API) Procs(ctx context.Context) *Result {
 
 	// Initialize columns after the fact,
 	// because this is checked in Scan().
-	result.Query.columns = result.Columns()
+	result.Query.columns = buildColumns(result.Columns())
 
 	return result
+}
+
+func buildColumns(columnNumbers []msg.ColumnNumber) []Column {
+	columns := make([]Column, len(columnNumbers))
+
+	for i, columnNumber := range columnNumbers {
+		columns[i] = columnNumber
+	}
+
+	return columns
 }
