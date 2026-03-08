@@ -85,8 +85,15 @@ var responses = []any{
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
 	},
-	msg.String{
-		String: `[["100","1"]]`,
+	msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 2,
+		TotalRowCount:  1,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 407, ResultLen: 1, Values: []string{"100"}},
+			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
+		},
 	},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
@@ -94,14 +101,14 @@ var responses = []any{
 	msg.QueryResponse{AttributeCount: 7},
 	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
-	msg.String{String: `[]`},
+	msg.QueryResponse{},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 7},
 	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
-	msg.String{String: `[]`},
+	msg.QueryResponse{},
 	msg.QueryResponse{AttributeCount: 4},
 }
 
@@ -220,8 +227,14 @@ func TestGetRecord(t *testing.T) {
 		msg.QueryResponse{},
 		msg.QueryResponse{},
 		msg.QueryResponse{},
-		msg.String{
-			String: `[["100"]]`,
+		msg.QueryResponse{
+			RowCount:       1,
+			AttributeCount: 1,
+			TotalRowCount:  1,
+			ContinueIndex:  0,
+			SQLResult: []msg.SQLResult{
+				{AttributeIndex: 407, ResultLen: 1, Values: []string{"100"}},
+			},
 		},
 	})
 

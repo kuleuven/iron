@@ -154,8 +154,14 @@ var statResponses = []any{
 	msg.QueryResponse{},
 	msg.QueryResponse{},
 	msg.QueryResponse{},
-	msg.String{
-		String: `[["100"]]`,
+	msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 1,
+		TotalRowCount:  1,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 407, ResultLen: 1, Values: []string{"100"}},
+		},
 	},
 }
 
