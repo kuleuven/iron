@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/kuleuven/iron/msg"
 )
@@ -297,7 +296,7 @@ func (b bulk) prefetchSizesForCollections(ctx context.Context, api *API, keys ..
 			strList[i] = fmt.Sprintf("%d", id)
 		}
 
-		result := api.GenericQuery(fmt.Sprintf("SELECT SUM(DATA_SIZE), COLL_ID WHERE COLL_ID IN ('%s') AND COLL_ACCESS_USER_NAME = '%s' GROUP BY COLL_ID", strings.Join(strList, "','"), api.Username)).Execute(ctx)
+		result := api.Query(Sum(msg.ICAT_COLUMN_DATA_SIZE), msg.ICAT_COLUMN_COLL_ID).With(In(msg.ICAT_COLUMN_COLL_ID, batch)).Execute(ctx)
 
 		if err := b.collectSizes(result); err != nil {
 			return err
@@ -307,7 +306,7 @@ func (b bulk) prefetchSizesForCollections(ctx context.Context, api *API, keys ..
 	return nil
 }
 
-func (b bulk) collectSizes(result *GenericResult) error {
+func (b bulk) collectSizes(result *Result) error {
 	defer result.Close()
 
 	for result.Next() {

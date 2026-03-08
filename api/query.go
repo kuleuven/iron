@@ -26,7 +26,7 @@ type Column interface {
 }
 
 type col struct {
-	columnNumber msg.ColumnNumber
+	columnNumber     msg.ColumnNumber
 	aggregationLevel int
 }
 
@@ -40,37 +40,36 @@ func (c col) AggregationLevel() int {
 
 func Min(column msg.ColumnNumber) Column {
 	return col{
-		columnNumber: column,
-		aggregationLevel:  2,
+		columnNumber:     column,
+		aggregationLevel: 2,
 	}
 }
 
 func Max(column msg.ColumnNumber) Column {
 	return col{
-		columnNumber: column,
-		aggregationLevel:  3,
+		columnNumber:     column,
+		aggregationLevel: 3,
 	}
 }
 
-
 func Sum(column msg.ColumnNumber) Column {
 	return col{
-		columnNumber: column,
-		aggregationLevel:  4,
+		columnNumber:     column,
+		aggregationLevel: 4,
 	}
 }
 
 func Avg(column msg.ColumnNumber) Column {
 	return col{
-		columnNumber: column,
-		aggregationLevel:  5,
+		columnNumber:     column,
+		aggregationLevel: 5,
 	}
 }
 
 func Count(column msg.ColumnNumber) Column {
 	return col{
-		columnNumber: column,
-		aggregationLevel:  6,
+		columnNumber:     column,
+		aggregationLevel: 6,
 	}
 }
 
@@ -141,7 +140,6 @@ func (api *API) Query(columns ...Column) PreparedQuery {
 		conditions: make(map[msg.ColumnNumber]string),
 	}
 }
-
 
 // Where adds a condition to the query for the specified column.
 // The condition is a string that will be used to filter results

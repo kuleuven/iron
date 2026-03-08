@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -673,7 +672,7 @@ func (api *API) GetRecord(ctx context.Context, path string, options ...WalkOptio
 	}
 
 	if slices.Contains(options, FetchCollectionSize) {
-		return r, api.GenericQueryRow(fmt.Sprintf("SELECT SUM(DATA_SIZE) WHERE COLL_NAME = '%s' AND COLL_ACCESS_USER_NAME = '%s'", path, api.Username)).Execute(ctx).Scan(&r.collectionSize)
+		return r, api.QueryRow(Sum(msg.ICAT_COLUMN_DATA_SIZE)).With(Equal(msg.ICAT_COLUMN_COLL_NAME, path)).Execute(ctx).Scan(&r.collectionSize)
 	}
 
 	return r, nil
