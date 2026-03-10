@@ -18,6 +18,7 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/cmd/iron/tabwriter"
+	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/transfer"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -232,30 +233,35 @@ const (
 func (a *App) unlock() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "unlock <path>",
-		Short:             "Unlock a locked data object (with hierarchy errors)",
+		Short:             "Unlock a locked data object (with hierarchy errors) or all locked data objects in a collection",
+		Long:              "Unlock a locked data object (with hierarchy errors) or all locked data objects in a collection and its subcollections",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		Hidden:            !a.Admin,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := a.Path(args[0])
 
-			obj, err := a.GetDataObject(cmd.Context(), path)
+			obj, err := a.GetRecord(cmd.Context(), path)
 			if err != nil {
 				return err
 			}
 
-			for _, replica := range obj.Replicas {
-				if replica.Status == "0" || replica.Status == "1" {
-					continue
+			if !obj.IsDir() {
+				dataObj, ok := obj.Sys().(*api.DataObject)
+				if !ok {
+					return nil
 				}
 
-				fmt.Fprintf(cmd.OutOrStdout(), "Unlocking replica %d of %s\n", replica.Number, path)
+				return a.unlockObj(cmd, dataObj)
+			}
 
-				if err := a.ModifyReplicaAttribute(cmd.Context(), path, replica, dataSizeKW, "0"); err != nil {
-					return err
-				}
+			objs, err := a.findLockedObjs(cmd, path)
+			if err != nil {
+				return err
+			}
 
-				if err := a.ModifyReplicaAttribute(cmd.Context(), path, replica, replStatusKW, "0"); err != nil {
+			for _, obj := range objs {
+				if err := a.unlockObj(cmd, &obj); err != nil {
 					return err
 				}
 			}
@@ -265,6 +271,48 @@ func (a *App) unlock() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func (a *App) findLockedObjs(cmd *cobra.Command, path string) ([]api.DataObject, error) {
+	var result []api.DataObject
+
+	for _, filter := range []api.Condition{
+		api.Equal(msg.ICAT_COLUMN_COLL_NAME, path),
+		api.Like(msg.ICAT_COLUMN_COLL_NAME, path+"/%"),
+	} {
+		objs, err := a.ListDataObjects(cmd.Context(),
+			filter,
+			api.NotEqual(msg.ICAT_COLUMN_D_REPL_STATUS, "0"),
+			api.NotEqual(msg.ICAT_COLUMN_D_REPL_STATUS, "1"),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, objs...)
+	}
+
+	return result, nil
+}
+
+func (a *App) unlockObj(cmd *cobra.Command, dataObj *api.DataObject) error {
+	for _, replica := range dataObj.Replicas {
+		if replica.Status == "0" || replica.Status == "1" {
+			continue
+		}
+
+		fmt.Fprintf(cmd.OutOrStdout(), "Unlocking replica %d of %s\n", replica.Number, dataObj.Path)
+
+		if err := a.ModifyReplicaAttribute(cmd.Context(), dataObj.Path, replica, dataSizeKW, "0"); err != nil {
+			return err
+		}
+
+		if err := a.ModifyReplicaAttribute(cmd.Context(), dataObj.Path, replica, replStatusKW, "0"); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (a *App) mv() *cobra.Command {

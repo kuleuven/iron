@@ -86,6 +86,51 @@ func TestUnlock(t *testing.T) {
 	}
 }
 
+func TestUnlockDir(t *testing.T) {
+	app := testApp(t)
+
+	app.Client.API.Admin = true
+
+	app.AddResponses(statResponses[:2])
+	app.AddResponse(msg.QueryResponse{
+		RowCount:       2,
+		AttributeCount: 16,
+		TotalRowCount:  2,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1", "1"}},
+			{AttributeIndex: 501, ResultLen: 2, Values: []string{"/test", "/test"}},
+			{AttributeIndex: 403, ResultLen: 2, Values: []string{"obj_name", "obj_name"}},
+			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1", "1"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic", "generic"}},
+			{AttributeIndex: 404, ResultLen: 2, Values: []string{"2", "4"}},
+			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
+			{AttributeIndex: 412, ResultLen: 2, Values: []string{"zone", "zone"}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
+			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2"}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
+			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
+		},
+	})
+	app.AddResponse(msg.QueryResponse{})
+
+	// Fixes
+	for range 4 {
+		app.AddResponse(msg.EmptyResponse{})
+	}
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"--admin", "unlock", "/test"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTree(t *testing.T) {
 	app := testApp(t)
 
