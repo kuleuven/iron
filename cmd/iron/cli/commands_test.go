@@ -47,6 +47,45 @@ func TestRmdir(t *testing.T) {
 	}
 }
 
+func TestUnlock(t *testing.T) {
+	app := testApp(t)
+
+	app.Client.API.Admin = true
+
+	app.AddResponse(msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 14,
+		TotalRowCount:  1,
+		ContinueIndex:  0,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1"}},
+			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic"}},
+			{AttributeIndex: 404, ResultLen: 2, Values: []string{"2"}},
+			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods"}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{"testzone"}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum"}},
+			{AttributeIndex: 413, ResultLen: 2, Values: []string{""}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc"}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1"}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc"}},
+			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000"}},
+			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000"}},
+		},
+	})
+
+	app.AddResponse(msg.EmptyResponse{})
+	app.AddResponse(msg.EmptyResponse{})
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"--admin", "unlock", "testfile"})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTree(t *testing.T) {
 	app := testApp(t)
 

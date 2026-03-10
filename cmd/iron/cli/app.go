@@ -97,6 +97,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.mkdir(),
 		a.rmdir(),
 		a.rm(),
+		a.unlock(),
 		a.mv(),
 		a.cp(),
 		a.create(),

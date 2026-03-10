@@ -224,6 +224,49 @@ func (a *App) rm() *cobra.Command {
 	return cmd
 }
 
+const (
+	dataSizeKW   = "dataSize"
+	replStatusKW = "replStatus"
+)
+
+func (a *App) unlock() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "unlock <path>",
+		Short:             "Unlock a locked data object (with hierarchy errors)",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: a.CompleteArgs,
+		Hidden:            !a.Admin,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := a.Path(args[0])
+
+			obj, err := a.GetDataObject(cmd.Context(), path)
+			if err != nil {
+				return err
+			}
+
+			for _, replica := range obj.Replicas {
+				if replica.Status == "0" || replica.Status == "1" {
+					continue
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "Unlocking replica %d of %s\n", replica.Number, path)
+
+				if err := a.ModifyReplicaAttribute(cmd.Context(), path, replica, dataSizeKW, "0"); err != nil {
+					return err
+				}
+
+				if err := a.ModifyReplicaAttribute(cmd.Context(), path, replica, replStatusKW, "0"); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
 func (a *App) mv() *cobra.Command {
 	examples := []string{
 		"  " + a.name + " mv /path/to/collection1/file.txt /path/to/collection2/file.txt",
