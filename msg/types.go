@@ -179,6 +179,20 @@ type SpecialCollection struct {
 	ReplicationNumber int      `xml:"replNum"`
 }
 
+type SpecialCollectionPtr struct {
+	XMLName           xml.Name `xml:"specColl"`
+	CollectionClass   int      `xml:"collClass"`
+	Type              int      `xml:"type"`
+	Collection        string   `xml:"collection"`
+	ObjectPath        string   `xml:"objPath"`
+	Resource          string   `xml:"resource"`
+	ResourceHierarchy string   `xml:"rescHier"`
+	PhysicalPath      string   `xml:"phyPath"`
+	CacheDirectory    string   `xml:"cacheDir"`
+	CacheDirty        int      `xml:"cacheDirty"`
+	ReplicationNumber int      `xml:"replNum"`
+}
+
 type FileDescriptor int32
 
 type OpenedDataObjectRequest struct {
@@ -342,42 +356,43 @@ type UnregDataObjRequest struct {
 }
 
 type DataObjectInfo struct {
-	XMLName                  xml.Name           `xml:"DataObjInfo_PI"`
-	ObjPath                  string             `xml:"objPath"`
-	RescName                 string             `xml:"rescName"`
-	RescHier                 string             `xml:"rescHier"`
-	DataType                 string             `xml:"dataType"`
-	DataSize                 int64              `xml:"dataSize"`
-	Chksum                   string             `xml:"chksum"`
-	Version                  string             `xml:"version"`
-	FilePath                 string             `xml:"filePath"`
-	DataOwnerName            string             `xml:"dataOwnerName"`
-	DataOwnerZone            string             `xml:"dataOwnerZone"`
-	ReplNum                  int                `xml:"replNum"`
-	ReplStatus               int                `xml:"replStatus"`
-	StatusString             string             `xml:"statusString"`
-	DataID                   int64              `xml:"dataId"`
-	CollID                   int64              `xml:"collId"`
-	DataMapID                int                `xml:"dataMapId"`
-	Flags                    int                `xml:"flags"`
-	DataComments             string             `xml:"dataComments"`
-	DataMode                 string             `xml:"dataMode"`
-	DataExpiry               string             `xml:"dataExpiry"`
-	DataCreate               string             `xml:"dataCreate"`
-	DataModify               string             `xml:"dataModify"`
-	DataAccess               string             `xml:"dataAccess"`
-	DataAccessInx            int                `xml:"dataAccessInx"`
-	WriteFlag                int                `xml:"writeFlag"`
-	DestRescName             string             `xml:"destRescName"`
-	BackupRescName           string             `xml:"backupRescName"`
-	SubPath                  string             `xml:"subPath"`
-	SpecialCollectionPointer *SpecialCollection `xml:"SpecColl_PI"`
-	RegUID                   int                `xml:"regUid"`
-	OtherFlags               int                `xml:"otherFlags"`
-	KeyVals                  SSKeyVal           `xml:"KeyValPair_PI"`
-	InPdmo                   string             `xml:"in_pdmo"`
-	Next                     *DataObjectInfo    `xml:"DataObjInfo_PI"`
-	RescID                   int64              `xml:"rescId"`
+	XMLName                  xml.Name              `xml:"DataObjInfo_PI"`
+	ObjPath                  string                `xml:"objPath"`
+	RescName                 string                `xml:"rescName"`
+	RescHier                 string                `xml:"rescHier"`
+	DataType                 string                `xml:"dataType"`
+	DataSize                 int64                 `xml:"dataSize"`
+	Chksum                   string                `xml:"chksum"`
+	Version                  string                `xml:"version"`
+	FilePath                 string                `xml:"filePath"`
+	DataOwnerName            string                `xml:"dataOwnerName"`
+	DataOwnerZone            string                `xml:"dataOwnerZone"`
+	ReplNum                  int                   `xml:"replNum"`
+	ReplStatus               int                   `xml:"replStatus"`
+	StatusString             string                `xml:"statusString"`
+	DataID                   int64                 `xml:"dataId"`
+	CollID                   int64                 `xml:"collId"`
+	DataMapID                int                   `xml:"dataMapId"`
+	Flags                    int                   `xml:"flags"`
+	DataComments             string                `xml:"dataComments"`
+	DataMode                 string                `xml:"dataMode"`
+	DataExpiry               string                `xml:"dataExpiry"`
+	DataCreate               string                `xml:"dataCreate"`
+	DataModify               string                `xml:"dataModify"`
+	DataAccess               string                `xml:"dataAccess"`
+	DataAccessInx            int                   `xml:"dataAccessInx"`
+	WriteFlag                int                   `xml:"writeFlag"`
+	DestRescName             string                `xml:"destRescName"`
+	BackupRescName           string                `xml:"backupRescName"`
+	SubPath                  string                `xml:"subPath"`
+	SpecialCollectionPointer *SpecialCollectionPtr `xml:"specColl"`
+	RegUID                   int                   `xml:"regUid"`
+	OtherFlags               int                   `xml:"otherFlags"`
+	KeyVals                  SSKeyVal              `xml:"KeyValPair_PI"`
+	InPdmo                   string                `xml:"in_pdmo"`
+	Next                     *DataObjectInfo       `xml:"DataObjInfo_PI"` // int to next
+	RescID                   int64                 `xml:"rescId"`
+	DataAccessTime           string                `xml:"dataAccessTime"`
 }
 
 type AdminRequest struct {
