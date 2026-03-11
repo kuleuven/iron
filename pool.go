@@ -51,7 +51,7 @@ func newPool(client *Client) *Pool {
 		Connect: func(ctx context.Context) (api.Conn, error) {
 			return pool.Connect(ctx)
 		},
-		DefaultResource: client.env.DefaultResource,
+		// DefaultResource: client.env.DefaultResource,
 	}
 
 	if client.option.Admin {
