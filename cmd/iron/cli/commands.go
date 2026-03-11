@@ -545,7 +545,7 @@ func (a *App) checksum() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			checksum, err := a.Checksum(cmd.Context(), a.Path(args[0]), false)
+			checksum, err := a.WithDefaultResource("").Checksum(cmd.Context(), a.Path(args[0]), false)
 			if err != nil {
 				return err
 			}
