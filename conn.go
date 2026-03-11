@@ -852,7 +852,7 @@ func (c *conn) API() *api.API {
 		Connect: func(ctx context.Context) (api.Conn, error) {
 			return &dummyCloser{c}, nil
 		},
-		DefaultResource: c.env.DefaultResource,
+		// DefaultResource: c.env.DefaultResource,
 	}
 }
 
