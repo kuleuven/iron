@@ -134,7 +134,7 @@ func (c *Client) Env() Env {
 		c.envCallbackExpiry = expiry
 		c.Username = env.Username
 		c.Zone = env.Zone
-		c.DefaultResource = env.DefaultResource
+		// c.DefaultResource = env.DefaultResource
 		c.nativePasswordExpiry = time.Time{}
 
 		if expiry.IsZero() {
@@ -197,7 +197,7 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		c.envCallbackExpiry = expiry
 		c.Username = env.Username
 		c.Zone = env.Zone
-		c.DefaultResource = env.DefaultResource
+		// c.DefaultResource = env.DefaultResource
 		c.nativePasswordExpiry = time.Time{}
 
 		if expiry.IsZero() {
