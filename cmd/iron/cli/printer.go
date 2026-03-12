@@ -47,10 +47,10 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes bool) {
 }
 
 func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
-	t := i.ModTime().Format("Jan 01  2006")
+	t := i.ModTime().Format("Jan 02  2006")
 
 	if i.ModTime().Year() == time.Now().Year() {
-		t = i.ModTime().Format("Jan 01 15:04")
+		t = i.ModTime().Format("Jan 02 15:04")
 	}
 
 	var status, owner, checksum, color string
