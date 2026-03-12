@@ -66,7 +66,7 @@ func (w *StreamWriter) writeLine(line string) error {
 		}
 
 		if slices.Contains(w.HideColumns, i) {
-			fmt.Fprint(&out, abbreviate(cell, 0))
+			fmt.Fprint(&out, Abbreviate(cell, 0))
 
 			i++
 
@@ -92,7 +92,7 @@ func (w *StreamWriter) writeLine(line string) error {
 		if padding >= 0 {
 			fmt.Fprintf(&out, "%s%s", cell, strings.Repeat(" ", padding))
 		} else {
-			fmt.Fprint(&out, abbreviate(cell, w.ColumnWidths[i]-1)+"…")
+			fmt.Fprint(&out, Abbreviate(cell, w.ColumnWidths[i]-1)+"…")
 		}
 
 		i++
@@ -105,7 +105,7 @@ func (w *StreamWriter) writeLine(line string) error {
 	return err
 }
 
-func abbreviate(str string, width int) string {
+func Abbreviate(str string, width int) string {
 	buf := []byte(str)
 
 	var out bytes.Buffer

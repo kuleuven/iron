@@ -97,7 +97,7 @@ func emptyCell(cell string) string {
 		return ""
 	}
 
-	abbr := abbreviate(cell, 0)
+	abbr := Abbreviate(cell, 0)
 
 	if cell[len(cell)-1] == '\n' || cell[len(cell)-1] == '\f' {
 		abbr += cell[len(cell)-1:]
