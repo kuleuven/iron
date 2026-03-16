@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -230,13 +229,13 @@ func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) err
 }
 
 const (
-	O_RDONLY = os.O_RDONLY
-	O_WRONLY = os.O_WRONLY
-	O_RDWR   = os.O_RDWR
-	O_CREAT  = os.O_CREATE
-	O_EXCL   = os.O_EXCL
-	O_TRUNC  = os.O_TRUNC
-	O_APPEND = os.O_APPEND // Irods does not support O_APPEND, we need to seek to the end //nolint:staticcheck
+	O_RDONLY = 0
+	O_WRONLY = 1
+	O_RDWR   = 2
+	O_CREAT  = 64
+	O_EXCL   = 128
+	O_TRUNC  = 512
+	O_APPEND = 1024 // Irods does not support O_APPEND, we need to seek to the end //nolint:staticcheck
 )
 
 // CreateDataObject creates a data object.

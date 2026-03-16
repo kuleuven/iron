@@ -9,6 +9,34 @@ import (
 	"github.com/kuleuven/iron/msg"
 )
 
+func TestMatchingModes(t *testing.T) {
+	apiModes := []int{
+		O_RDONLY,
+		O_WRONLY,
+		O_RDWR,
+		O_CREAT,
+		O_EXCL,
+		O_TRUNC,
+		O_APPEND,
+	}
+
+	osModes := []int{
+		os.O_RDONLY,
+		os.O_WRONLY,
+		os.O_RDWR,
+		os.O_CREATE,
+		os.O_EXCL,
+		os.O_TRUNC,
+		os.O_APPEND,
+	}
+
+	for i, apiMode := range apiModes {
+		if apiMode != osModes[i] {
+			t.Fatalf("mode %d does not match os mode %d", apiMode, osModes[i])
+		}
+	}
+}
+
 func TestCreateCollection(t *testing.T) {
 	testAPI := newAPI()
 
@@ -185,7 +213,7 @@ func TestOpenDataObject(t *testing.T) {
 	testAPI.AddResponse(msg.EmptyResponse{})
 	testAPI.AddResponse(msg.EmptyResponse{})
 
-	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY|os.O_APPEND)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", O_WRONLY|O_APPEND)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +246,7 @@ func TestTouchDataObject(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY|os.O_TRUNC)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", O_WRONLY|O_TRUNC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +281,7 @@ func TestOpenDataObjectSize(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY|os.O_APPEND)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", O_WRONLY|O_APPEND)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +314,7 @@ func TestOpenDataObjectSize2(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +348,7 @@ func TestTruncateDataObject(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.OpenDataObject(t.Context(), "test", os.O_WRONLY)
+	file, err := testAPI.OpenDataObject(t.Context(), "test", O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,12 +391,12 @@ func TestCreateDataObjectTruncate(t *testing.T) {
 		msg.EmptyResponse{},
 	})
 
-	file, err := testAPI.CreateDataObject(t.Context(), "test", os.O_CREATE|os.O_WRONLY)
+	file, err := testAPI.CreateDataObject(t.Context(), "test", O_CREAT|O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file2, err := file.Reopen(testAPI2, os.O_WRONLY)
+	file2, err := file.Reopen(testAPI2, O_WRONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
