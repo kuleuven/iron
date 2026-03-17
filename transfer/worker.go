@@ -15,6 +15,7 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 )
@@ -925,13 +926,35 @@ func (worker *Worker) SynchronizeDir(ctx context.Context, local, remote string, 
 	// Process the records
 	wg.Go(func() error {
 		if direction == RemoteToLocal {
-			return worker.merge(ctx, rch, lch, queue, mergeOptions{opts, VerifyRemoteToLocal(worker.IndexPool, worker.options.ProgressHandler)})
+			return worker.merge(ctx, checkOrder(rch), checkOrder(lch), queue, mergeOptions{opts, VerifyRemoteToLocal(worker.IndexPool, worker.options.ProgressHandler)})
 		}
 
-		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyLocalToRemote(worker.IndexPool, worker.options.ProgressHandler)})
+		return worker.merge(ctx, checkOrder(lch), checkOrder(rch), queue, mergeOptions{opts, VerifyLocalToRemote(worker.IndexPool, worker.options.ProgressHandler)})
 	})
 
 	return wg.Wait()
+}
+
+func checkOrder(ch <-chan *object) <-chan *object {
+	out := make(chan *object)
+
+	go func() {
+		defer close(out)
+
+		var prev *object
+
+		for obj := range ch {
+			if prev != nil && api.ComparePaths(prev.irodsPath, obj.irodsPath) >= 0 {
+				logrus.Errorf("expected lexicographical order: %s >= %s [%s]", prev.irodsPath, obj.irodsPath, obj.info)
+			}
+
+			prev = obj
+
+			out <- obj
+		}
+	}()
+
+	return out
 }
 
 // SynchronizeRemoteDir schedules tasks to synchronize a remote collection to another remote
@@ -981,7 +1004,7 @@ func (worker *Worker) SynchronizeRemoteDir(ctx context.Context, remote1, remote2
 
 	// Process the records
 	wg.Go(func() error {
-		return worker.merge(ctx, lch, rch, queue, mergeOptions{opts, VerifyRemoteToRemote(worker.IndexPool, worker.options.ProgressHandler)})
+		return worker.merge(ctx, checkOrder(lch), checkOrder(rch), queue, mergeOptions{opts, VerifyRemoteToRemote(worker.IndexPool, worker.options.ProgressHandler)})
 	})
 
 	return wg.Wait()
@@ -1013,7 +1036,7 @@ type mergeOptions struct {
 	ChecksumVerify checksumVerifyFunction
 }
 
-func (worker *Worker) merge(ctx context.Context, left, right chan *object, queue chan<- Task, opts mergeOptions) error {
+func (worker *Worker) merge(ctx context.Context, left, right <-chan *object, queue chan<- Task, opts mergeOptions) error {
 	leftObject, hasLeft := <-left
 	rightObject, hasRight := <-right
 
@@ -1199,10 +1222,14 @@ func (worker *Worker) removeAll(ch <-chan *object, obj *object, queue chan<- Tas
 }
 
 func skipAll(ch <-chan *object, obj *object) (*object, bool) {
+	logrus.Debugf("skipping %s [%s]", obj.irodsPath, obj.info)
+
 	next, ok := <-ch
 
 	if obj.info.IsDir() {
 		for ok && strings.HasPrefix(next.irodsPath, obj.irodsPath+"/") {
+			logrus.Debugf("skipping %s [%s]", next.irodsPath, next.info)
+
 			next, ok = <-ch
 		}
 	}
