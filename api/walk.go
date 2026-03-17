@@ -149,40 +149,43 @@ func (api *API) walkBatches(ctx context.Context, fn WalkFunc, parents []Collecti
 }
 
 func callBatches(callback func(ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error, ctx context.Context, fn WalkFunc, parents []Collection, opts ...WalkOption) error {
-	if len(parents) == 0 {
-		return nil
-	}
-
 	var (
-		batch []Collection
-		n     int
+		batches [][]Collection
+		batch   []Collection
+		n       int
 	)
 
 	for _, item := range parents {
-		if strings.Contains(item.Path, "'") {
+		switch {
+		case strings.Contains(item.Path, "'"):
+			if len(batch) > 0 {
+				batches = append(batches, batch)
+			}
+
 			// The irods IN condition used in callback cannot cope with single quotes
 			// Do a batch with a single item instead, so the = condition can be used
-			if err := callback(ctx, fn, []Collection{item}, opts...); err != nil {
-				return err
-			}
-
-			continue
-		}
-
-		if n+len(item.Path)+4 > maxBatchLength {
-			if err := callback(ctx, fn, batch, opts...); err != nil {
-				return err
-			}
-
+			batches = append(batches, []Collection{item})
 			batch = nil
 			n = 0
-		}
 
-		batch = append(batch, item)
-		n += len(item.Path) + 4
+		case n+len(item.Path)+4 > maxBatchLength:
+			batches = append(batches, batch)
+			batch = nil
+			n = 0
+
+			fallthrough
+
+		default:
+			batch = append(batch, item)
+			n += len(item.Path) + 4
+		}
 	}
 
 	if len(batch) > 0 {
+		batches = append(batches, batch)
+	}
+
+	for _, batch := range batches {
 		if err := callback(ctx, fn, batch, opts...); err != nil {
 			return err
 		}
@@ -338,10 +341,9 @@ func (api *API) walkLexographicalNoSkipBatch(ctx context.Context, fn WalkFunc, p
 		err    error
 	}
 
-	var (
-		first = true
-		queue []result
-	)
+	first := true
+
+	var queue []result
 
 	subcols, err := api.walkCollections(ctx, func(path string, record Record, err error) error {
 		if first {

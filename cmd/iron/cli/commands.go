@@ -1200,10 +1200,18 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 }
 
 func treeFunc(dir string, printer Printer, maxDepth int, jsonFormat bool) func(path string, record api.Record, err error) error {
+	var lastPath string
+
 	return func(path string, record api.Record, err error) error {
 		if err != nil {
 			return err
 		}
+
+		if api.ComparePaths(lastPath, path) >= 0 {
+			return fmt.Errorf("walk did not return paths in lexicographical order: %s came after %s", path, lastPath)
+		}
+
+		lastPath = path
 
 		depth := strings.Count(strings.TrimPrefix(path, dir), "/")
 
