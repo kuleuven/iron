@@ -362,6 +362,10 @@ func (api *API) walkLexographicalNoSkipBatch(ctx context.Context, fn WalkFunc, p
 		return ComparePaths(a.path, b.path)
 	})
 
+	slices.SortFunc(subcols, func(a, b Collection) int {
+		return ComparePaths(a.Path, b.Path)
+	})
+
 	var skipAll bool
 
 	err = api.walkLexographicalNoSkip(ctx, func(path string, record Record, err error) error {
