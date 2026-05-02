@@ -4,7 +4,7 @@ code.gitea.io/sdk/gitea
 # github.com/42wim/httpsig v1.2.3
 ## explicit; go 1.23.0
 github.com/42wim/httpsig
-# github.com/Masterminds/semver/v3 v3.4.0
+# github.com/Masterminds/semver/v3 v3.5.0
 ## explicit; go 1.21
 github.com/Masterminds/semver/v3
 # github.com/acomagu/bufpipe v1.0.4

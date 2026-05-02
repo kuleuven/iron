@@ -3,7 +3,7 @@ module github.com/kuleuven/iron
 go 1.25.5
 
 require (
-	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/acomagu/bufpipe v1.0.4
 	github.com/c9s/goprocinfo v0.0.0-20210130143923-c95fcf8c64a8
 	github.com/creativeprojects/go-selfupdate v1.5.2
