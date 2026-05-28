@@ -174,6 +174,7 @@ func TestGenericResultIteration(t *testing.T) {
 	}
 
 	var count int
+
 	for gr.Next() {
 		count++
 

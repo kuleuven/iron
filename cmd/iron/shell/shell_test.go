@@ -16,8 +16,8 @@ func TestNew(t *testing.T) {
 
 	shellCmd := New(root)
 
-	if shellCmd.Use != "shell" {
-		t.Errorf("Expected shell command Use to be 'shell', got '%s'", shellCmd.Use)
+	if shellCmd.Use != shellCommandName {
+		t.Errorf("Expected shell command Use to be '%s', got '%s'", shellCommandName, shellCmd.Use)
 	}
 
 	if shellCmd.Short != "Start an interactive shell." {
@@ -46,7 +46,7 @@ func TestEditCommandTree(t *testing.T) {
 	}
 
 	shellCmd := &cobra.Command{
-		Use: "shell",
+		Use: shellCommandName,
 	}
 	root.AddCommand(shellCmd)
 
@@ -56,7 +56,7 @@ func TestEditCommandTree(t *testing.T) {
 	found := false
 
 	for _, cmd := range root.Commands() {
-		if cmd.Use == "shell" {
+		if cmd.Use == shellCommandName {
 			found = true
 			break
 		}
@@ -93,19 +93,19 @@ func TestBuildCompletionArgs(t *testing.T) {
 	}{
 		{
 			input:    "command arg1",
-			expected: []string{"__complete", "command", "arg1"},
+			expected: []string{completionCommandName, "command", "arg1"},
 		},
 		{
 			input:    "command arg1 ",
-			expected: []string{"__complete", "command", "arg1", ""},
+			expected: []string{completionCommandName, "command", "arg1", ""},
 		},
 		{
 			input:    "",
-			expected: []string{"__complete", ""},
+			expected: []string{completionCommandName, ""},
 		},
 		{
 			input:    "single",
-			expected: []string{"__complete", "single"},
+			expected: []string{completionCommandName, "single"},
 		},
 	}
 
@@ -502,6 +502,7 @@ func TestCobraShellExecutorInvalidCommand(t *testing.T) {
 
 	// This should not panic, even with invalid input
 	shell.executor("invalid command")
+
 	// The command should handle the error gracefully
 	// (exact behavior depends on cobra's error handling)
 }

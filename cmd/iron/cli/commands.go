@@ -1,3 +1,4 @@
+//nolint:goconst
 package cli
 
 import (
@@ -24,11 +25,13 @@ import (
 	"golang.org/x/term"
 )
 
+const versionCommandName = "version"
+
 const dryrunOption = "dry-run"
 
 func (a *App) version() *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
+		Use:   versionCommandName,
 		Short: "Print the version number of iron",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println(a.Version())

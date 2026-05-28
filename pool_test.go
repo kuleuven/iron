@@ -387,6 +387,7 @@ func TestDiscardConnectionOnTransportError(t *testing.T) {
 
 	// Pool should have 0 available connections since it was discarded
 	client.defaultPool.lock.Lock()
+
 	availCount := len(client.defaultPool.available)
 	allCount := len(client.defaultPool.all)
 	client.defaultPool.lock.Unlock()
@@ -419,6 +420,7 @@ func TestDiscardConnectionOnSQLError(t *testing.T) {
 	conn.Close()
 
 	client.defaultPool.lock.Lock()
+
 	allCount := len(client.defaultPool.all)
 	client.defaultPool.lock.Unlock()
 
@@ -456,12 +458,14 @@ func TestDiscardOldConnections(t *testing.T) {
 	oldConn.connectedAt = time.Now().Add(-1 * time.Second)
 
 	client.defaultPool.lock.Lock()
+
 	client.defaultPool.available = append(client.defaultPool.available, oldConn)
 	client.defaultPool.all = append(client.defaultPool.all, oldConn)
 	client.defaultPool.lock.Unlock()
 
 	// Verify the connection is available
 	client.defaultPool.lock.Lock()
+
 	availBefore := len(client.defaultPool.available)
 	client.defaultPool.lock.Unlock()
 
@@ -472,6 +476,7 @@ func TestDiscardOldConnections(t *testing.T) {
 	// Run discard
 	client.defaultPool.lock.Lock()
 	client.defaultPool.discardOldConnections()
+
 	availAfter := len(client.defaultPool.available)
 	allAfter := len(client.defaultPool.all)
 	client.defaultPool.lock.Unlock()
@@ -521,6 +526,7 @@ func TestDiscardOldConnectionsNotExpired(t *testing.T) {
 	// Run discard — connection is fresh, should not be removed
 	client.defaultPool.lock.Lock()
 	client.defaultPool.discardOldConnections()
+
 	availAfter := len(client.defaultPool.available)
 	client.defaultPool.lock.Unlock()
 
@@ -545,6 +551,7 @@ func TestDiscardOldConnectionsDisabled(t *testing.T) {
 	// discardConnectionAge is 0, so discardOldConnections should be a no-op
 	client.defaultPool.lock.Lock()
 	client.defaultPool.discardOldConnections()
+
 	availAfter := len(client.defaultPool.available)
 	client.defaultPool.lock.Unlock()
 
@@ -647,12 +654,14 @@ func TestPoolChildClose(t *testing.T) {
 
 	// Close the subpool — should return capacity to parent
 	client.defaultPool.lock.Lock()
+
 	parentMaxBefore := client.defaultPool.maxConns
 	client.defaultPool.lock.Unlock()
 
 	sub.Close()
 
 	client.defaultPool.lock.Lock()
+
 	parentMaxAfter := client.defaultPool.maxConns
 	client.defaultPool.lock.Unlock()
 

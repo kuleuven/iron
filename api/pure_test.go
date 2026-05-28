@@ -180,6 +180,7 @@ func TestParseIrodsChecksum(t *testing.T) {
 	for i, b := range result {
 		if b != byte(i) {
 			t.Errorf("byte %d: expected %d, got %d", i, i, b)
+
 			break
 		}
 	}

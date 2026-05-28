@@ -113,6 +113,7 @@ func (w *CircularWriter) Write(data []byte) (int, error) {
 	}
 
 	copy(worker.buffer, data)
+
 	worker.offset = w.offset
 	worker.length = len(data)
 

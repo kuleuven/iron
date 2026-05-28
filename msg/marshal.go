@@ -23,7 +23,7 @@ func Marshal(obj any, protocol Protocol, msgType string) (*Message, error) {
 	val := reflect.ValueOf(obj)
 
 	// Marshal argument is allowed to be a pointer
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -56,7 +56,7 @@ func Unmarshal(msg Message, protocol Protocol, obj any) error {
 	ptr := reflect.ValueOf(obj)
 
 	// Unmarshal argument is required to be a pointer
-	if ptr.Kind() != reflect.Ptr {
+	if ptr.Kind() != reflect.Pointer {
 		return fmt.Errorf("%w: expected ptr, got %T", ErrUnrecognizedType, obj)
 	}
 

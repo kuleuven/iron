@@ -19,6 +19,7 @@ func (api *API) Glob(ctx context.Context, root, pattern string, walkFn WalkFunc)
 	abs := strings.HasPrefix(pattern, "/")
 
 	var absPattern string
+
 	if abs {
 		absPattern = pattern
 	} else {

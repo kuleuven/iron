@@ -1,4 +1,4 @@
-//nolint:staticcheck
+//nolint:staticcheck,goconst
 package api
 
 import (

@@ -24,6 +24,8 @@ type cobraShell struct {
 	stdin *term.State
 }
 
+const shellCommandName = "shell"
+
 // New creates a Cobra CLI command named "shell" which runs an interactive shell prompt for the root command.
 func New(root *cobra.Command, opts ...prompt.Option) *cobra.Command {
 	shell := &cobraShell{
@@ -43,7 +45,7 @@ func New(root *cobra.Command, opts ...prompt.Option) *cobra.Command {
 	)
 
 	return &cobra.Command{
-		Use:   "shell",
+		Use:   shellCommandName,
 		Short: "Start an interactive shell.",
 		Run: func(cmd *cobra.Command, _ []string) {
 			shell.saveStdin()
@@ -148,10 +150,12 @@ func (s *cobraShell) completer(d prompt.Document) ([]prompt.Suggest, istrings.Ru
 	return prompt.FilterHasPrefix(suggestions, word, true), startIndex, endIndex
 }
 
+const completionCommandName = "__complete"
+
 func buildCompletionArgs(input string) ([]string, error) {
 	args, err := shlex.Split(input)
 
-	args = append([]string{"__complete"}, args...)
+	args = append([]string{completionCommandName}, args...)
 	if input == "" || input[len(input)-1] == ' ' {
 		args = append(args, "")
 	}

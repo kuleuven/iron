@@ -47,8 +47,7 @@ type Options struct {
 	// IntegrityChecksums indicates whether checksums should be computed before
 	// and after the transfer to verify the integrity of the transfer (Upload, Download, UploadDir, DownloadDir, CopyDir).
 	IntegrityChecksums bool
-	// DryRun will only print actions for directory operations (UploadDir, DownloadDir, RemoveDir, CopyDir).
-	// It does not apply to file operations (Upload, Download, ToStream, FromStream)!
+	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
 	DryRun bool
 	// IgnorePatterns indicates patterns to ignore when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
 	// The pattern syntax is the same as filepath.Match.
@@ -244,6 +243,24 @@ func (r fileReader) Checksum(ctx context.Context) ([]byte, error) {
 // The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
 func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) { //nolint:funlen
+	if worker.options.DryRun {
+		pw := &progressWriter{
+			progress: Progress{
+				Action:      TransferFile,
+				Label:       r.Name(),
+				Size:        r.Size(),
+				Transferred: r.Size(),
+				StartedAt:   time.Now(),
+				FinishedAt:  time.Now(),
+			},
+			handler: worker.options.ProgressHandler,
+		}
+
+		pw.handler(pw.progress)
+
+		return
+	}
+
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
 	if worker.options.Exclusive {
@@ -435,6 +452,15 @@ func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, 
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
 func (worker *Worker) Download(ctx context.Context, local, remote string) {
+	if worker.options.DryRun {
+		worker.ToWriter(ctx, &fileWriter{
+			name: local,
+			File: nil,
+		}, remote)
+
+		return
+	}
+
 	mode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
 	if worker.options.Exclusive {
@@ -512,6 +538,26 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 		err = multierr.Append(err, w.Remove())
 
 		worker.Error(w.Name(), remote, err)
+
+		return
+	}
+
+	if worker.options.DryRun {
+		defer r.Close()
+
+		pw := &progressWriter{
+			progress: Progress{
+				Action:      TransferFile,
+				Label:       r.Name(),
+				Size:        size,
+				Transferred: size,
+				StartedAt:   time.Now(),
+				FinishedAt:  time.Now(),
+			},
+			handler: worker.options.ProgressHandler,
+		}
+
+		pw.handler(pw.progress)
 
 		return
 	}

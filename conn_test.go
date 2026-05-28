@@ -320,7 +320,7 @@ func TestConnPamPasswordTLS(t *testing.T) {
 		Username:             "testUser",
 		Password:             "testPassword",
 		AuthScheme:           "pam_password",
-		SSLVerifyServer:      "host",
+		SSLVerifyServer:      SSLVerifyServerHost,
 		SSLCACertificateFile: f.Name(),
 	}
 
@@ -368,7 +368,7 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 		Username:             "testUser",
 		Password:             "testPassword",
 		AuthScheme:           "pam_password",
-		SSLVerifyServer:      "cert",
+		SSLVerifyServer:      SSLVerifyServerCert,
 		SSLCACertificateFile: f.Name(),
 	}
 

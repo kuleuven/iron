@@ -54,6 +54,7 @@ func TestPrompt_Print(t *testing.T) {
 			err = p.Print(tt.message)
 			if err != nil {
 				t.Errorf("Print() error = %v", err)
+
 				return
 			}
 
@@ -299,11 +300,13 @@ func TestBot_Ask(t *testing.T) { //nolint:funlen
 			value, err := tt.bot.Ask(tt.message)
 			if tt.expectError && err == nil {
 				t.Errorf("Bot.Ask() expected error but got none")
+
 				return
 			}
 
 			if !tt.expectError && err != nil {
 				t.Errorf("Bot.Ask() unexpected error = %v", err)
+
 				return
 			}
 
@@ -353,11 +356,13 @@ func TestBot_Password(t *testing.T) {
 			value, err := tt.bot.Password(tt.message)
 			if tt.expectError && err == nil {
 				t.Errorf("Bot.Password() expected error but got none")
+
 				return
 			}
 
 			if !tt.expectError && err != nil {
 				t.Errorf("Bot.Password() unexpected error = %v", err)
+
 				return
 			}
 

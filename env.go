@@ -61,6 +61,12 @@ const (
 	ClientServerDontCare   = "CS_NEG_DONT_CARE"
 )
 
+const (
+	SSLVerifyServerCert = "cert"
+	SSLVerifyServerHost = "host"
+	SSLVerifyServerNone = "none"
+)
+
 // DefaultEnv contains the default IRODS connection parameters.
 // Use ApplyDefaults() to apply the default values to an environment.
 var DefaultEnv = Env{
@@ -71,7 +77,7 @@ var DefaultEnv = Env{
 	EncryptionKeySize:             32,
 	EncryptionNumHashRounds:       8,
 	Username:                      "rods",
-	SSLVerifyServer:               "cert",
+	SSLVerifyServer:               SSLVerifyServerCert,
 	ClientServerNegotiation:       "request_server_negotiation",
 	ClientServerNegotiationPolicy: "CS_NEG_REQUIRE",
 	DefaultResource:               "demoResc",

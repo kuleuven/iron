@@ -38,6 +38,7 @@ func ProgressBar(w io.Writer) *PB {
 			select {
 			case <-pb.done:
 				pb.printDone()
+
 				return
 			case t := <-ticker.C:
 				pb.print(t)

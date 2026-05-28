@@ -398,18 +398,18 @@ func (c *conn) handshakeTLS() error {
 	}
 
 	switch c.env.SSLVerifyServer {
-	case "cert":
+	case SSLVerifyServerCert:
 		tlsConfig.ServerName = c.env.Host
 
 		if c.env.SSLServerName != "" {
 			tlsConfig.ServerName = c.env.SSLServerName
 		}
-	case "host":
+	case SSLVerifyServerHost:
 		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = func(certificates [][]byte, _ [][]*x509.Certificate) error {
+		tlsConfig.VerifyPeerCertificate = func(certificates [][]byte, _ [][]*x509.Certificate) error { //nolint:gosec
 			return verifyPeerCertificateNoHostname(tlsConfig, certificates)
 		}
-	case "none":
+	case SSLVerifyServerNone:
 		tlsConfig.InsecureSkipVerify = true
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownSSLVerifyPolicy, c.env.SSLVerifyServer)
@@ -507,8 +507,8 @@ func (c *conn) authenticateNative(ctx context.Context) error {
 
 	// Request challenge
 	request := msg.AuthPluginRequest{
-		Scheme:        "native",
-		NextOperation: "auth_agent_auth_request",
+		Scheme:        native,
+		NextOperation: authAgentAuthRequest,
 		UserName:      c.env.ProxyUsername,
 		ZoneName:      c.env.ProxyZone,
 	}
@@ -519,7 +519,7 @@ func (c *conn) authenticateNative(ctx context.Context) error {
 		return err
 	}
 
-	request.NextOperation = "auth_agent_auth_response"
+	request.NextOperation = authAgentAuthResponse
 
 	// In the new authentication scheme, the server sends the challenge not base64 encoded
 	challengeBytes := []byte(response.RequestResult)
@@ -560,6 +560,15 @@ func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
 
+const (
+	authAgentAuthRequest  = "auth_agent_auth_request"
+	authAgentAuthResponse = "auth_agent_auth_response"
+	next                  = "next"
+	waiting               = "waiting"
+	waitingPw             = "waiting_pw"
+	authenticated         = "authenticated"
+)
+
 func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 	ttl := determineTTL(c.env.GeneratedPasswordTimeout)
 
@@ -569,7 +578,7 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 		TTL:                 strconv.Itoa(ttl),
 		ForcePasswordPrompt: true,
 		RecordAuthFile:      true,
-		NextOperation:       "auth_agent_auth_request",
+		NextOperation:       authAgentAuthRequest,
 		UserName:            c.env.ProxyUsername,
 		ZoneName:            c.env.ProxyZone,
 		PState:              map[string]any{},
@@ -589,20 +598,20 @@ func (c *conn) authenticatePAM(ctx context.Context, prompt Prompt) error {
 		var err error
 
 		switch response.NextOperation {
-		case "auth_agent_auth_request":
-			request.NextOperation = "auth_agent_auth_response"
+		case authAgentAuthRequest:
+			request.NextOperation = authAgentAuthResponse
 
-		case "next":
+		case next:
 			if response.Message.Prompt == "" {
 				break
 			}
 
 			err = prompt.Print(response.Message.Prompt)
 
-		case "waiting", "waiting_pw":
-			request.Response, err = getValue(request.PState, prompt, response.Message.Prompt, response.NextOperation == "waiting_pw", response.Message.Retrieve, response.Message.DefaultPath)
+		case waiting, waitingPw:
+			request.Response, err = getValue(request.PState, prompt, response.Message.Prompt, response.NextOperation == waitingPw, response.Message.Retrieve, response.Message.DefaultPath)
 
-		case "authenticated":
+		case authenticated:
 			c.nativePassword = response.RequestResult
 
 			return c.env.PersistentState.Save(request.PState)
@@ -662,21 +671,28 @@ func retrieveValue(state map[string]any, path string) (string, error) {
 	return s, nil
 }
 
+const (
+	op      = "op"
+	add     = "add"
+	replace = "replace"
+	value   = "value"
+)
+
 func patchState(state map[string]any, patch []map[string]any, dirty *bool, defaultValue string) error {
 	if len(patch) == 0 {
 		return nil
 	}
 
 	for _, p := range patch {
-		if p["op"] != "add" && p["op"] != "replace" {
+		if p[op] != add && p[op] != replace {
 			continue
 		}
 
-		if _, ok := p["value"]; ok {
+		if _, ok := p[value]; ok {
 			continue
 		}
 
-		p["value"] = defaultValue
+		p[value] = defaultValue
 	}
 
 	patchPayload, err := json.Marshal(patch)
@@ -731,6 +747,8 @@ func promptValue(prompt Prompt, message string, sensitive bool, defaultValue str
 	return value, err
 }
 
+const pamPasswordAuthClientRequest = "pam_password_auth_client_request"
+
 func (c *conn) authenticatePAMPassword(ctx context.Context) error {
 	if !checkVersion(*c.version, 5, 0, 0) {
 		return c.authenticatePAMPasswordDeprecated(ctx)
@@ -740,9 +758,9 @@ func (c *conn) authenticatePAMPassword(ctx context.Context) error {
 
 	// Request challenge
 	request := msg.AuthPluginRequest{
-		Scheme:        "pam_password",
+		Scheme:        pamPassword,
 		TTL:           strconv.Itoa(ttl),
-		NextOperation: "pam_password_auth_client_request",
+		NextOperation: pamPasswordAuthClientRequest,
 		UserName:      c.env.ProxyUsername,
 		ZoneName:      c.env.ProxyZone,
 		Password:      c.env.Password,

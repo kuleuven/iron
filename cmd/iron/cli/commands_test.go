@@ -14,7 +14,7 @@ func TestVersion(t *testing.T) {
 	app := testApp(t)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"version"})
+	cmd.SetArgs([]string{versionCommandName})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)

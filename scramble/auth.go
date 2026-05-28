@@ -23,6 +23,7 @@ func GenerateAuthResponse(challenge []byte, password string) string {
 	m := md5.New() //nolint:gosec
 	m.Write(challenge[:challengeLen])
 	m.Write(paddedPassword)
+
 	encodedPassword := m.Sum(nil)
 
 	// replace 0x00 to 0x01

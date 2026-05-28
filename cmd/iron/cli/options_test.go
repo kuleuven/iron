@@ -114,6 +114,7 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error but got none")
+
 					return
 				}
 
@@ -126,6 +127,7 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
@@ -160,6 +162,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				fi, err := os.Stat(filePath)
 				if err != nil {
 					t.Errorf("failed to stat created file: %v", err)
+
 					return
 				}
 
@@ -171,6 +174,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
+
 					return
 				}
 
@@ -190,6 +194,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				fi, err := os.Stat(filePath)
 				if err != nil {
 					t.Errorf("failed to stat created file: %v", err)
+
 					return
 				}
 
@@ -201,6 +206,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				result, err := ReadAuthFile(filePath, &uid)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
+
 					return
 				}
 
@@ -225,6 +231,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
+
 					return
 				}
 
@@ -242,6 +249,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
+
 					return
 				}
 
@@ -259,6 +267,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				result, err := ReadAuthFile(filePath, nil)
 				if err != nil {
 					t.Errorf("failed to read back written file: %v", err)
+
 					return
 				}
 
@@ -303,6 +312,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error but got none")
+
 					return
 				}
 

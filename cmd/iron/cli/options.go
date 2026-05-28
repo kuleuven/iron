@@ -163,7 +163,7 @@ func FileStore(file string, template iron.Env) ConfigStore {
 
 		defer f.Close()
 
-		err = json.NewEncoder(f).Encode(env)
+		err = json.NewEncoder(f).Encode(env) //nolint:gosec
 		if err != nil {
 			defer os.Remove(f.Name())
 
@@ -179,7 +179,7 @@ func FileStore(file string, template iron.Env) ConfigStore {
 // to decode the contents.
 // The file is expected to have been created with the iRODS `iinit` command.
 func ReadAuthFile(authFile string, uid *int) (string, error) {
-	f, err := os.Open(authFile)
+	f, err := os.Open(authFile) //nolint:gosec
 	if err != nil {
 		return "", err
 	}

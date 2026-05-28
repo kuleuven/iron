@@ -33,13 +33,13 @@ func (a *App) CompleteArgs(cmd *cobra.Command, args []string, toComplete string)
 	// Try to find the zone of the previous arguments
 	// and detect the argument type of the last given argument
 	for i, a := range a.ArgTypes(cmd) {
-		if i == len(args) {
+		if i >= len(args) {
 			argType = a
 
 			break
 		}
 
-		if z := GetZone(args[i], a); zone == "" || z != "" && zone == z {
+		if z := GetZone(args[i], a); zone == "" || z != "" && zone == z { //nolint:gosec
 			zone = z
 		} else if z != "" {
 			// Don't proceed - there are at least two zones involved

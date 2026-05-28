@@ -111,7 +111,7 @@ func setResponse(dialog Dialog, response any, responseBuf []byte) error {
 
 	val := reflect.ValueOf(response)
 
-	if val.Kind() != reflect.Ptr {
+	if val.Kind() != reflect.Pointer {
 		return fmt.Errorf("%w: expected ptr, got %T", msg.ErrUnrecognizedType, response)
 	}
 

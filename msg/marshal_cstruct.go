@@ -52,7 +52,7 @@ func EncodeC(obj any) ([]byte, error) {
 	val := reflect.ValueOf(obj)
 
 	// Marshal argument is allowed to be a pointer
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -85,7 +85,7 @@ const anullstr = "%@#ANULLSTR$%"
 
 func encodeC(e reflect.Value, buf *bufio.Writer) error {
 	switch e.Type().Kind() { //nolint:exhaustive
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if !e.IsNil() {
 			return encodeC(e.Elem(), buf)
 		}
@@ -185,7 +185,7 @@ func encodeCSlice(e reflect.Value, buf *bufio.Writer) error {
 
 func decodeC(e reflect.Value, buf *bufio.Reader) error {
 	switch e.Type().Kind() { //nolint:exhaustive
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
 			_, err = buf.Discard(14)
 

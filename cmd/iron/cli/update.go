@@ -15,11 +15,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const updateCommandName = "update"
+
 func (a *App) update() *cobra.Command {
 	var downgrade bool
 
 	cmd := &cobra.Command{
-		Use:          "update",
+		Use:          updateCommandName,
 		Short:        "Update the binary to the latest version. Might require evelated privileges.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

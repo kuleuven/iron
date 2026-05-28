@@ -739,7 +739,7 @@ const (
 	SYS_NO_HANDLER_REPLY_MSG                 ErrorCode = -99999999
 )
 
-var ErrorCodes = map[ErrorCode]string{
+var ErrorCodes = map[ErrorCode]string{ //nolint:gosec
 	SYS_SOCK_OPEN_ERR:                      "SYS_SOCK_OPEN_ERR",
 	SYS_SOCK_LISTEN_ERR:                    "SYS_SOCK_LISTEN_ERR",
 	SYS_SOCK_BIND_ERR:                      "SYS_SOCK_BIND_ERR",

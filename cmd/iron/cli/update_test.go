@@ -36,7 +36,7 @@ func TestUpdateCommand(t *testing.T) {
 	WithUpdater(selfupdate.DefaultUpdater(), selfupdate.ParseSlug("kuleuven/iron"))(app.App)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"update"})
+	cmd.SetArgs([]string{updateCommandName})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)

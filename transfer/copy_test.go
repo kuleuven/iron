@@ -141,6 +141,7 @@ func (m *memWriteSeekCloser) Write(p []byte) (int, error) {
 
 	b := m.buf.Bytes()
 	copy(b[m.offset:], p)
+
 	m.offset += int64(len(p))
 
 	return len(p), nil
