@@ -211,7 +211,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	defer app.Close()
 
-	if err := app.ShellInit(cmd, nil); err != nil {
+	if err := app.PreRunShell(cmd, nil); err != nil {
 		t.Fatal(err)
 	}
 

@@ -42,7 +42,7 @@ func (a *App) version() *cobra.Command {
 func (a *App) auth() *cobra.Command {
 	use := "auth [flags] [zone]"
 	args := cobra.MaximumNArgs(1)
-	preRun := a.ResetInit
+	preRun := a.PreRunAuth
 
 	if a.configStore != nil {
 		use += "\n  " + a.name + " auth [flags] <" + strings.Join(a.configStoreArgs, "> <") + ">"
@@ -57,10 +57,10 @@ func (a *App) auth() *cobra.Command {
 
 		preRun = func(cmd *cobra.Command, args []string) error {
 			if len(args) < 2 {
-				return a.ResetInit(cmd, args)
+				return a.PreRunAuth(cmd, args)
 			}
 
-			return a.ResetInitConfigStore(cmd, args)
+			return a.PreRunAuthConfigStore(cmd, args)
 		}
 	}
 
@@ -553,7 +553,7 @@ func (a *App) checksum() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("%s\n", hex.EncodeToString(checksum))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", hex.EncodeToString(checksum))
 
 			return nil
 		},

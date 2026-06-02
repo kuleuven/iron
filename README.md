@@ -93,6 +93,15 @@ $ ls /home/peter/sub/localdir
 peter.txt
 ```
 
+## GUI
+
+A Fyne-based desktop GUI is available as a separate project
+<https://github.com/kuleuven/iron-gui>. It reuses the same
+`~/.irods/irods_environment.json`, `.irodsA` and `.irodsA.json` files
+as the CLI, supports `pam_interactive` authentication (browser launch
++ dialog input), and lets you browse collections, transfer files
+edit metadata/permissions, and compute checksums.
+
 ## Library usage
 
 ```go

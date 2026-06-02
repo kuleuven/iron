@@ -72,30 +72,46 @@ func FileLoader(file string) Loader {
 			return env, nil, err
 		}
 
-		if forceReauthentication, ok := ctx.Value(ForceReauthentication).(bool); ok && forceReauthentication {
-			// Force reauthentication
-			env.Password = ""
-		} else if env.AuthScheme != "native" || env.Password == "" {
-			// Try to read the password from the .irodsA file
-			authFile := filepath.Join(filepath.Dir(file), ".irodsA")
-
-			if f, ok := os.LookupEnv("IRODS_AUTHENTICATION_FILE"); ok {
-				authFile = f
-			}
-
-			if password, err := ReadAuthFile(authFile, env.IrodsAuthenticationUID); err == nil {
-				env.Password = password
-				env.AuthScheme = "native"
-			}
-		}
-
-		if env.AuthScheme == "pam_interactive" {
-			env.PersistentState = &persistentState{
-				file: filepath.Join(filepath.Dir(file), ".irodsA.json"),
-			}
-		}
+		ApplyFileAuth(ctx, file, &env)
 
 		return env, iron.DefaultDialFunc, nil
+	}
+}
+
+// ApplyFileAuth applies the file-based authentication state to env, mirroring
+// what FileLoader does internally. It tries to read a cached password from the
+// .irodsA file (or the file specified by IRODS_AUTHENTICATION_FILE) next to
+// the irods_environment.json path, switching env.AuthScheme to "native" on
+// success. For pam_interactive it configures a PersistentState backed by the
+// .irodsA.json file in the same directory, so that subsequent runs can
+// re-use the cached PAM token instead of prompting again.
+//
+// This is exported so callers that reload or modify env after the initial
+// Loader call (e.g. an interactive UI that lets the user change AuthScheme)
+// can re-apply the auth file logic against the modified env.
+func ApplyFileAuth(ctx context.Context, file string, env *iron.Env) {
+	if forceReauthentication, ok := ctx.Value(ForceReauthentication).(bool); ok && forceReauthentication {
+		// Force reauthentication
+		env.Password = ""
+		env.PersistentState = nil
+	} else if env.AuthScheme != "native" || env.Password == "" {
+		// Try to read the password from the .irodsA file
+		authFile := filepath.Join(filepath.Dir(file), ".irodsA")
+
+		if f, ok := os.LookupEnv("IRODS_AUTHENTICATION_FILE"); ok {
+			authFile = f
+		}
+
+		if password, err := ReadAuthFile(authFile, env.IrodsAuthenticationUID); err == nil {
+			env.Password = password
+			env.AuthScheme = "native"
+		}
+	}
+
+	if env.AuthScheme == "pam_interactive" && env.PersistentState == nil {
+		env.PersistentState = &persistentState{
+			file: filepath.Join(filepath.Dir(file), ".irodsA.json"),
+		}
 	}
 }
 

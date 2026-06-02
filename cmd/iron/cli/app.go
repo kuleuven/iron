@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -59,8 +60,30 @@ type App struct {
 	PamTTL         time.Duration
 	NonInteractive bool
 
+	// Prompt overrides the iron.Prompt used during authentication. When
+	// nil, Init falls back to iron.Bot{} for NonInteractive runs and to
+	// iron.StdPrompt otherwise (the default chosen by iron.New).
+	Prompt iron.Prompt
+
 	inShell bool
 }
+
+// Name returns the application name (used for client telemetry, prompts, etc.).
+func (a *App) Name() string { return a.name }
+
+// Loader returns the configured environment Loader, or nil if none.
+func (a *App) Loader() Loader { return a.loadEnv }
+
+// ConfigStore returns the configured ConfigStore, or nil if none.
+func (a *App) ConfigStore() ConfigStore { return a.configStore }
+
+// ConfigStoreArgs returns the positional argument labels expected by the
+// ConfigStore (e.g. ["user name", "zone name", "host"]). Returns nil if no
+// ConfigStore is configured.
+func (a *App) ConfigStoreArgs() []string { return a.configStoreArgs }
+
+// PasswordStore returns the configured PasswordStore, or nil if none.
+func (a *App) PasswordStore() PasswordStore { return a.passwordStore }
 
 func (a *App) Command() *cobra.Command {
 	// Root command
@@ -76,7 +99,7 @@ func (a *App) Command() *cobra.Command {
 	shellCmd := shell.New(rootShell, prompt.WithPrefixCallback(a.prefix))
 	shellCmd.Use = "shell [zone]"
 	shellCmd.Args = cobra.MaximumNArgs(1)
-	shellCmd.PersistentPreRunE = a.ShellInit
+	shellCmd.PersistentPreRunE = a.PreRunShell
 
 	// Open subcommand
 	openURLCmd := a.xopen()
@@ -86,11 +109,44 @@ func (a *App) Command() *cobra.Command {
 	return rootCmd
 }
 
+// Exec runs a single iron CLI command (e.g. "mkdir", "-p", "/zone/home/peter")
+// against the App's already-initialized Client. It is intended for embedding
+// callers (such as iron-gui) that drive the App outside of cobra. The
+// command's stdout / stderr are routed to the supplied writers (nil falls
+// back to os.Stdout / os.Stderr). The App.Client must already be set.
+func (a *App) Exec(ctx context.Context, stdout, stderr io.Writer, args ...string) error {
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	// Build a fresh shell-style root each call so that command flag parser
+	// state (e.g. -p on `mkdir`) is reset between invocations.
+	rootCmd := a.root(true)     //nolint:contextcheck
+	hiddenChild := a.root(true) //nolint:contextcheck
+	hiddenChild.Hidden = true
+	rootCmd.AddCommand(hiddenChild)
+
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+	rootCmd.SetArgs(args)
+
+	rootCmd.SilenceErrors = true
+	rootCmd.SilenceUsage = true
+
+	a.inShell = true
+
+	return rootCmd.ExecuteContext(ctx)
+}
+
 func (a *App) root(shellCommand bool) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:               a.name,
 		Short:             "Golang client for iRODS",
-		PersistentPreRunE: a.Init,
+		PersistentPreRunE: a.PreRun,
 	}
 
 	rootCmd.AddCommand(
@@ -267,10 +323,10 @@ func (a *App) ResetClient() error {
 	return nil
 }
 
-// Init sets up the client for most commands.
+// PreRun sets up the client for most commands.
 // It is used under the PersistentPreRunE hook.
 // To override, either adjust SkipInit or implement your own PersistentPreRunE hook.
-func (a *App) Init(cmd *cobra.Command, args []string) error {
+func (a *App) PreRun(cmd *cobra.Command, args []string) error {
 	if a.Debug > 0 {
 		logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
 	}
@@ -302,22 +358,35 @@ func (a *App) Init(cmd *cobra.Command, args []string) error {
 		return errors.New("multiple zones found in arguments")
 	}
 
-	return a.init(cmd, zone)
+	ctx := cmd.Context()
+
+	if strings.HasPrefix(cmd.Use, "auth ") {
+		ctx = context.WithValue(ctx, ForceReauthentication, true)
+	}
+
+	if err := a.Init(ctx, zone); err != nil {
+		// Doesn't make sense to print usage here
+		cmd.SilenceUsage = true
+
+		return err
+	}
+
+	return nil
 }
 
-// ResetInit sets up the client for the "auth" command.
+// PreRunAuth sets up the client for the "auth" command.
 // It ensures a previous client is closed, useful for the shell.
-func (a *App) ResetInit(cmd *cobra.Command, args []string) error {
+func (a *App) PreRunAuth(cmd *cobra.Command, args []string) error {
 	if err := a.ResetClient(); err != nil {
 		return err
 	}
 
-	return a.Init(cmd, args)
+	return a.PreRun(cmd, args)
 }
 
-// ResetInitConfigStore sets up the client for the "auth" command,
+// PreRunAuthConfigStore sets up the client for the "auth" command,
 // in case two or more arguments are provided and a ConfigStore is configured.
-func (a *App) ResetInitConfigStore(cmd *cobra.Command, args []string) error {
+func (a *App) PreRunAuthConfigStore(cmd *cobra.Command, args []string) error {
 	if err := a.ResetClient(); err != nil {
 		return err
 	}
@@ -335,16 +404,29 @@ func (a *App) ResetInitConfigStore(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	return a.init(cmd, zone)
+	ctx := cmd.Context()
+
+	if strings.HasPrefix(cmd.Use, "auth ") {
+		ctx = context.WithValue(ctx, ForceReauthentication, true)
+	}
+
+	if err := a.Init(ctx, zone); err != nil {
+		// Doesn't make sense to print usage here
+		cmd.SilenceUsage = true
+
+		return err
+	}
+
+	return nil
 }
 
-// ShellInit calls Init but does not fail on error,
+// PreRunShell calls PreRun but does not fail on error,
 // instead it writes an invitation to authenticate.
 // Useful for the shell only.
-func (a *App) ShellInit(cmd *cobra.Command, args []string) error {
+func (a *App) PreRunShell(cmd *cobra.Command, args []string) error {
 	a.inShell = true
 
-	err := a.Init(cmd, args)
+	err := a.PreRun(cmd, args)
 	if err == nil || a.configStore == nil {
 		return err
 	}
@@ -356,19 +438,18 @@ func (a *App) ShellInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (a *App) init(cmd *cobra.Command, zone string) error {
-	// Load zone and start client
-	ctx := cmd.Context()
-
-	if strings.HasPrefix(cmd.Use, "auth ") {
-		ctx = context.WithValue(ctx, ForceReauthentication, true)
-	}
-
+// Init loads the iRODS environment for the given zone (empty string =
+// the Loader's default) and constructs the underlying iron.Client. It is
+// the cobra-independent core of Init: callers that drive the App outside
+// of cobra (e.g. iron-gui) can use it directly. Stamp the context with
+// ForceReauthentication=true to bypass cached credentials.
+//
+// On failure, returns InitError wrapping the underlying error (and any
+// partially-loaded env, when available). On success, App.Client is set
+// and App.Workdir is defaulted to "/<zone>" if it was empty.
+func (a *App) Init(ctx context.Context, zone string) error {
 	env, dialer, err := a.loadEnv(ctx, zone)
 	if err != nil {
-		// Doesn't make sense to print usage here
-		cmd.SilenceUsage = true
-
 		return InitError{a, env, err}
 	}
 
@@ -381,13 +462,13 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		clientName = fmt.Sprintf("%s-%s", clientName, version.String())
 	}
 
-	var authPrompt iron.Prompt
+	authPrompt := a.Prompt
 
-	if a.NonInteractive {
+	if authPrompt == nil && a.NonInteractive {
 		authPrompt = iron.Bot{}
 	}
 
-	a.Client, err = iron.New(cmd.Context(), env, iron.Option{
+	a.Client, err = iron.New(ctx, env, iron.Option{
 		ClientName:           clientName,
 		Admin:                a.Admin,
 		UseNativeProtocol:    a.Native,
@@ -396,9 +477,6 @@ func (a *App) init(cmd *cobra.Command, zone string) error {
 		AuthenticationPrompt: authPrompt,
 	})
 	if err != nil {
-		// Doesn't make sense to print usage here
-		cmd.SilenceUsage = true
-
 		return InitError{a, env, err}
 	}
 
