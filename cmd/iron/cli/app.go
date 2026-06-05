@@ -65,7 +65,8 @@ type App struct {
 	// iron.StdPrompt otherwise (the default chosen by iron.New).
 	Prompt iron.Prompt
 
-	inShell bool
+	inShell   bool
+	inTesting bool
 }
 
 // Name returns the application name (used for client telemetry, prompts, etc.).
@@ -377,8 +378,10 @@ func (a *App) PreRunAuth(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Stamp the context with ForceReauthentication=true to bypass cached credentials.
-	cmd.SetContext(context.WithValue(cmd.Context(), ForceReauthentication, true))
+	if !a.inTesting {
+		// Stamp the context with ForceReauthentication=true to bypass cached credentials.
+		cmd.SetContext(context.WithValue(cmd.Context(), ForceReauthentication, true))
+	}
 
 	return a.PreRun(cmd, args)
 }
@@ -403,7 +406,11 @@ func (a *App) PreRunAuthConfigStore(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	ctx := context.WithValue(cmd.Context(), ForceReauthentication, true)
+	ctx := cmd.Context()
+
+	if !a.inTesting {
+		ctx = context.WithValue(ctx, ForceReauthentication, true)
+	}
 
 	if err := a.Init(ctx, zone); err != nil {
 		// Doesn't make sense to print usage here

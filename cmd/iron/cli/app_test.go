@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +112,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 	}
 
 	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile), WithPasswordStore(FilePasswordStore(envfile)))
+	app.inTesting = true
 
 	cmd := app.Command()
 	cmd.SetContext(t.Context())
@@ -121,13 +121,6 @@ func TestNew(t *testing.T) { //nolint:funlen
 
 	if err := cmd.PersistentPreRunE(cmd, nil); err != nil {
 		t.Fatal(err)
-	}
-
-	// Alter Use so init() does not erase password
-	for _, child := range cmd.Commands() {
-		if strings.HasPrefix(child.Use, "auth ") {
-			child.Use = "test-" + child.Use
-		}
 	}
 
 	cmd.SetArgs([]string{testAuth, "zone1"})
@@ -201,6 +194,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 		WithLoader(FileLoader(envfile)),
 		WithPasswordStore(FilePasswordStore(envfile)),
 	)
+	app.inTesting = true
 
 	cmd := app.Command()
 	cmd.SetContext(t.Context())
@@ -213,13 +207,6 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 	if err := app.PreRunShell(cmd, nil); err != nil {
 		t.Fatal(err)
-	}
-
-	// Alter Use so init() does not erase password
-	for _, child := range cmd.Commands() {
-		if strings.HasPrefix(child.Use, "auth ") {
-			child.Use = "test-" + child.Use
-		}
 	}
 
 	cmd.SetArgs([]string{testAuth, testUser, testZoneShort, "127.0.0.1"})

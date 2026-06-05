@@ -10,7 +10,7 @@ const (
 	testTestZone       = "/testzone"
 	testTestZoneName   = "testzone"
 	testTestPath       = "/test"
-	testAuth           = "test-auth"
+	testAuth           = "auth"
 	testTestDir        = "testdir"
 	testRods           = "rods"
 	testGeneric        = "generic"
