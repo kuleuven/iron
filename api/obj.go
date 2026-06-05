@@ -16,6 +16,10 @@ type Object interface {
 	ObjectType() ObjectType
 }
 
+// defaultOwner is the owner used when one cannot be determined from a query,
+// e.g. for the root collection.
+const defaultOwner = "rods"
+
 var _ os.FileInfo = &Collection{}
 
 type Collection struct {
@@ -186,7 +190,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 	if path == "/" { // Avoid non functioning query if requesting root
 		return &Collection{
 			Path:      "/",
-			Owner:     "rods",
+			Owner:     defaultOwner,
 			OwnerZone: api.Zone,
 		}, nil
 	}

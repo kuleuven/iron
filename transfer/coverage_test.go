@@ -1,3 +1,4 @@
+//nolint:goconst
 package transfer
 
 import (
@@ -49,6 +50,7 @@ func TestFileReaderAccessors(t *testing.T) {
 
 	// Checksum uses cached value when set.
 	cached := fileReader{checksum: []byte("cached")}
+
 	got, err := cached.Checksum(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +80,7 @@ func TestFileWriterAccessors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := f.Write([]byte("payload")); err != nil {
+	if _, err := f.WriteString("payload"); err != nil {
 		t.Fatal(err)
 	}
 

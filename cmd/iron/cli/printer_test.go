@@ -1,3 +1,4 @@
+//nolint:goconst
 package cli
 
 import (
@@ -6,6 +7,7 @@ import (
 
 	"github.com/kuleuven/iron/cmd/iron/tabwriter"
 )
+
 func TestBracket(t *testing.T) {
 	tests := []struct {
 		i, n int
@@ -47,6 +49,7 @@ func TestFormatPermission(t *testing.T) {
 
 func TestTablePrinterFlush(t *testing.T) {
 	var buf bytes.Buffer
+
 	w := &tabwriter.TabWriter{Writer: &buf}
 
 	tp := &TablePrinter{Writer: w}

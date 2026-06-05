@@ -1,3 +1,4 @@
+//nolint:goconst
 package api
 
 import (
@@ -11,10 +12,10 @@ import (
 
 func TestColumnHelpers(t *testing.T) {
 	tests := []struct {
-		name             string
-		col              Column
-		wantInt          int
-		wantAggregation  int
+		name            string
+		col             Column
+		wantInt         int
+		wantAggregation int
 	}{
 		{"Min", Min(msg.ICAT_COLUMN_DATA_SIZE), int(msg.ICAT_COLUMN_DATA_SIZE), 2},
 		{"Max", Max(msg.ICAT_COLUMN_DATA_SIZE), int(msg.ICAT_COLUMN_DATA_SIZE), 3},
@@ -167,6 +168,7 @@ func TestHandleWalkError(t *testing.T) {
 	target := errors.New("boom")
 
 	names := []string{"/a", "/b", "/c"}
+
 	var seen []string
 
 	err := api.handleWalkError(func(path string, _ Record, err error) error {

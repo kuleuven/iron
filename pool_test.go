@@ -1,4 +1,4 @@
-//nolint:forcetypeassert
+//nolint:forcetypeassert,goconst
 package iron
 
 import (

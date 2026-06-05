@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"reflect"
-	"runtime"
 	"testing"
 
 	"github.com/kuleuven/iron/api"
@@ -17,7 +16,7 @@ func TestLocalPathEndsWithSeparator(t *testing.T) {
 		{"/foo/", true},
 		{"/foo", false},
 		{"", false},
-		{"foo" + string(runtime.GOOS[0:0]), false}, // empty suffix branch
+		{"plain", false},
 	}
 
 	for _, tt := range tests {
@@ -57,7 +56,7 @@ type capturingPrinter struct {
 	names []string
 }
 
-func (c *capturingPrinter) Setup(_, _, _ bool)             {}
+func (c *capturingPrinter) Setup(_, _, _ bool)              {}
 func (c *capturingPrinter) Print(name string, _ api.Record) { c.names = append(c.names, name) }
 func (c *capturingPrinter) Flush()                          {}
 
