@@ -22,7 +22,7 @@ func (a *App) update() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          updateCommandName,
-		Short:        "Update the binary to the latest version. Might require evelated privileges.",
+		Short:        "Update the binary to the latest version. Might require elevated privileges.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			exe, err := selfupdate.ExecutablePath()
@@ -57,7 +57,7 @@ func (a *App) CheckUpdate(ctx context.Context) {
 		return
 	}
 
-	logrus.Infof("Currently running version %s of %s. Version %s has been released and is available for installation. Please update with `%s update`.", current, a.name, latest, a.name)
+	logrus.Infof("Currently running version %s of %s. Version %s has been released and is available for installation.", current, a.name, latest)
 }
 
 func (a *App) LatestVersion(ctx context.Context) (*semver.Version, error) {
