@@ -64,8 +64,12 @@ var ForceReauthentication ContextKey = "force_reauthentication"
 // The environment is loaded from the file, and the password is read from the
 // .irodsA file in the same directory, or the file specified by the
 // IRODS_AUTHENTICATION_FILE environment variable if set.
+//
+// If the SOCKS_PROXY environment variable is set, the returned Loader's
+// DialFunc routes iRODS connections through that SOCKS5 proxy. See
+// WrapLoaderWithSOCKS5 for the accepted proxy URL formats.
 func FileLoader(file string) Loader {
-	return func(ctx context.Context, _ string) (iron.Env, iron.DialFunc, error) {
+	loader := func(ctx context.Context, _ string) (iron.Env, iron.DialFunc, error) {
 		var env iron.Env
 
 		if err := env.LoadFromFile(file); err != nil {
@@ -76,6 +80,8 @@ func FileLoader(file string) Loader {
 
 		return env, iron.DefaultDialFunc, nil
 	}
+
+	return WrapLoaderWithSOCKS5(loader, socksProxyFromEnv())
 }
 
 // ApplyFileAuth applies the file-based authentication state to env, mirroring
