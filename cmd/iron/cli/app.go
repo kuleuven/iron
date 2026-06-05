@@ -360,10 +360,6 @@ func (a *App) PreRun(cmd *cobra.Command, args []string) error {
 
 	ctx := cmd.Context()
 
-	if strings.HasPrefix(cmd.Use, "auth ") {
-		ctx = context.WithValue(ctx, ForceReauthentication, true)
-	}
-
 	if err := a.Init(ctx, zone); err != nil {
 		// Doesn't make sense to print usage here
 		cmd.SilenceUsage = true
@@ -380,6 +376,9 @@ func (a *App) PreRunAuth(cmd *cobra.Command, args []string) error {
 	if err := a.ResetClient(); err != nil {
 		return err
 	}
+
+	// Stamp the context with ForceReauthentication=true to bypass cached credentials.
+	cmd.SetContext(context.WithValue(cmd.Context(), ForceReauthentication, true))
 
 	return a.PreRun(cmd, args)
 }
@@ -404,11 +403,7 @@ func (a *App) PreRunAuthConfigStore(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	ctx := cmd.Context()
-
-	if strings.HasPrefix(cmd.Use, "auth ") {
-		ctx = context.WithValue(ctx, ForceReauthentication, true)
-	}
+	ctx := context.WithValue(cmd.Context(), ForceReauthentication, true)
 
 	if err := a.Init(ctx, zone); err != nil {
 		// Doesn't make sense to print usage here
