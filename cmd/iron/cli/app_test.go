@@ -1,4 +1,3 @@
-//nolint:goconst
 package cli
 
 import (
@@ -62,7 +61,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 
 			msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
 			msg.Write(conn, msg.Version{
-				ReleaseVersion: "rods5.0.1",
+				ReleaseVersion: testRods501,
 			}, nil, msg.XML, "RODS_VERSION", 0)
 			msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
 			msg.Write(conn, msg.AuthPluginResponse{
@@ -79,8 +78,8 @@ func TestNew(t *testing.T) { //nolint:funlen
 				ContinueIndex:  0,
 				SQLResult: []msg.SQLResult{
 					{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-					{AttributeIndex: 503, ResultLen: 1, Values: []string{"/testzone/coll"}},
-					{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+					{AttributeIndex: 503, ResultLen: 1, Values: []string{testTestZoneColl}},
+					{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 					{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 					{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 					{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -131,13 +130,13 @@ func TestNew(t *testing.T) { //nolint:funlen
 		}
 	}
 
-	cmd.SetArgs([]string{"test-auth", "zone1"})
+	cmd.SetArgs([]string{testAuth, "zone1"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
-	cmd.SetArgs([]string{"test-auth", "zone2"})
+	cmd.SetArgs([]string{testAuth, "zone2"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -159,7 +158,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 
 			msg.Read(conn, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT")
 			msg.Write(conn, msg.Version{
-				ReleaseVersion: "rods5.0.1",
+				ReleaseVersion: testRods501,
 			}, nil, msg.XML, "RODS_VERSION", 0)
 			msg.Read(conn, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ")
 			msg.Write(conn, msg.AuthPluginResponse{
@@ -223,7 +222,7 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 		}
 	}
 
-	cmd.SetArgs([]string{"test-auth", "user", "zone", "127.0.0.1"})
+	cmd.SetArgs([]string{testAuth, testUser, testZoneShort, "127.0.0.1"})
 
 	for range 2 {
 		if err := cmd.ExecuteContext(t.Context()); err != nil {
@@ -239,11 +238,11 @@ type mockConn struct {
 func (c *mockConn) API() *api.API {
 	return &api.API{
 		Username: "testuser",
-		Zone:     "testzone",
+		Zone:     testTestZoneName,
 		Connect: func(context.Context) (api.Conn, error) {
 			return c, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 }
 
@@ -253,8 +252,8 @@ func (c *mockConn) ConnectedAt() time.Time {
 
 func (c *mockConn) Env() iron.Env {
 	return iron.Env{
-		Zone:            "testzone",
-		DefaultResource: "demoResc",
+		Zone:            testTestZoneName,
+		DefaultResource: testDemoResc,
 	}
 }
 
@@ -271,7 +270,7 @@ func (c *mockConn) TransportErrors() int {
 }
 
 func (c *mockConn) ServerVersion() string {
-	return "rods5.0.1"
+	return testRods501
 }
 
 type mockApp struct {
@@ -289,8 +288,8 @@ func testApp(t *testing.T) *mockApp {
 	var err error
 
 	app.Client, err = iron.New(t.Context(), iron.Env{
-		Zone:            "testzone",
-		DefaultResource: "demoResc",
+		Zone:            testTestZoneName,
+		DefaultResource: testDemoResc,
 	}, iron.Option{
 		HandshakeFunc: func(ctx context.Context) (iron.Conn, error) {
 			return testConn, nil
@@ -300,7 +299,7 @@ func testApp(t *testing.T) *mockApp {
 		t.Fatal(err)
 	}
 
-	WithName("test")(app)
+	WithName(testStr)(app)
 	WithDefaultWorkdir("")(app)
 
 	return &mockApp{
@@ -312,7 +311,7 @@ func testApp(t *testing.T) *mockApp {
 func TestAutocomplete(t *testing.T) {
 	app := testApp(t)
 
-	opts, directive := app.CompleteArgs(app.mkdir(), []string{}, "/test")
+	opts, directive := app.CompleteArgs(app.mkdir(), []string{}, testTestPath)
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("expected default directive, got %d", directive)
 	}
@@ -332,7 +331,7 @@ func TestAutocompleteLocal(t *testing.T) {
 
 	dir := t.TempDir()
 
-	if err := os.Mkdir(filepath.Join(dir, "test"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, testStr), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -350,7 +349,7 @@ func TestAutocompleteLocal(t *testing.T) {
 		t.Fatalf("expected 1 options, got %v", opts)
 	}
 
-	if opts[0] != "test" {
+	if opts[0] != testStr {
 		t.Fatalf("expected test, got %s", opts[0])
 	}
 }
@@ -363,8 +362,8 @@ var responses = []any{
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"/testzone"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{testTestZone}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -378,8 +377,8 @@ var responses = []any{
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"2", "3"}},
 			{AttributeIndex: 501, ResultLen: 1, Values: []string{"/testzone/a", "/testzone/home"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods", "user"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone", "zone"}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{testRods, testUser}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort, testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
@@ -394,16 +393,16 @@ var responses = []any{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"4", "4", "5", "6"}},
 			{AttributeIndex: 403, ResultLen: 2, Values: []string{"file1", "file1", "file2", "file3"}},
 			{AttributeIndex: 402, ResultLen: 2, Values: slices.Repeat([]string{"1"}, 4)},
-			{AttributeIndex: 406, ResultLen: 2, Values: slices.Repeat([]string{"generic"}, 4)},
+			{AttributeIndex: 406, ResultLen: 2, Values: slices.Repeat([]string{testGeneric}, 4)},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1", "2", "3"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000", "100", "1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: slices.Repeat([]string{"rods"}, 4)},
-			{AttributeIndex: 412, ResultLen: 2, Values: slices.Repeat([]string{"zone"}, 4)},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum", "", ""}},
+			{AttributeIndex: 411, ResultLen: 2, Values: slices.Repeat([]string{testRods}, 4)},
+			{AttributeIndex: 412, ResultLen: 2, Values: slices.Repeat([]string{testZoneShort}, 4)},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum, testChecksum, "", ""}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"2", "4", "0", "1"}},
-			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2", "resc1", "resc2"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2", "/path3", "/path4"}},
-			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2", "demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{testResc1, testResc2, testResc1, testResc2}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1, "/path2", "/path3", "/path4"}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{testDemoRescResc1, testDemoRescResc2, testDemoRescResc1, testDemoRescResc2}},
 			{AttributeIndex: 419, ResultLen: 2, Values: slices.Repeat([]string{"10000"}, 4)},
 			{AttributeIndex: 420, ResultLen: 2, Values: slices.Repeat([]string{"10000"}, 4)},
 		},

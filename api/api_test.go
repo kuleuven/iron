@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -22,7 +21,7 @@ func newAPI() *testAPI {
 			Connect: func(context.Context) (Conn, error) {
 				return testConn, nil
 			},
-			DefaultResource: "demoResc",
+			DefaultResource: testDemoResc,
 		},
 		conn: testConn,
 	}

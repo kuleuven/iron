@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -15,8 +14,8 @@ var responses = []any{
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"/test"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{testTestPath}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -30,8 +29,8 @@ var responses = []any{
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"2", "3"}},
 			{AttributeIndex: 501, ResultLen: 1, Values: []string{"/test/test'2", "/test/test3"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods", "user"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone", "zone"}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{defaultOwner, testUser}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort, testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
@@ -47,16 +46,16 @@ var responses = []any{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"4", "4"}},
 			{AttributeIndex: 403, ResultLen: 2, Values: []string{"file1", "file1"}},
 			{AttributeIndex: 402, ResultLen: 2, Values: []string{"1", "1"}},
-			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic", "generic"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric, testGeneric}},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
-			{AttributeIndex: 412, ResultLen: 2, Values: []string{"zone", "zone"}},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{defaultOwner, defaultOwner}},
+			{AttributeIndex: 412, ResultLen: 2, Values: []string{testZoneShort, testZoneShort}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum, testChecksum}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
-			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2"}},
-			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{testResc1, testResc2}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1, testPath2}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{testDemoRescResc1, testDemoRescResc2}},
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
@@ -67,7 +66,7 @@ var responses = []any{
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 711, ResultLen: 2, Values: []string{"own"}},
+			{AttributeIndex: 711, ResultLen: 2, Values: []string{testOwn}},
 			{AttributeIndex: 713, ResultLen: 2, Values: []string{"500"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
 		},
@@ -79,9 +78,9 @@ var responses = []any{
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 201, ResultLen: 1, Values: []string{"500"}},
-			{AttributeIndex: 202, ResultLen: 1, Values: []string{"username"}},
-			{AttributeIndex: 204, ResultLen: 1, Values: []string{"testZone"}},
-			{AttributeIndex: 203, ResultLen: 1, Values: []string{"rodsuser"}},
+			{AttributeIndex: 202, ResultLen: 1, Values: []string{testUsername}},
+			{AttributeIndex: 204, ResultLen: 1, Values: []string{testTestZone}},
+			{AttributeIndex: 203, ResultLen: 1, Values: []string{testRodsUser}},
 			{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
@@ -118,7 +117,7 @@ func TestWalk(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, FetchCollectionSize)
 	if err != nil {
@@ -131,7 +130,7 @@ func TestWalkL(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, LexographicalOrder, FetchCollectionSize)
 	if err != nil {
@@ -144,7 +143,7 @@ func TestWalkLS(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, FetchCollectionSize, LexographicalOrder, NoSkip)
 	if err != nil {
@@ -157,7 +156,7 @@ func TestWalkBF(t *testing.T) {
 
 	testAPI.AddResponses(responses)
 
-	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
 	}, FetchAccess, FetchMetadata, FetchCollectionSize, BreadthFirst)
 	if err != nil {
@@ -177,8 +176,8 @@ func TestWalkSkip(t *testing.T) {
 		msg.QueryResponse{AttributeCount: 4},
 	})
 
-	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
-		if path == "/test" {
+	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
+		if path == testTestPath {
 			return SkipSubDirs
 		}
 
@@ -198,7 +197,7 @@ func TestWalkSkipAll(t *testing.T) {
 
 	testAPI.AddResponses(responses[:7])
 
-	err := testAPI.Walk(t.Context(), "/test", func(path string, info Record, err error) error {
+	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return SkipAll
 	}, FetchAccess, FetchMetadata, FetchCollectionSize)
 	if err != nil {
@@ -219,7 +218,7 @@ func TestGetRecord(t *testing.T) {
 			SQLResult: []msg.SQLResult{
 				{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
 				{AttributeIndex: 503, ResultLen: 1, Values: []string{"/test.coll"}},
-				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+				{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 				{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},

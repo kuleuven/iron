@@ -1,4 +1,3 @@
-//nolint:goconst
 package msg
 
 import (
@@ -11,11 +10,11 @@ import (
 func TestMessage(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 
-	body := []byte("test")
+	body := []byte(testStr)
 
 	msg := Message{
 		Header: Header{
-			Type:       "test",
+			Type:       testStr,
 			MessageLen: uint32(len(body)),
 		},
 		Body: Body{

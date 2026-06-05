@@ -1,0 +1,37 @@
+package cli
+
+// Shared string constants for tests in package cli. Defined to satisfy the
+// goconst linter for repeated literals.
+const (
+	testStr            = "test"
+	testRods501        = "rods5.0.1"
+	testTestZoneColl   = "/testzone/coll"
+	testTestZoneObj1   = "/testzone/obj1"
+	testTestZone       = "/testzone"
+	testTestZoneName   = "testzone"
+	testTestPath       = "/test"
+	testAuth           = "test-auth"
+	testTestDir        = "testdir"
+	testRods           = "rods"
+	testGeneric        = "generic"
+	testChecksum       = "checksum"
+	testDemoResc       = "demoResc"
+	testResc1          = "resc1"
+	testPath1          = "/path1"
+	testDemoRescResc1  = "demoResc;resc1"
+	testPwd            = "pwd"
+	testMeta           = "meta"
+	testSelect         = "SELECT"
+	testPermissionDeny = "permission denied"
+	testNewPassword    = "newpassword"
+	testOwn            = "own"
+	testRead           = "read"
+	testUser           = "user"
+	testZoneShort      = "zone"
+	testResc2          = "resc2"
+	testDemoRescResc2  = "demoResc;resc2"
+	testCol1           = "col1"
+	testCol2           = "col2"
+	testCol3           = "col3"
+	testWrite          = "write"
+)

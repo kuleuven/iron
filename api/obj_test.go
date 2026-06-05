@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -19,8 +18,8 @@ func TestGetCollection(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{defaultOwner}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -36,8 +35,8 @@ func TestGetCollection(t *testing.T) {
 		t.Error("object should be a dir")
 	}
 
-	if obj.Name() != "coll_name" {
-		t.Errorf("object name should be %s, but is %s", "coll_name", obj.Name())
+	if obj.Name() != testCollName {
+		t.Errorf("object name should be %s, but is %s", testCollName, obj.Name())
 	}
 
 	if obj.Size() != 0 {
@@ -72,16 +71,16 @@ func TestGetDataObject(t *testing.T) {
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1", "1"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1", "1"}},
-			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic", "generic"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric, testGeneric}},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
-			{AttributeIndex: 412, ResultLen: 1, Values: []string{"zone", "zone"}},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{defaultOwner, defaultOwner}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{testZoneShort, testZoneShort}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum, testChecksum}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
-			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2"}},
-			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{testResc1, testResc2}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1, testPath2}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{testDemoRescResc1, testDemoRescResc2}},
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
@@ -96,8 +95,8 @@ func TestGetDataObject(t *testing.T) {
 		t.Error("object should not be a dir")
 	}
 
-	if obj.Name() != "test" {
-		t.Errorf("object name should be %s, but is %s", "test", obj.Name())
+	if obj.Name() != testStr {
+		t.Errorf("object name should be %s, but is %s", testStr, obj.Name())
 	}
 
 	if obj.Size() != 1024000 {
@@ -133,7 +132,7 @@ func TestGetResource(t *testing.T) {
 			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 302, ResultLen: 1, Values: []string{"resc_name"}},
-			{AttributeIndex: 303, ResultLen: 1, Values: []string{"testZone"}},
+			{AttributeIndex: 303, ResultLen: 1, Values: []string{testTestZone}},
 			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
 			{AttributeIndex: 305, ResultLen: 1, Values: []string{"class"}},
 			{AttributeIndex: 306, ResultLen: 1, Values: []string{"server"}},
@@ -144,7 +143,7 @@ func TestGetResource(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.GetResource(t.Context(), "/test")
+	_, err := testAPI.GetResource(t.Context(), testTestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,15 +159,15 @@ func TestGetUser(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 201, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 202, ResultLen: 1, Values: []string{"username"}},
-			{AttributeIndex: 204, ResultLen: 1, Values: []string{"testZone"}},
-			{AttributeIndex: 203, ResultLen: 1, Values: []string{"rodsuser"}},
+			{AttributeIndex: 202, ResultLen: 1, Values: []string{testUsername}},
+			{AttributeIndex: 204, ResultLen: 1, Values: []string{testTestZone}},
+			{AttributeIndex: 203, ResultLen: 1, Values: []string{testRodsUser}},
 			{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
 	})
 
-	_, err := testAPI.GetUser(t.Context(), "/test")
+	_, err := testAPI.GetUser(t.Context(), testTestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,9 +183,9 @@ func TestListUsers(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 201, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 202, ResultLen: 1, Values: []string{"username"}},
-			{AttributeIndex: 204, ResultLen: 1, Values: []string{"testZone"}},
-			{AttributeIndex: 203, ResultLen: 1, Values: []string{"rodsuser"}},
+			{AttributeIndex: 202, ResultLen: 1, Values: []string{testUsername}},
+			{AttributeIndex: 204, ResultLen: 1, Values: []string{testTestZone}},
+			{AttributeIndex: 203, ResultLen: 1, Values: []string{testRodsUser}},
 			{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
@@ -214,7 +213,7 @@ func TestListResources(t *testing.T) {
 			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 302, ResultLen: 1, Values: []string{"resc_name"}},
-			{AttributeIndex: 303, ResultLen: 1, Values: []string{"testZone"}},
+			{AttributeIndex: 303, ResultLen: 1, Values: []string{testTestZone}},
 			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
 			{AttributeIndex: 305, ResultLen: 1, Values: []string{"class"}},
 			{AttributeIndex: 306, ResultLen: 1, Values: []string{"server"}},
@@ -245,16 +244,16 @@ func TestListSubCollections(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 501, ResultLen: 1, Values: []string{"coll_name"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+			{AttributeIndex: 501, ResultLen: 1, Values: []string{testCollName}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{defaultOwner}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
 		},
 	})
 
-	_, err := testAPI.ListSubCollections(t.Context(), "/test")
+	_, err := testAPI.ListSubCollections(t.Context(), testTestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,25 +269,25 @@ func TestListDataObjects(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1", "1"}},
-			{AttributeIndex: 501, ResultLen: 2, Values: []string{"/test", "/test"}},
+			{AttributeIndex: 501, ResultLen: 2, Values: []string{testTestPath, testTestPath}},
 			{AttributeIndex: 403, ResultLen: 2, Values: []string{"obj_name", "obj_name"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1", "1"}},
-			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic", "generic"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric, testGeneric}},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
-			{AttributeIndex: 412, ResultLen: 1, Values: []string{"zone", "zone"}},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{defaultOwner, defaultOwner}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{testZoneShort, testZoneShort}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum, testChecksum}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
-			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2"}},
-			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{testResc1, testResc2}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1, testPath2}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{testDemoRescResc1, testDemoRescResc2}},
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
 	})
 
-	_, err := testAPI.ListDataObjectsInCollection(t.Context(), "/test")
+	_, err := testAPI.ListDataObjectsInCollection(t.Context(), testTestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,9 +302,9 @@ func TestListMetadataDataObject(t *testing.T) {
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 600, ResultLen: 2, Values: []string{"key", "key"}},
-			{AttributeIndex: 601, ResultLen: 2, Values: []string{"value", "1"}},
-			{AttributeIndex: 602, ResultLen: 2, Values: []string{"unit", ""}},
+			{AttributeIndex: 600, ResultLen: 2, Values: []string{testKey, testKey}},
+			{AttributeIndex: 601, ResultLen: 2, Values: []string{testValue, "1"}},
+			{AttributeIndex: 602, ResultLen: 2, Values: []string{testUnit, ""}},
 		},
 	})
 
@@ -328,13 +327,13 @@ func TestListMetadataCollection(t *testing.T) {
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 610, ResultLen: 2, Values: []string{"key", "key"}},
-			{AttributeIndex: 611, ResultLen: 2, Values: []string{"value", "1"}},
-			{AttributeIndex: 612, ResultLen: 2, Values: []string{"unit", ""}},
+			{AttributeIndex: 610, ResultLen: 2, Values: []string{testKey, testKey}},
+			{AttributeIndex: 611, ResultLen: 2, Values: []string{testValue, "1"}},
+			{AttributeIndex: 612, ResultLen: 2, Values: []string{testUnit, ""}},
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(t.Context(), "/test", CollectionType)
+	meta, err := testAPI.ListMetadata(t.Context(), testTestPath, CollectionType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,13 +352,13 @@ func TestListMetadataResource(t *testing.T) {
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 630, ResultLen: 2, Values: []string{"key", "key"}},
-			{AttributeIndex: 631, ResultLen: 2, Values: []string{"value", "1"}},
-			{AttributeIndex: 632, ResultLen: 2, Values: []string{"unit", ""}},
+			{AttributeIndex: 630, ResultLen: 2, Values: []string{testKey, testKey}},
+			{AttributeIndex: 631, ResultLen: 2, Values: []string{testValue, "1"}},
+			{AttributeIndex: 632, ResultLen: 2, Values: []string{testUnit, ""}},
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(t.Context(), "test", ResourceType)
+	meta, err := testAPI.ListMetadata(t.Context(), testStr, ResourceType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,13 +377,13 @@ func TestListMetadataUser(t *testing.T) {
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 640, ResultLen: 2, Values: []string{"key", "key"}},
-			{AttributeIndex: 641, ResultLen: 2, Values: []string{"value", "1"}},
-			{AttributeIndex: 642, ResultLen: 2, Values: []string{"unit", ""}},
+			{AttributeIndex: 640, ResultLen: 2, Values: []string{testKey, testKey}},
+			{AttributeIndex: 641, ResultLen: 2, Values: []string{testValue, "1"}},
+			{AttributeIndex: 642, ResultLen: 2, Values: []string{testUnit, ""}},
 		},
 	})
 
-	meta, err := testAPI.ListMetadata(t.Context(), "test", UserType)
+	meta, err := testAPI.ListMetadata(t.Context(), testStr, UserType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +403,7 @@ func TestListAccessCollection(t *testing.T) {
 			TotalRowCount:  2,
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
-				{AttributeIndex: 711, ResultLen: 2, Values: []string{"own", "read_object"}},
+				{AttributeIndex: 711, ResultLen: 2, Values: []string{testOwn, "read_object"}},
 				{AttributeIndex: 713, ResultLen: 2, Values: []string{"1", "2"}},
 			},
 		},
@@ -415,9 +414,9 @@ func TestListAccessCollection(t *testing.T) {
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
 				{AttributeIndex: 201, ResultLen: 1, Values: []string{"1"}},
-				{AttributeIndex: 202, ResultLen: 1, Values: []string{"username"}},
-				{AttributeIndex: 204, ResultLen: 1, Values: []string{"testZone"}},
-				{AttributeIndex: 203, ResultLen: 1, Values: []string{"rodsuser"}},
+				{AttributeIndex: 202, ResultLen: 1, Values: []string{testUsername}},
+				{AttributeIndex: 204, ResultLen: 1, Values: []string{testTestZone}},
+				{AttributeIndex: 203, ResultLen: 1, Values: []string{testRodsUser}},
 				{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 			},
@@ -440,7 +439,7 @@ func TestListAccessDataObject(t *testing.T) {
 			TotalRowCount:  2,
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
-				{AttributeIndex: 701, ResultLen: 2, Values: []string{"own", "read_object"}},
+				{AttributeIndex: 701, ResultLen: 2, Values: []string{testOwn, "read_object"}},
 				{AttributeIndex: 703, ResultLen: 2, Values: []string{"1", "2"}},
 			},
 		},
@@ -451,9 +450,9 @@ func TestListAccessDataObject(t *testing.T) {
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
 				{AttributeIndex: 201, ResultLen: 1, Values: []string{"1"}},
-				{AttributeIndex: 202, ResultLen: 1, Values: []string{"username"}},
-				{AttributeIndex: 204, ResultLen: 1, Values: []string{"testZone"}},
-				{AttributeIndex: 203, ResultLen: 1, Values: []string{"rodsuser"}},
+				{AttributeIndex: 202, ResultLen: 1, Values: []string{testUsername}},
+				{AttributeIndex: 204, ResultLen: 1, Values: []string{testTestZone}},
+				{AttributeIndex: 203, ResultLen: 1, Values: []string{testRodsUser}},
 				{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 			},

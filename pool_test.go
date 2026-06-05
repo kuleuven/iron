@@ -1,4 +1,4 @@
-//nolint:forcetypeassert,goconst
+//nolint:forcetypeassert
 package iron
 
 import (
@@ -30,7 +30,7 @@ func newMockPoolConn() *mockPoolConn {
 
 func (m *mockPoolConn) Env() Env                { return Env{} }
 func (m *mockPoolConn) Transport() net.Conn     { return nil }
-func (m *mockPoolConn) ServerVersion() string   { return "4.3.2" }
+func (m *mockPoolConn) ServerVersion() string   { return mockVersion }
 func (m *mockPoolConn) ClientSignature() string { return "sig" }
 func (m *mockPoolConn) NativePassword() string  { return "pw" }
 func (m *mockPoolConn) ConnectedAt() time.Time  { return m.connectedAt }
@@ -60,8 +60,8 @@ func (m *mockPoolConn) RegisterCloseHandler(_ func() error) context.CancelFunc {
 // newTestClient creates a Client with a mock HandshakeFunc that returns mockPoolConns.
 func newTestClient(maxConns int) *Client {
 	env := Env{
-		Username: "testUser",
-		Zone:     "testZone",
+		Username: testUserName,
+		Zone:     testZoneName,
 	}
 
 	client := &Client{
@@ -69,7 +69,7 @@ func newTestClient(maxConns int) *Client {
 		protocol: msg.XML,
 		option: Option{
 			MaxConns:   maxConns,
-			ClientName: "test",
+			ClientName: testStr,
 			HandshakeFunc: func(ctx context.Context) (Conn, error) {
 				return newMockPoolConn(), nil
 			},
@@ -214,8 +214,8 @@ func TestPoolClose(t *testing.T) {
 
 func TestPoolConcurrentUse(t *testing.T) {
 	env := Env{
-		Username: "testUser",
-		Zone:     "testZone",
+		Username: testUserName,
+		Zone:     testZoneName,
 	}
 
 	client := &Client{
@@ -224,7 +224,7 @@ func TestPoolConcurrentUse(t *testing.T) {
 		option: Option{
 			MaxConns:           1,
 			AllowConcurrentUse: true,
-			ClientName:         "test",
+			ClientName:         testStr,
 			HandshakeFunc: func(ctx context.Context) (Conn, error) {
 				return newMockPoolConn(), nil
 			},
@@ -431,8 +431,8 @@ func TestDiscardConnectionOnSQLError(t *testing.T) {
 
 func TestDiscardOldConnections(t *testing.T) {
 	env := Env{
-		Username: "testUser",
-		Zone:     "testZone",
+		Username: testUserName,
+		Zone:     testZoneName,
 	}
 
 	client := &Client{
@@ -440,7 +440,7 @@ func TestDiscardOldConnections(t *testing.T) {
 		protocol: msg.XML,
 		option: Option{
 			MaxConns:             3,
-			ClientName:           "test",
+			ClientName:           testStr,
 			DiscardConnectionAge: 100 * time.Millisecond,
 			HandshakeFunc: func(ctx context.Context) (Conn, error) {
 				return newMockPoolConn(), nil
@@ -492,8 +492,8 @@ func TestDiscardOldConnections(t *testing.T) {
 
 func TestDiscardOldConnectionsNotExpired(t *testing.T) {
 	env := Env{
-		Username: "testUser",
-		Zone:     "testZone",
+		Username: testUserName,
+		Zone:     testZoneName,
 	}
 
 	client := &Client{
@@ -501,7 +501,7 @@ func TestDiscardOldConnectionsNotExpired(t *testing.T) {
 		protocol: msg.XML,
 		option: Option{
 			MaxConns:             3,
-			ClientName:           "test",
+			ClientName:           testStr,
 			DiscardConnectionAge: time.Hour,
 			HandshakeFunc: func(ctx context.Context) (Conn, error) {
 				return newMockPoolConn(), nil
@@ -679,7 +679,7 @@ func TestClientOption(t *testing.T) {
 		t.Errorf("expected MaxConns=2, got %d", opt.MaxConns)
 	}
 
-	if opt.ClientName != "test" {
+	if opt.ClientName != testStr {
 		t.Errorf("expected ClientName='test', got %q", opt.ClientName)
 	}
 }

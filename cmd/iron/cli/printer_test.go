@@ -1,4 +1,3 @@
-//nolint:goconst
 package cli
 
 import (
@@ -30,12 +29,12 @@ func TestFormatPermission(t *testing.T) {
 	tests := []struct {
 		in, want string
 	}{
-		{"own", "own"},
-		{"read object", "read"},
-		{"read_object", "read"},
-		{"write object", "write"},
-		{"write_object", "write"},
-		{"modify_object", "write"},
+		{testOwn, testOwn},
+		{"read object", testRead},
+		{"read_object", testRead},
+		{"write object", testWrite},
+		{"write_object", testWrite},
+		{"modify_object", testWrite},
 		{"delete_object", "delete"},
 		{"other", "other"},
 	}

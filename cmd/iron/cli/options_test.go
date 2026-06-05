@@ -1,4 +1,3 @@
-//nolint:goconst
 package cli
 
 import (
@@ -54,7 +53,7 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 		},
 		{
 			skip: os.Getuid() == 0,
-			name: "permission denied",
+			name: testPermissionDeny,
 			setupFile: func(t *testing.T) (string, func()) {
 				tmpFile, err := os.CreateTemp(t.TempDir(), "test_auth_perm_*")
 				if err != nil {
@@ -74,7 +73,7 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				}
 			},
 			expectError:   true,
-			errorContains: "permission denied",
+			errorContains: testPermissionDeny,
 		},
 		{
 			name: "decode error",
@@ -155,7 +154,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 	}{
 		{
 			name:        "create new file successfully",
-			password:    "newpassword",
+			password:    testNewPassword,
 			setupDir:    func(t *testing.T, dir string) {},
 			expectError: false,
 			validateFile: func(t *testing.T, filePath string) {
@@ -179,14 +178,14 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 					return
 				}
 
-				if result != "newpassword" {
+				if result != testNewPassword {
 					t.Errorf("expected to read back 'newpassword', got '%s'", result)
 				}
 			},
 		},
 		{
 			name:        "create new file successfully",
-			password:    "newpassword",
+			password:    testNewPassword,
 			setupDir:    func(t *testing.T, dir string) {},
 			expectError: false,
 			uid:         &uid,
@@ -211,7 +210,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 					return
 				}
 
-				if result != "newpassword" {
+				if result != testNewPassword {
 					t.Errorf("expected to read back 'newpassword', got '%s'", result)
 				}
 			},
@@ -289,7 +288,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 				}
 			},
 			expectError:   true,
-			errorContains: "permission denied",
+			errorContains: testPermissionDeny,
 		},
 	}
 
@@ -341,7 +340,7 @@ func TestPersistentState(t *testing.T) {
 	testFile := filepath.Join(t.TempDir(), ".irodsA.json")
 
 	testMap := map[string]any{
-		"test": "value",
+		testStr: "value",
 	}
 
 	state := &persistentState{
@@ -358,8 +357,8 @@ func TestPersistentState(t *testing.T) {
 		t.Errorf("failed to load state: %v", err)
 	}
 
-	if testMap["test"] != "value" {
-		t.Errorf("expected testMap['test'] to be 'value', got '%s'", testMap["test"])
+	if testMap[testStr] != "value" {
+		t.Errorf("expected testMap['test'] to be 'value', got '%s'", testMap[testStr])
 	}
 }
 

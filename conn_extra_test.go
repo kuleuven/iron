@@ -1,4 +1,3 @@
-//nolint:goconst
 package iron
 
 import (
@@ -17,21 +16,21 @@ func TestCheckVersionValid(t *testing.T) {
 		release        int
 		expectedResult bool
 	}{
-		{"rods4.3.2", 4, 3, 2, true},  // equal
-		{"rods4.3.3", 4, 3, 2, true},  // release greater
-		{"rods4.4.0", 4, 3, 2, true},  // minor greater
-		{"rods5.0.0", 4, 3, 2, true},  // major greater
-		{"rods4.3.1", 4, 3, 2, false}, // release less
-		{"rods4.2.9", 4, 3, 2, false}, // minor less
-		{"rods3.9.9", 4, 3, 2, false}, // major less
-		{"rods4.3.2", 4, 3, 3, false}, // equal major/minor, release less
-		{"rods4.3.2", 4, 4, 0, false}, // equal major, minor less
-		{"rods10.0.0", 4, 3, 2, true}, // large major
-		{"rods4.3.2", 5, 0, 0, false}, // major less than required
-		{"rods5.0.0", 5, 0, 0, true},  // exact match v5
-		{"rods4.3.10", 4, 3, 2, true}, // multi-digit release
-		{"rods4.10.0", 4, 3, 0, true}, // multi-digit minor
-		{"rods0.0.0", 0, 0, 0, true},  // zero version
+		{releaseVersion, 4, 3, 2, true},  // equal
+		{"rods4.3.3", 4, 3, 2, true},     // release greater
+		{"rods4.4.0", 4, 3, 2, true},     // minor greater
+		{"rods5.0.0", 4, 3, 2, true},     // major greater
+		{"rods4.3.1", 4, 3, 2, false},    // release less
+		{"rods4.2.9", 4, 3, 2, false},    // minor less
+		{"rods3.9.9", 4, 3, 2, false},    // major less
+		{releaseVersion, 4, 3, 3, false}, // equal major/minor, release less
+		{releaseVersion, 4, 4, 0, false}, // equal major, minor less
+		{"rods10.0.0", 4, 3, 2, true},    // large major
+		{releaseVersion, 5, 0, 0, false}, // major less than required
+		{"rods5.0.0", 5, 0, 0, true},     // exact match v5
+		{"rods4.3.10", 4, 3, 2, true},    // multi-digit release
+		{"rods4.10.0", 4, 3, 0, true},    // multi-digit minor
+		{"rods0.0.0", 0, 0, 0, true},     // zero version
 	}
 
 	for _, tt := range tests {
@@ -51,7 +50,7 @@ func TestCheckVersionInvalid(t *testing.T) {
 		name    string
 		version string
 	}{
-		{"no prefix", "4.3.2"},
+		{"no prefix", mockVersion},
 		{"wrong prefix", "irods4.3.2"},
 		{"too few parts", "rods4.3"},
 		{"too many parts", "rods4.3.2.1"},
@@ -106,9 +105,9 @@ func TestDetermineTTL(t *testing.T) {
 
 func TestRetrieveValue(t *testing.T) {
 	state := map[string]any{
-		"username":    "testuser",
-		"password":    "secret",
-		"nested_data": map[string]any{"key": "value"},
+		testUsername:  testUserLower,
+		testPassword:  testSecret,
+		"nested_data": map[string]any{testKey: value},
 	}
 
 	tests := []struct {
@@ -117,10 +116,10 @@ func TestRetrieveValue(t *testing.T) {
 		expected string
 		wantErr  bool
 	}{
-		{"top-level string", "/username", "testuser", false},
-		{"another top-level", "/password", "secret", false},
+		{"top-level string", "/username", testUserLower, false},
+		{"another top-level", "/password", testSecret, false},
 		{"missing key returns empty", "/nonexistent", "", false},
-		{"nested value", "/nested_data/key", "value", false},
+		{"nested value", "/nested_data/key", value, false},
 	}
 
 	for _, tt := range tests {
@@ -146,7 +145,7 @@ func TestRetrieveValue(t *testing.T) {
 }
 
 func TestRetrieveValueInvalidPath(t *testing.T) {
-	state := map[string]any{"key": "value"}
+	state := map[string]any{testKey: value}
 
 	// A completely invalid JSON pointer should return an error
 	_, err := retrieveValue(state, "not a valid pointer ~")
@@ -183,7 +182,7 @@ func TestRetrieveValueNonStringValue(t *testing.T) {
 }
 
 func TestPatchStateEmpty(t *testing.T) {
-	state := map[string]any{"key": "value"}
+	state := map[string]any{testKey: value}
 	dirty := false
 
 	err := patchState(state, nil, &dirty, "default")
@@ -206,11 +205,11 @@ func TestPatchStateEmpty(t *testing.T) {
 }
 
 func TestPatchStateAdd(t *testing.T) {
-	state := map[string]any{"existing": "old"}
+	state := map[string]any{"existing": testOldKey}
 	dirty := false
 
 	patch := []map[string]any{
-		{"op": "add", "path": "/newkey", "value": "newvalue"},
+		{"op": add, testPath: testNewKey, value: "newvalue"},
 	}
 
 	err := patchState(state, patch, &dirty, "default")
@@ -228,11 +227,11 @@ func TestPatchStateAdd(t *testing.T) {
 }
 
 func TestPatchStateReplace(t *testing.T) {
-	state := map[string]any{"key": "old"}
+	state := map[string]any{testKey: testOldKey}
 	dirty := false
 
 	patch := []map[string]any{
-		{"op": "replace", "path": "/key", "value": "new"},
+		{"op": "replace", testPath: "/key", value: "new"},
 	}
 
 	err := patchState(state, patch, &dirty, "default")
@@ -244,18 +243,18 @@ func TestPatchStateReplace(t *testing.T) {
 		t.Error("dirty should be true")
 	}
 
-	if state["key"] != "new" {
-		t.Errorf("expected state[key]='new', got %v", state["key"])
+	if state[testKey] != "new" {
+		t.Errorf("expected state[key]='new', got %v", state[testKey])
 	}
 }
 
 func TestPatchStateDefaultValue(t *testing.T) {
-	state := map[string]any{"key": "old"}
+	state := map[string]any{testKey: testOldKey}
 	dirty := false
 
-	// Patch without "value" should use defaultValue
+	// Patch without value should use defaultValue
 	patch := []map[string]any{
-		{"op": "add", "path": "/newkey"},
+		{"op": add, testPath: testNewKey},
 	}
 
 	err := patchState(state, patch, &dirty, "mydefault")
@@ -273,13 +272,13 @@ func TestPatchStateDefaultValue(t *testing.T) {
 }
 
 func TestPatchStateSkipsNonAddReplace(t *testing.T) {
-	state := map[string]any{"key": "value", "other": "keep"}
+	state := map[string]any{testKey: value, "other": "keep"}
 	dirty := false
 
-	// Only "add" and "replace" get the defaultValue fill-in.
-	// A "test" op without value is passed through to jsonpatch which will handle it.
+	// Only add and "replace" get the defaultValue fill-in.
+	// A testStr op without value is passed through to jsonpatch which will handle it.
 	patch := []map[string]any{
-		{"op": "add", "path": "/newkey"},
+		{"op": add, testPath: testNewKey},
 	}
 
 	err := patchState(state, patch, &dirty, "filled")
@@ -331,14 +330,14 @@ func TestPromptValueNonSensitive(t *testing.T) {
 }
 
 func TestPromptValueSensitive(t *testing.T) {
-	p := &mockPrompt{passwordResponse: "secret"}
+	p := &mockPrompt{passwordResponse: testSecret}
 
 	result, err := promptValue(p, "Enter password", true, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result != "secret" {
+	if result != testSecret {
 		t.Errorf("expected 'secret', got %q", result)
 	}
 }
@@ -358,14 +357,14 @@ func TestPromptValueWithDefault(t *testing.T) {
 }
 
 func TestPromptValueWithDefaultOverridden(t *testing.T) {
-	p := &mockPrompt{askResponse: "custom"}
+	p := &mockPrompt{askResponse: testCustom}
 
 	result, err := promptValue(p, "Enter value", false, "defaultVal")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result != "custom" {
+	if result != testCustom {
 		t.Errorf("expected 'custom', got %q", result)
 	}
 }
@@ -381,8 +380,8 @@ func TestPromptValueError(t *testing.T) {
 
 func TestGetValue(t *testing.T) {
 	state := map[string]any{
-		"username": "testuser",
-		"password": "secret",
+		testUsername: testUserLower,
+		testPassword: testSecret,
 	}
 
 	t.Run("retrieve path", func(t *testing.T) {
@@ -391,7 +390,7 @@ func TestGetValue(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if result != "testuser" {
+		if result != testUserLower {
 			t.Errorf("expected 'testuser', got %q", result)
 		}
 	})
@@ -404,20 +403,20 @@ func TestGetValue(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if result != "testuser" {
+		if result != testUserLower {
 			t.Errorf("expected 'testuser' as default, got %q", result)
 		}
 	})
 
 	t.Run("prompt without default", func(t *testing.T) {
-		p := &mockPrompt{askResponse: "custom"}
+		p := &mockPrompt{askResponse: testCustom}
 
 		result, err := getValue(state, p, "Enter value", false, "", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if result != "custom" {
+		if result != testCustom {
 			t.Errorf("expected 'custom', got %q", result)
 		}
 	})
@@ -456,10 +455,10 @@ func TestConnAccessors(t *testing.T) {
 
 func TestConnServerVersion(t *testing.T) {
 	c := &conn{
-		version: &msg.Version{ReleaseVersion: "rods4.3.2"},
+		version: &msg.Version{ReleaseVersion: releaseVersion},
 	}
 
-	if got := c.ServerVersion(); got != "4.3.2" {
+	if got := c.ServerVersion(); got != mockVersion {
 		t.Errorf("ServerVersion() = %q, want '4.3.2'", got)
 	}
 }

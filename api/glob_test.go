@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -24,8 +23,8 @@ func collectionsResponse(paths ...string) msg.QueryResponse {
 
 	for i := range paths {
 		ids[i] = "1"
-		owners[i] = "rods"
-		zones[i] = "zone1"
+		owners[i] = defaultOwner
+		zones[i] = testZone1
 		ctimes[i] = "10000"
 		mtimes[i] = "10000"
 		inherits[i] = "0"
@@ -78,16 +77,16 @@ func dataObjectsResponse(items ...struct{ coll, name string }) msg.QueryResponse
 		colls[i] = item.coll
 		names[i] = item.name
 		collIDs[i] = "1"
-		dtypes[i] = "generic"
+		dtypes[i] = testGeneric
 		replNums[i] = "0"
 		sizes[i] = "1024"
-		owners[i] = "rods"
-		ownerZones[i] = "zone1"
+		owners[i] = defaultOwner
+		ownerZones[i] = testZone1
 		checksums[i] = ""
 		statuses[i] = ""
-		rescs[i] = "demoResc"
+		rescs[i] = testDemoResc
 		physPaths[i] = "/vault/" + item.name
-		rescHiers[i] = "demoResc"
+		rescHiers[i] = testDemoResc
 		ctimes[i] = "10000"
 		mtimes[i] = "10000"
 	}
@@ -123,20 +122,20 @@ type collObj struct{ coll, name string }
 func TestGlobRelativeStar(t *testing.T) {
 	testAPI := newAPI()
 
-	// Glob pattern: "*.txt" in root "/zone/home"
+	// Glob pattern: "*.txt" in root testZoneHome
 	// Expect: ListCollections (subcols matching *.txt) → none
 	//         ListDataObjects (objects matching *.txt) → 2 matches
 	testAPI.AddResponses([]any{
 		collectionsResponse(),
 		dataObjectsResponse(
-			collObj{"/zone/home", "file1.txt"},
-			collObj{"/zone/home", "file2.txt"},
+			collObj{testZoneHome, testFile1Txt},
+			collObj{testZoneHome, testFile2Txt},
 		),
 	})
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "*.txt", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "*.txt", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -154,11 +153,11 @@ func TestGlobRelativeStar(t *testing.T) {
 	}
 
 	// Relative pattern → relative paths
-	if paths[0] != "file1.txt" {
+	if paths[0] != testFile1Txt {
 		t.Errorf("expected relative path 'file1.txt', got %q", paths[0])
 	}
 
-	if paths[1] != "file2.txt" {
+	if paths[1] != testFile2Txt {
 		t.Errorf("expected relative path 'file2.txt', got %q", paths[1])
 	}
 }
@@ -170,13 +169,13 @@ func TestGlobAbsoluteStar(t *testing.T) {
 	testAPI.AddResponses([]any{
 		collectionsResponse(),
 		dataObjectsResponse(
-			collObj{"/zone/home", "file1.txt"},
+			collObj{testZoneHome, testFile1Txt},
 		),
 	})
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "/zone/home/*.txt", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "/zone/home/*.txt", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -202,7 +201,7 @@ func TestGlobAbsoluteStar(t *testing.T) {
 func TestGlobNestedPattern(t *testing.T) {
 	testAPI := newAPI()
 
-	// Glob pattern: "sub*/data.csv" in root "/zone/home"
+	// Glob pattern: "sub*/data.csv" in root testZoneHome
 	// First level: ListCollections matching sub* → 2 subcollections
 	// Second level (subA): ListCollections → none, ListDataObjects → 1 match
 	// Second level (subB): ListCollections → none, ListDataObjects → 1 match
@@ -221,7 +220,7 @@ func TestGlobNestedPattern(t *testing.T) {
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "sub*/data.csv", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "sub*/data.csv", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -254,14 +253,14 @@ func TestGlobQuestionMark(t *testing.T) {
 	testAPI.AddResponses([]any{
 		collectionsResponse(),
 		dataObjectsResponse(
-			collObj{"/zone/home", "file1.txt"},
-			collObj{"/zone/home", "file2.txt"},
+			collObj{testZoneHome, testFile1Txt},
+			collObj{testZoneHome, testFile2Txt},
 		),
 	})
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "file?.txt", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "file?.txt", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -295,8 +294,8 @@ func TestGlobNoWildcard(t *testing.T) {
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
 				{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-				{AttributeIndex: 503, ResultLen: 1, Values: []string{"rods"}},
-				{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone1"}},
+				{AttributeIndex: 503, ResultLen: 1, Values: []string{defaultOwner}},
+				{AttributeIndex: 504, ResultLen: 1, Values: []string{testZone1}},
 				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 509, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
@@ -306,7 +305,7 @@ func TestGlobNoWildcard(t *testing.T) {
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "subdir", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "subdir", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -334,14 +333,14 @@ func TestGlobSkipAll(t *testing.T) {
 	testAPI.AddResponses([]any{
 		collectionsResponse(),
 		dataObjectsResponse(
-			collObj{"/zone/home", "a.txt"},
-			collObj{"/zone/home", "b.txt"},
+			collObj{testZoneHome, "a.txt"},
+			collObj{testZoneHome, "b.txt"},
 		),
 	})
 
 	var count int
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "*.txt", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "*.txt", func(path string, rec Record, err error) error {
 		count++
 
 		return SkipAll
@@ -366,7 +365,7 @@ func TestGlobMatchesCollections(t *testing.T) {
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "arch*", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "arch*", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -398,7 +397,7 @@ func TestGlobNoMatches(t *testing.T) {
 
 	var count int
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "*.xyz", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "*.xyz", func(path string, rec Record, err error) error {
 		count++
 
 		return nil
@@ -426,7 +425,7 @@ func TestGlobStaticPrefix(t *testing.T) {
 
 	var paths []string
 
-	err := testAPI.Glob(t.Context(), "/zone/home", "deep/nested/*.dat", func(path string, rec Record, err error) error {
+	err := testAPI.Glob(t.Context(), testZoneHome, "deep/nested/*.dat", func(path string, rec Record, err error) error {
 		if err != nil {
 			return err
 		}
@@ -457,7 +456,7 @@ func TestGlobToLike(t *testing.T) {
 		{"*.txt", "%.txt"},
 		{"file?.dat", "file_.dat"},
 		{"[abc]test", "%test"},
-		{"hello", "hello"},
+		{testHello, testHello},
 		{"100%", `100\%`},
 		{"col_name", `col\_name`},
 		{`\*`, `*`},
@@ -482,9 +481,9 @@ func TestSplitGlobPrefix(t *testing.T) {
 		wantLen  int
 		wantPart string
 	}{
-		{"/zone/home/*.txt", "/zone/home", 1, "*.txt"},
-		{"/zone/home/sub/file.txt", "/zone/home/sub/file.txt", 0, ""},
-		{"/zone/*/data", "/zone", 2, "*"},
+		{"/zone/home/*.txt", testZoneHome, 1, "*.txt"},
+		{testZoneHomeSub, testZoneHomeSub, 0, ""},
+		{"/zone/*/data", testZone, 2, "*"},
 		{"/*", "/", 1, "*"},
 	}
 
@@ -514,10 +513,10 @@ func TestGlobPath(t *testing.T) {
 		isAbs  bool
 		expect string
 	}{
-		{"absolute", "/zone/home", "/zone/home/file.txt", true, "/zone/home/file.txt"},
-		{"relative file", "/zone/home", "/zone/home/file.txt", false, "file.txt"},
-		{"relative subdir", "/zone/home", "/zone/home/sub/file.txt", false, "sub/file.txt"},
-		{"relative root", "/zone/home", "/zone/home", false, "."},
+		{"absolute", testZoneHome, testZoneHomeFile, true, testZoneHomeFile},
+		{"relative file", testZoneHome, testZoneHomeFile, false, testFileTxt},
+		{"relative subdir", testZoneHome, testZoneHomeSub, false, "sub/file.txt"},
+		{"relative root", testZoneHome, testZoneHome, false, "."},
 	}
 
 	for _, tt := range tests {

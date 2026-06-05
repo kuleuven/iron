@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -39,7 +38,7 @@ func TestCollectionAccessors(t *testing.T) {
 	c := &Collection{
 		ID:    7,
 		Path:  "/zone/home/user/foo",
-		Owner: "user",
+		Owner: testUser,
 	}
 
 	if c.Identifier() != 7 {

@@ -1,4 +1,3 @@
-//nolint:goconst
 package iron
 
 import (
@@ -40,12 +39,12 @@ func TestClient(t *testing.T) {
 		t.Fatalf("expected TCP address, got %T", listener.Addr())
 	}
 
-	env := Env{Host: "127.0.0.1", Port: tcpAddr.Port}
+	env := Env{Host: testIP, Port: tcpAddr.Port}
 
 	env.ApplyDefaults()
 
 	client, err := New(t.Context(), env, Option{
-		ClientName:                "test",
+		ClientName:                testStr,
 		DeferConnectionToFirstUse: true,
 		EnvCallback:               func() (Env, time.Time, error) { return env, time.Time{}, nil },
 		DiscardConnectionAge:      time.Hour,
@@ -89,12 +88,12 @@ func TestClient1(t *testing.T) {
 		t.Fatalf("expected TCP address, got %T", listener.Addr())
 	}
 
-	env := Env{Host: "127.0.0.1", Port: tcpAddr.Port}
+	env := Env{Host: testIP, Port: tcpAddr.Port}
 
 	env.ApplyDefaults()
 
 	client, err := New(t.Context(), env, Option{
-		ClientName:                "test",
+		ClientName:                testStr,
 		DeferConnectionToFirstUse: true,
 		EnvCallback:               func() (Env, time.Time, error) { return env, time.Time{}, nil },
 		DiscardConnectionAge:      time.Hour,
@@ -153,11 +152,11 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "password"}
+		env := Env{Host: testIP, Port: tcpAddr.Port, ClientServerNegotiation: testNoNegotiation, Password: testPassword}
 
 		env.ApplyDefaults()
 
-		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 1})
+		client, err := New(t.Context(), env, Option{ClientName: testStr, MaxConns: 1})
 		if err != nil {
 			return err
 		}
@@ -220,7 +219,7 @@ func runDialog(conn net.Conn, dialog []Dialog) error {
 	}
 
 	err = msg.Write(conn, msg.Version{
-		ReleaseVersion: "rods4.3.2",
+		ReleaseVersion: releaseVersion,
 	}, nil, msg.XML, "RODS_VERSION", 0)
 	if err != nil {
 		return err
@@ -371,25 +370,25 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "test"}
+		env := Env{Host: testIP, Port: tcpAddr.Port, ClientServerNegotiation: testNoNegotiation, Password: testStr}
 
 		env.ApplyDefaults()
 
-		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 2})
+		client, err := New(t.Context(), env, Option{ClientName: testStr, MaxConns: 2})
 		if err != nil {
 			return err
 		}
 
 		defer client.Close()
 
-		f, err := os.CreateTemp(t.TempDir(), "test")
+		f, err := os.CreateTemp(t.TempDir(), testStr)
 		if err != nil {
 			return err
 		}
 
 		defer os.Remove(f.Name())
 
-		_, err = f.Write(bytes.Repeat([]byte("test"), 100))
+		_, err = f.Write(bytes.Repeat([]byte(testStr), 100))
 		if err != nil {
 			return err
 		}
@@ -402,7 +401,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		transfer.MinimumRangeSize = 200
 		transfer.CopyBufferDelay = 5 * time.Second
 
-		return client.Upload(t.Context(), f.Name(), "test", transfer.Options{
+		return client.Upload(t.Context(), f.Name(), testStr, transfer.Options{
 			//	SyncModTime: true,
 			MaxThreads: 2,
 		})
@@ -470,18 +469,18 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "test"}
+		env := Env{Host: testIP, Port: tcpAddr.Port, ClientServerNegotiation: testNoNegotiation, Password: testStr}
 
 		env.ApplyDefaults()
 
-		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 1})
+		client, err := New(t.Context(), env, Option{ClientName: testStr, MaxConns: 1})
 		if err != nil {
 			return err
 		}
 
 		defer client.Close()
 
-		f, err := os.CreateTemp(t.TempDir(), "test")
+		f, err := os.CreateTemp(t.TempDir(), testStr)
 		if err != nil {
 			return err
 		}
@@ -495,7 +494,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
 
-		return client.Download(t.Context(), f.Name(), "test", transfer.Options{
+		return client.Download(t.Context(), f.Name(), testStr, transfer.Options{
 			//	SyncModTime: true,
 			MaxThreads: 1,
 		})
@@ -555,25 +554,25 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: "127.0.0.1", Port: tcpAddr.Port, ClientServerNegotiation: "no_negotiation", Password: "testverify"}
+		env := Env{Host: testIP, Port: tcpAddr.Port, ClientServerNegotiation: testNoNegotiation, Password: "testverify"}
 
 		env.ApplyDefaults()
 
-		client, err := New(t.Context(), env, Option{ClientName: "test", MaxConns: 2})
+		client, err := New(t.Context(), env, Option{ClientName: testStr, MaxConns: 2})
 		if err != nil {
 			return err
 		}
 
 		defer client.Close()
 
-		f, err := os.CreateTemp(t.TempDir(), "test")
+		f, err := os.CreateTemp(t.TempDir(), testStr)
 		if err != nil {
 			return err
 		}
 
 		defer os.Remove(f.Name())
 
-		_, err = f.Write(bytes.Repeat([]byte("test"), 100))
+		_, err = f.Write(bytes.Repeat([]byte(testStr), 100))
 		if err != nil {
 			return err
 		}
@@ -582,7 +581,7 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 			return err
 		}
 
-		return client.Verify(t.Context(), f.Name(), "test")
+		return client.Verify(t.Context(), f.Name(), testStr)
 	})
 
 	if err := wg.Wait(); err != nil {

@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -12,7 +11,7 @@ func TestObjectTypeString(t *testing.T) {
 		input    ObjectType
 		expected string
 	}{
-		{UserType, "user"},
+		{UserType, testUser},
 		{CollectionType, "collection"},
 		{DataObjectType, "data_object"},
 		{ResourceType, "resource"},
@@ -30,8 +29,8 @@ func TestObjectTypeString(t *testing.T) {
 
 func TestAsAdmin(t *testing.T) {
 	api := &API{
-		Username: "user",
-		Zone:     "zone",
+		Username: testUser,
+		Zone:     testZoneShort,
 		Admin:    false,
 	}
 
@@ -41,7 +40,7 @@ func TestAsAdmin(t *testing.T) {
 		t.Error("expected Admin to be true")
 	}
 
-	if admin.Username != "user" || admin.Zone != "zone" {
+	if admin.Username != testUser || admin.Zone != testZoneShort {
 		t.Error("expected Username and Zone to be preserved")
 	}
 
@@ -53,7 +52,7 @@ func TestAsAdmin(t *testing.T) {
 
 func TestWithDefaultResource(t *testing.T) {
 	api := &API{
-		Username:        "user",
+		Username:        testUser,
 		DefaultResource: "original",
 	}
 
@@ -71,7 +70,7 @@ func TestWithDefaultResource(t *testing.T) {
 
 func TestWithNumThreads(t *testing.T) {
 	api := &API{
-		Username:   "user",
+		Username:   testUser,
 		NumThreads: 0,
 	}
 
@@ -89,7 +88,7 @@ func TestWithNumThreads(t *testing.T) {
 
 func TestWithReplicaNumber(t *testing.T) {
 	api := &API{
-		Username: "user",
+		Username: testUser,
 	}
 
 	modified := api.WithReplicaNumber(2)
@@ -114,11 +113,11 @@ func TestSplit(t *testing.T) {
 		wantDir  string
 		wantBase string
 	}{
-		{"/zone/home/user", "/zone/home", "user"},
-		{"/zone/home", "/zone", "home"},
-		{"/zone", "/", "zone"},
+		{"/zone/home/user", testZoneHome, testUser},
+		{testZoneHome, testZone, "home"},
+		{testZone, "/", testZoneShort},
 		{"/", "/", ""},
-		{"file.txt", "", "file.txt"},
+		{testFileTxt, "", testFileTxt},
 		{"/a/b/c/d", "/a/b/c", "d"},
 		{"", "", ""},
 	}
@@ -136,11 +135,11 @@ func TestComparePaths(t *testing.T) {
 		a, b string
 		want int // -1, 0, 1
 	}{
-		{"/a/b", "/a/b", 0},
-		{"/a/b", "/a/c", -1},
-		{"/a/c", "/a/b", 1},
-		{"/a", "/a/b", -1},
-		{"/a/b", "/a", 1},
+		{testABPath, testABPath, 0},
+		{testABPath, "/a/c", -1},
+		{"/a/c", testABPath, 1},
+		{"/a", testABPath, -1},
+		{testABPath, "/a", 1},
 		{"/a/b/c", "/a/b/d", -1},
 		{"/", "/", 0},
 		{"/a", "/b", -1},

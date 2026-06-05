@@ -1,4 +1,3 @@
-//nolint:goconst
 package cli
 
 import (
@@ -28,7 +27,7 @@ func TestMkdir(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"mkdir", "testdir"})
+	cmd.SetArgs([]string{"mkdir", testTestDir})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -41,7 +40,7 @@ func TestRmdir(t *testing.T) {
 	app.AddResponse(msg.CollectionOperationStat{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"rmdir", "testdir"})
+	cmd.SetArgs([]string{"rmdir", testTestDir})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -61,15 +60,15 @@ func TestUnlock(t *testing.T) {
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
-			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric}},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"2"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods"}},
-			{AttributeIndex: 412, ResultLen: 1, Values: []string{"testzone"}},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{testRods}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{testTestZoneName}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{""}},
 			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1"}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1}},
 			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc"}},
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000"}},
@@ -100,19 +99,19 @@ func TestUnlockDir(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1", "1"}},
-			{AttributeIndex: 501, ResultLen: 2, Values: []string{"/test", "/test"}},
+			{AttributeIndex: 501, ResultLen: 2, Values: []string{testTestPath, testTestPath}},
 			{AttributeIndex: 403, ResultLen: 2, Values: []string{"obj_name", "obj_name"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1", "1"}},
-			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic", "generic"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric, testGeneric}},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"2", "4"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods", "rods"}},
-			{AttributeIndex: 412, ResultLen: 2, Values: []string{"zone", "zone"}},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum", "checksum"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{testRods, testRods}},
+			{AttributeIndex: 412, ResultLen: 2, Values: []string{testZoneShort, testZoneShort}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum, testChecksum}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{"", ""}},
-			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc1", "resc2"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1", "/path2"}},
-			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc1", "demoResc;resc2"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{testResc1, testResc2}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1, "/path2"}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{testDemoRescResc1, testDemoRescResc2}},
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
@@ -125,7 +124,7 @@ func TestUnlockDir(t *testing.T) {
 	}
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"--admin", "unlock", "/test"})
+	cmd.SetArgs([]string{"--admin", "unlock", testTestPath})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -141,7 +140,7 @@ func TestTree(t *testing.T) {
 	app.AddResponse(msg.QueryResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"tree", "/testzone"})
+	cmd.SetArgs([]string{"tree", testTestZone})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -154,7 +153,7 @@ func TestList(t *testing.T) {
 	app.AddResponses(responses)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"ls", "/testzone"})
+	cmd.SetArgs([]string{"ls", testTestZone})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -173,7 +172,7 @@ func TestListExtra(t *testing.T) {
 			TotalRowCount:  1,
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
-				{AttributeIndex: 711, ResultLen: 2, Values: []string{"own"}},
+				{AttributeIndex: 711, ResultLen: 2, Values: []string{testOwn}},
 				{AttributeIndex: 713, ResultLen: 2, Values: []string{"500"}},
 				{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
 			},
@@ -200,7 +199,7 @@ func TestListExtra(t *testing.T) {
 	})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"ls", "--acl", "--meta", "/testzone"})
+	cmd.SetArgs([]string{"ls", "--acl", "--meta", testTestZone})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -213,7 +212,7 @@ func TestListJSON(t *testing.T) {
 	app.AddResponses(responses)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"ls", "--json", "/testzone"})
+	cmd.SetArgs([]string{"ls", "--json", testTestZone})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -229,8 +228,8 @@ var statResponses = []any{
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 503, ResultLen: 1, Values: []string{"/testzone/coll"}},
-			{AttributeIndex: 504, ResultLen: 1, Values: []string{"zone"}},
+			{AttributeIndex: 503, ResultLen: 1, Values: []string{testTestZoneColl}},
+			{AttributeIndex: 504, ResultLen: 1, Values: []string{testZoneShort}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
@@ -256,7 +255,7 @@ func TestStat(t *testing.T) {
 	app.AddResponses(statResponses)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"stat", "/testzone/coll"})
+	cmd.SetArgs([]string{"stat", testTestZoneColl})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -269,7 +268,7 @@ func TestStatJSON(t *testing.T) {
 	app.AddResponses(statResponses)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"stat", "--json", "/testzone/coll"})
+	cmd.SetArgs([]string{"stat", "--json", testTestZoneColl})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -283,7 +282,7 @@ func TestMv(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"mv", "/testzone/coll", "/testzone/coll2"})
+	cmd.SetArgs([]string{"mv", testTestZoneColl, "/testzone/coll2"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -297,7 +296,7 @@ func TestRm(t *testing.T) {
 	app.AddResponse(msg.CollectionOperationStat{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"rm", "/testzone/coll"})
+	cmd.SetArgs([]string{"rm", testTestZoneColl})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -315,15 +314,15 @@ func TestCopy(t *testing.T) {
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
-			{AttributeIndex: 406, ResultLen: 2, Values: []string{"generic"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric}},
 			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0"}},
 			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000"}},
-			{AttributeIndex: 411, ResultLen: 2, Values: []string{"rods"}},
-			{AttributeIndex: 412, ResultLen: 1, Values: []string{"testzone"}},
-			{AttributeIndex: 415, ResultLen: 2, Values: []string{"checksum"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{testRods}},
+			{AttributeIndex: 412, ResultLen: 1, Values: []string{testTestZoneName}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum}},
 			{AttributeIndex: 413, ResultLen: 2, Values: []string{""}},
 			{AttributeIndex: 409, ResultLen: 2, Values: []string{"resc"}},
-			{AttributeIndex: 410, ResultLen: 2, Values: []string{"/path1"}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1}},
 			{AttributeIndex: 422, ResultLen: 2, Values: []string{"demoResc;resc"}},
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000"}},
@@ -356,7 +355,7 @@ func TestTouch(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"touch", "/testzone/obj1"})
+	cmd.SetArgs([]string{"touch", testTestZoneObj1})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -371,7 +370,7 @@ func TestChecksum(t *testing.T) {
 	})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"checksum", "/testzone/obj1"})
+	cmd.SetArgs([]string{testChecksum, testTestZoneObj1})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -395,7 +394,7 @@ func TestLocal(t *testing.T) {
 
 	cmd := app.local()
 
-	cmd.SetArgs([]string{"pwd"})
+	cmd.SetArgs([]string{testPwd})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -420,7 +419,7 @@ func TestMetaList(t *testing.T) {
 	app.AddResponses(statResponses[:len(statResponses)-2])
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"meta", "ls", "/testzone/coll"})
+	cmd.SetArgs([]string{testMeta, "ls", testTestZoneColl})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -435,7 +434,7 @@ func TestMetaBasicOps(t *testing.T) {
 		app.AddResponse(msg.EmptyResponse{})
 
 		cmd := app.Command()
-		cmd.SetArgs([]string{"meta", op, "/testzone/coll", "a", "b"})
+		cmd.SetArgs([]string{testMeta, op, testTestZoneColl, "a", "b"})
 
 		if err := cmd.ExecuteContext(t.Context()); err != nil {
 			t.Fatal(err)
@@ -451,7 +450,7 @@ func TestMetaUnset(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"meta", "unset", "/testzone/coll", "a"})
+	cmd.SetArgs([]string{testMeta, "unset", testTestZoneColl, "a"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -483,7 +482,7 @@ func TestCat(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"cat", "--threads", "1", "/testzone/obj1"})
+	cmd.SetArgs([]string{"cat", "--threads", "1", testTestZoneObj1})
 
 	transfer.BufferSize = 200
 
@@ -503,7 +502,7 @@ func TestHead(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"head", "/testzone/obj1"})
+	cmd.SetArgs([]string{"head", testTestZoneObj1})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -521,7 +520,7 @@ func TestSave(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"save", "--threads", "1", "/testzone/obj1"})
+	cmd.SetArgs([]string{"save", "--threads", "1", testTestZoneObj1})
 	cmd.SetIn(strings.NewReader("hello\n"))
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
@@ -541,7 +540,7 @@ func TestCD(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"cd", "testdir"})
+	cmd.SetArgs([]string{"cd", testTestDir})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
@@ -570,10 +569,10 @@ func TestPS(t *testing.T) {
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 1000001, ResultLen: 1, Values: []string{"10"}},
 			{AttributeIndex: 1000002, ResultLen: 1, Values: []string{"1764600000"}},
-			{AttributeIndex: 1000003, ResultLen: 1, Values: []string{"user"}},
-			{AttributeIndex: 1000004, ResultLen: 1, Values: []string{"zone"}},
-			{AttributeIndex: 1000005, ResultLen: 1, Values: []string{"user"}},
-			{AttributeIndex: 1000006, ResultLen: 1, Values: []string{"zone"}},
+			{AttributeIndex: 1000003, ResultLen: 1, Values: []string{testUser}},
+			{AttributeIndex: 1000004, ResultLen: 1, Values: []string{testZoneShort}},
+			{AttributeIndex: 1000005, ResultLen: 1, Values: []string{testUser}},
+			{AttributeIndex: 1000006, ResultLen: 1, Values: []string{testZoneShort}},
 			{AttributeIndex: 1000007, ResultLen: 1, Values: []string{"1.2.3.4"}},
 			{AttributeIndex: 1000008, ResultLen: 1, Values: []string{"example.org"}},
 			{AttributeIndex: 1000009, ResultLen: 1, Values: []string{"iron"}},
@@ -622,27 +621,27 @@ var tokenizeTests = []struct {
 	{
 		name:     "simple spaces",
 		query:    "SELECT col1 col2 col3",
-		expected: []string{"SELECT", "col1", "col2", "col3"},
+		expected: []string{testSelect, testCol1, testCol2, testCol3},
 	},
 	{
 		name:     "commas without parentheses",
 		query:    "col1,col2,col3",
-		expected: []string{"col1", "col2", "col3"},
+		expected: []string{testCol1, testCol2, testCol3},
 	},
 	{
 		name:     "mixed spaces and commas",
 		query:    "SELECT col1, col2, col3",
-		expected: []string{"SELECT", "col1", "col2", "col3"},
+		expected: []string{testSelect, testCol1, testCol2, testCol3},
 	},
 	{
 		name:     "parentheses preserve contents",
 		query:    "SELECT func(col1, col2) col3",
-		expected: []string{"SELECT", "func(col1, col2)", "col3"},
+		expected: []string{testSelect, "func(col1, col2)", testCol3},
 	},
 	{
 		name:     "nested parentheses",
 		query:    "SELECT func(nested(a, b), c) col3",
-		expected: []string{"SELECT", "func(nested(a, b), c)", "col3"},
+		expected: []string{testSelect, "func(nested(a, b), c)", testCol3},
 	},
 	{
 		name:     "empty string",
@@ -651,8 +650,8 @@ var tokenizeTests = []struct {
 	},
 	{
 		name:     "single token",
-		query:    "SELECT",
-		expected: []string{"SELECT"},
+		query:    testSelect,
+		expected: []string{testSelect},
 	},
 	{
 		name:     "only spaces",
@@ -662,7 +661,7 @@ var tokenizeTests = []struct {
 	{
 		name:     "complex query",
 		query:    "SELECT DISTINCT col1, func(col2, col3) WHERE col4",
-		expected: []string{"SELECT", "DISTINCT", "col1", "func(col2, col3)", "WHERE", "col4"},
+		expected: []string{testSelect, "DISTINCT", testCol1, "func(col2, col3)", "WHERE", "col4"},
 	},
 }
 
@@ -693,57 +692,57 @@ var guessColumnsTests = []struct {
 	{
 		name:     "simple select",
 		query:    "SELECT col1",
-		expected: []string{"col1"},
+		expected: []string{testCol1},
 	},
 	{
 		name:     "select multiple columns",
 		query:    "SELECT col1 col2 col3",
-		expected: []string{"col1", "col2", "col3"},
+		expected: []string{testCol1, testCol2, testCol3},
 	},
 	{
 		name:     "select distinct",
 		query:    "SELECT DISTINCT col1 col2",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 	{
 		name:     "comma separated columns",
 		query:    "SELECT col1,col2,col3",
-		expected: []string{"col1", "col2", "col3"},
+		expected: []string{testCol1, testCol2, testCol3},
 	},
 	{
 		name:     "stops at WHERE",
 		query:    "SELECT col1 col2 WHERE col3",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 	{
 		name:     "stops at GROUP",
 		query:    "SELECT col1 col2 GROUP BY col3",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 	{
 		name:     "stops at ORDER",
 		query:    "SELECT col1 col2 ORDER BY col3",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 	{
 		name:     "stops at LIMIT",
 		query:    "SELECT col1 col2 LIMIT 10",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 	{
 		name:     "stops at OFFSET",
 		query:    "SELECT col1 col2 OFFSET 5",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 	{
 		name:     "function with parentheses",
 		query:    "SELECT func(col1, col2) col3",
-		expected: []string{"func(col1, col2)", "col3"},
+		expected: []string{"func(col1, col2)", testCol3},
 	},
 	{
 		name:     "mixed commas in tokens",
 		query:    "SELECT col1, col2, col3",
-		expected: []string{"col1", "col2", "col3"},
+		expected: []string{testCol1, testCol2, testCol3},
 	},
 	{
 		name:     "empty query",
@@ -758,12 +757,12 @@ var guessColumnsTests = []struct {
 	{
 		name:     "case insensitive keywords",
 		query:    "select col1 where col2",
-		expected: []string{"col1"},
+		expected: []string{testCol1},
 	},
 	{
 		name:     "trailing commas",
 		query:    "SELECT col1,col2,",
-		expected: []string{"col1", "col2"},
+		expected: []string{testCol1, testCol2},
 	},
 }
 

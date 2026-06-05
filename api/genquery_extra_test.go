@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -69,11 +68,11 @@ func TestGenericResultScanNilRow(t *testing.T) {
 
 func TestGenericSingleRowResultRow(t *testing.T) {
 	grr := &GenericSingleRowResult{
-		row: []string{"hello", "42"},
+		row: []string{testHello, "42"},
 	}
 
 	row := grr.Row()
-	if len(row) != 2 || row[0] != "hello" {
+	if len(row) != 2 || row[0] != testHello {
 		t.Errorf("unexpected row: %v", row)
 	}
 }
@@ -103,7 +102,7 @@ func TestGenericSingleRowResultScanError(t *testing.T) {
 
 func TestGenericSingleRowResultScanTooManyDest(t *testing.T) {
 	grr := &GenericSingleRowResult{
-		row: []string{"hello"},
+		row: []string{testHello},
 	}
 
 	var a, b string
@@ -160,7 +159,7 @@ func TestGenericQueryRowScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name != "hello" || id != 42 {
+	if name != testHello || id != 42 {
 		t.Errorf("expected (hello, 42), got (%s, %d)", name, id)
 	}
 }

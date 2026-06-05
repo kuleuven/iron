@@ -1,4 +1,3 @@
-//nolint:goconst
 package iron
 
 import (
@@ -35,7 +34,7 @@ func (c *mockConn) ClientSignature() string {
 }
 
 func (c *mockConn) NativePassword() string {
-	return "password"
+	return testPassword
 }
 
 func (c *mockConn) LocalAddr() net.Addr {
@@ -78,7 +77,7 @@ func TestConnNative(t *testing.T) {
 	transport, server := connPipe(mockVersion)
 
 	msg.Write(server, msg.ClientServerNegotiation{
-		Result: "CS_NEG_DONT_CARE",
+		Result: ClientServerDontCare,
 	}, nil, msg.XML, "RODS_CS_NEG_T", 0)
 
 	msg.Write(server, msg.Version{
@@ -92,18 +91,18 @@ func TestConnNative(t *testing.T) {
 	msg.Write(server, msg.AuthResponse{}, nil, msg.XML, "RODS_API_REPLY", 0)
 
 	env := Env{
-		Host:                          "localhost",
+		Host:                          testHost,
 		Port:                          1247,
-		Zone:                          "testZone",
-		Username:                      "testUser",
-		Password:                      "testPassword",
-		AuthScheme:                    "native",
-		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+		Zone:                          testZoneName,
+		Username:                      testUserName,
+		Password:                      testPasswordValue,
+		AuthScheme:                    native,
+		ClientServerNegotiationPolicy: ClientServerRefuseTLS,
 	}
 
 	env.ApplyDefaults()
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +122,7 @@ func TestConnNativeNew(t *testing.T) {
 	transport, server := connPipe(mockVersionNew)
 
 	msg.Write(server, msg.ClientServerNegotiation{
-		Result: "CS_NEG_DONT_CARE",
+		Result: ClientServerDontCare,
 	}, nil, msg.XML, "RODS_CS_NEG_T", 0)
 
 	msg.Write(server, msg.Version{
@@ -140,18 +139,18 @@ func TestConnNativeNew(t *testing.T) {
 	}, nil, msg.XML, "RODS_API_REPLY", 0)
 
 	env := Env{
-		Host:                          "localhost",
+		Host:                          testHost,
 		Port:                          1247,
-		Zone:                          "testZone",
-		Username:                      "testUser",
-		Password:                      "testPassword",
-		AuthScheme:                    "native",
-		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+		Zone:                          testZoneName,
+		Username:                      testUserName,
+		Password:                      testPasswordValue,
+		AuthScheme:                    native,
+		ClientServerNegotiationPolicy: ClientServerRefuseTLS,
 	}
 
 	env.ApplyDefaults()
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +193,7 @@ func pamResponses(server net.Conn) {
 
 	assert(msg.Read(server, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT"))
 	assert(msg.Write(server, msg.ClientServerNegotiation{
-		Result: "CS_NEQ_REQUIRE",
+		Result: testCSNegRequire,
 	}, nil, msg.XML, "RODS_CS_NEG_T", 0))
 	assert(msg.Read(server, &msg.ClientServerNegotiation{}, nil, msg.XML, "RODS_CS_NEG_T"))
 	assert(msg.Write(server, msg.Version{
@@ -216,7 +215,7 @@ func pamResponses(server net.Conn) {
 	assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, nil, msg.XML, "SHARED_SECRET"))
 	assert(msg.Read(serverTLS, &msg.PamAuthRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.PamAuthResponse{
-		GeneratedPassword: "testNativePassword",
+		GeneratedPassword: testNativePassword,
 	}, nil, msg.XML, "RODS_API_REPLY", 0))
 	assert(msg.Read(serverTLS, &msg.AuthRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthChallenge{
@@ -235,7 +234,7 @@ func pamResponsesNew(server net.Conn) {
 
 	assert(msg.Read(server, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT"))
 	assert(msg.Write(server, msg.ClientServerNegotiation{
-		Result: "CS_NEQ_REQUIRE",
+		Result: testCSNegRequire,
 	}, nil, msg.XML, "RODS_CS_NEG_T", 0))
 	assert(msg.Read(server, &msg.ClientServerNegotiation{}, nil, msg.XML, "RODS_CS_NEG_T"))
 	assert(msg.Write(server, msg.Version{
@@ -257,7 +256,7 @@ func pamResponsesNew(server net.Conn) {
 	assert(msg.Read(serverTLS, &msg.SSLSharedSecret{}, nil, msg.XML, "SHARED_SECRET"))
 	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
-		RequestResult: "testNativePassword",
+		RequestResult: testNativePassword,
 	}, nil, msg.XML, "RODS_API_REPLY", 0))
 	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
@@ -274,16 +273,16 @@ func TestConnPamPassword(t *testing.T) {
 	go pamResponses(server)
 
 	env := Env{
-		Zone:            "testZone",
-		Username:        "testUser",
-		Password:        "testPassword",
-		AuthScheme:      "pam_password",
+		Zone:            testZoneName,
+		Username:        testUserName,
+		Password:        testPasswordValue,
+		AuthScheme:      pamPassword,
 		SSLVerifyServer: "none",
 	}
 
 	env.ApplyDefaults()
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,11 +315,11 @@ func TestConnPamPasswordTLS(t *testing.T) {
 	}
 
 	env := Env{
-		SSLServerName:        "localhost",
-		Zone:                 "testZone",
-		Username:             "testUser",
-		Password:             "testPassword",
-		AuthScheme:           "pam_password",
+		SSLServerName:        testHost,
+		Zone:                 testZoneName,
+		Username:             testUserName,
+		Password:             testPasswordValue,
+		AuthScheme:           pamPassword,
 		SSLVerifyServer:      SSLVerifyServerHost,
 		SSLCACertificateFile: f.Name(),
 	}
@@ -331,7 +330,7 @@ func TestConnPamPasswordTLS(t *testing.T) {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,11 +363,11 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 	}
 
 	env := Env{
-		SSLServerName:        "localhost:5453",
-		Zone:                 "testZone",
-		Username:             "testUser",
-		Password:             "testPassword",
-		AuthScheme:           "pam_password",
+		SSLServerName:        testHostPort,
+		Zone:                 testZoneName,
+		Username:             testUserName,
+		Password:             testPasswordValue,
+		AuthScheme:           pamPassword,
 		SSLVerifyServer:      SSLVerifyServerCert,
 		SSLCACertificateFile: f.Name(),
 	}
@@ -379,7 +378,7 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,11 +411,11 @@ func TestConnPamPasswordTLS3(t *testing.T) {
 	}
 
 	env := Env{
-		SSLServerName:        "localhost:5453",
-		Zone:                 "testZone",
-		Username:             "testUser",
-		Password:             "testPassword",
-		AuthScheme:           "pam_password",
+		SSLServerName:        testHostPort,
+		Zone:                 testZoneName,
+		Username:             testUserName,
+		Password:             testPasswordValue,
+		AuthScheme:           pamPassword,
 		SSLVerifyServer:      "cert",
 		SSLCACertificateFile: f.Name(),
 	}
@@ -427,7 +426,7 @@ func TestConnPamPasswordTLS3(t *testing.T) {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +446,7 @@ func pamResponsesInteractive(server net.Conn) { //nolint:funlen
 
 	assert(msg.Read(server, &msg.StartupPack{}, nil, msg.XML, "RODS_CONNECT"))
 	assert(msg.Write(server, msg.ClientServerNegotiation{
-		Result: "CS_NEQ_REQUIRE",
+		Result: testCSNegRequire,
 	}, nil, msg.XML, "RODS_CS_NEG_T", 0))
 	assert(msg.Read(server, &msg.ClientServerNegotiation{}, nil, msg.XML, "RODS_CS_NEG_T"))
 	assert(msg.Write(server, msg.Version{
@@ -479,9 +478,9 @@ func pamResponsesInteractive(server net.Conn) { //nolint:funlen
 			Prompt: "Hello",
 			Patch: []map[string]any{
 				{
-					"op":    "replace",
-					"path":  "/bla",
-					"value": "testValue",
+					"op":     "replace",
+					testPath: "/bla",
+					value:    "testValue",
 				},
 			},
 		},
@@ -526,7 +525,7 @@ func pamResponsesInteractive(server net.Conn) { //nolint:funlen
 	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
 		NextOperation: "authenticated",
-		RequestResult: "testNativePassword",
+		RequestResult: testNativePassword,
 	}, nil, msg.XML, "RODS_API_REPLY", 0))
 	assert(msg.Read(serverTLS, &msg.AuthPluginRequest{}, nil, msg.XML, "RODS_API_REQ"))
 	assert(msg.Write(serverTLS, msg.AuthPluginResponse{
@@ -558,9 +557,9 @@ func TestConnPamInteractiveTLS(t *testing.T) {
 	}
 
 	env := Env{
-		SSLServerName:        "localhost:5453",
-		Zone:                 "testZone",
-		Username:             "testUser",
+		SSLServerName:        testHostPort,
+		Zone:                 testZoneName,
+		Username:             testUserName,
 		AuthScheme:           "pam_interactive",
 		SSLVerifyServer:      "cert",
 		SSLCACertificateFile: f.Name(),
@@ -577,7 +576,7 @@ func TestConnPamInteractiveTLS(t *testing.T) {
 		"Some key": "def",
 	}
 
-	conn, err := NewPromptConn(ctx, transport, env, bot, "test")
+	conn, err := NewPromptConn(ctx, transport, env, bot, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,11 +613,11 @@ func TestDialer(t *testing.T) {
 		t.Fatalf("expected TCP address, got %T", listener.Addr())
 	}
 
-	env := Env{Host: "127.0.0.1", Port: tcpAddr.Port}
+	env := Env{Host: testIP, Port: tcpAddr.Port}
 
 	env.ApplyDefaults()
 
-	_, err = Dial(t.Context(), env, "test")
+	_, err = Dial(t.Context(), env, testStr)
 	if err != io.EOF {
 		t.Fatalf("expected EOF, got %v", err)
 	}
@@ -626,13 +625,13 @@ func TestDialer(t *testing.T) {
 
 func TestTLSRequired1(t *testing.T) {
 	env := Env{
-		AuthScheme:                    "pam_password",
-		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+		AuthScheme:                    pamPassword,
+		ClientServerNegotiationPolicy: ClientServerRefuseTLS,
 	}
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(t.Context(), nil, env, "test")
+	_, err := NewConn(t.Context(), nil, env, testStr)
 	if err != ErrTLSRequired {
 		t.Fatalf("expected ErrTLSRequired, got %v", err)
 	}
@@ -640,13 +639,13 @@ func TestTLSRequired1(t *testing.T) {
 
 func TestTLSRequired2(t *testing.T) {
 	env := Env{
-		AuthScheme:              "pam_password",
+		AuthScheme:              pamPassword,
 		ClientServerNegotiation: "dont_negotiate",
 	}
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(t.Context(), nil, env, "test")
+	_, err := NewConn(t.Context(), nil, env, testStr)
 	if err != ErrTLSRequired {
 		t.Fatalf("expected ErrTLSRequired, got %v", err)
 	}
@@ -657,7 +656,7 @@ func TestOldVersion(t *testing.T) {
 	transport, server := connPipe(mockVersion)
 
 	msg.Write(server, msg.ClientServerNegotiation{
-		Result: "CS_NEG_DONT_CARE",
+		Result: ClientServerDontCare,
 	}, nil, msg.XML, "RODS_CS_NEG_T", 0)
 
 	msg.Write(server, msg.Version{
@@ -665,18 +664,18 @@ func TestOldVersion(t *testing.T) {
 	}, nil, msg.XML, "RODS_VERSION", 0)
 
 	env := Env{
-		Host:                          "localhost",
+		Host:                          testHost,
 		Port:                          1247,
-		Zone:                          "testZone",
-		Username:                      "testUser",
-		Password:                      "testPassword",
-		AuthScheme:                    "native",
-		ClientServerNegotiationPolicy: "CS_NEG_REFUSE",
+		Zone:                          testZoneName,
+		Username:                      testUserName,
+		Password:                      testPasswordValue,
+		AuthScheme:                    native,
+		ClientServerNegotiationPolicy: ClientServerRefuseTLS,
 	}
 
 	env.ApplyDefaults()
 
-	_, err := NewConn(ctx, transport, env, "test")
+	_, err := NewConn(ctx, transport, env, testStr)
 	if !errors.Is(err, ErrUnsupportedVersion) {
 		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
 	}
@@ -701,18 +700,18 @@ func TestRequest(t *testing.T) { //nolint:funlen
 	msg.Write(server, msg.CollectionOperationStat{}, nil, msg.XML, "RODS_API_REPLY", 0)
 
 	env := Env{
-		Host:                    "localhost",
+		Host:                    testHost,
 		Port:                    1247,
-		Zone:                    "testZone",
-		Username:                "testUser",
-		Password:                "testPassword",
-		AuthScheme:              "native",
+		Zone:                    testZoneName,
+		Username:                testUserName,
+		Password:                testPasswordValue,
+		AuthScheme:              native,
 		ClientServerNegotiation: "dont_negotiate",
 	}
 
 	env.ApplyDefaults()
 
-	conn, err := NewConn(ctx, transport, env, "test")
+	conn, err := NewConn(ctx, transport, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}

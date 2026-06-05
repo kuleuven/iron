@@ -1,4 +1,3 @@
-//nolint:goconst
 package iron
 
 import (
@@ -264,19 +263,19 @@ func TestBot_Ask(t *testing.T) { //nolint:funlen
 		{
 			name: "existing key",
 			bot: Bot{
-				"username": "john_doe",
-				"email":    "john@example.com",
+				testUsername: testJohnDoe,
+				"email":      "john@example.com",
 			},
-			message:       "username",
-			expectedValue: "john_doe",
+			message:       testUsername,
+			expectedValue: testJohnDoe,
 			expectError:   false,
 		},
 		{
 			name: "missing key",
 			bot: Bot{
-				"username": "john_doe",
+				testUsername: testJohnDoe,
 			},
-			message:     "password",
+			message:     testPassword,
 			expectError: true,
 		},
 		{
@@ -336,18 +335,18 @@ func TestBot_Password(t *testing.T) {
 		{
 			name: "existing password",
 			bot: Bot{
-				"admin_password": "secret123",
+				testAdminPassword: "secret123",
 			},
-			message:       "admin_password",
+			message:       testAdminPassword,
 			expectedValue: "secret123",
 			expectError:   false,
 		},
 		{
 			name: "missing password",
 			bot: Bot{
-				"username": "admin",
+				testUsername: "admin",
 			},
-			message:     "admin_password",
+			message:     testAdminPassword,
 			expectError: true,
 		},
 	}
@@ -398,7 +397,7 @@ func TestPromptInterface(t *testing.T) {
 
 	// Test interface methods exist
 	testPrompt := &prompt{r: os.Stdin, w: os.Stdout}
-	testBot := Bot{"test": "value"}
+	testBot := Bot{testStr: value}
 
 	// These should compile without error
 	_ = testPrompt.Print

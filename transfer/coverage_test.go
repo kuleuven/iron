@@ -1,4 +1,3 @@
-//nolint:goconst
 package transfer
 
 import (
@@ -212,5 +211,5 @@ func TestWorkerProgressNoopHandler(t *testing.T) {
 	worker := New(nil, nil, Options{})
 
 	// Should not panic with default no-op handler.
-	worker.Progress(Progress{Label: "test"})
+	worker.Progress(Progress{Label: testStr})
 }

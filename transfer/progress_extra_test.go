@@ -1,4 +1,3 @@
-//nolint:goconst
 package transfer
 
 import (
@@ -11,10 +10,10 @@ func TestProgressLabel(t *testing.T) {
 	tests := []struct {
 		local, remote, expected string
 	}{
-		{"local.txt", "remote.txt", "local.txt"},
-		{"", "remote.txt", "remote.txt"},
+		{testLocalTxt, testRemoteTxt, testLocalTxt},
+		{"", testRemoteTxt, testRemoteTxt},
 		{"", "", ""},
-		{"local.txt", "", "local.txt"},
+		{testLocalTxt, "", testLocalTxt},
 	}
 
 	for _, tt := range tests {
@@ -68,7 +67,7 @@ func TestPBHandlerRegistration(t *testing.T) {
 
 	// Register a file
 	pb.Handler(Progress{
-		Label: "test.txt",
+		Label: testTxt,
 		Size:  1000,
 	})
 
@@ -78,7 +77,7 @@ func TestPBHandlerRegistration(t *testing.T) {
 
 	// Update with re-registration of same label with different size
 	pb.Handler(Progress{
-		Label: "test.txt",
+		Label: testTxt,
 		Size:  2000,
 	})
 
@@ -99,13 +98,13 @@ func TestPBHandlerTransferOngoing(t *testing.T) {
 
 	// Register
 	pb.Handler(Progress{
-		Label: "test.txt",
+		Label: testTxt,
 		Size:  1000,
 	})
 
 	// Transfer ongoing
 	pb.Handler(Progress{
-		Label:       "test.txt",
+		Label:       testTxt,
 		Size:        1000,
 		StartedAt:   time.Now(),
 		Transferred: 500,
@@ -130,13 +129,13 @@ func TestPBHandlerTransferComplete(t *testing.T) {
 
 	// Register
 	pb.Handler(Progress{
-		Label: "test.txt",
+		Label: testTxt,
 		Size:  1000,
 	})
 
 	// Complete
 	pb.Handler(Progress{
-		Label:       "test.txt",
+		Label:       testTxt,
 		Size:        1000,
 		StartedAt:   time.Now(),
 		FinishedAt:  time.Now(),
@@ -150,7 +149,7 @@ func TestPBHandlerTransferComplete(t *testing.T) {
 	}
 
 	// Check that transfer is complete (removed from actual)
-	if _, exists := pb.actual["test.txt"]; exists {
+	if _, exists := pb.actual[testTxt]; exists {
 		t.Error("expected transfer to be removed from actual map after completion")
 	}
 
@@ -173,7 +172,7 @@ func TestPBHandlerComputeChecksum(t *testing.T) {
 
 	pb.Handler(Progress{
 		Action: ComputeChecksum,
-		Label:  "test.txt",
+		Label:  testTxt,
 	})
 
 	if buf.Len() == 0 {
@@ -220,7 +219,7 @@ func TestPBErrorHandler(t *testing.T) {
 		w:            &bytes.Buffer{},
 	}
 
-	err := pb.ErrorHandler("local.txt", "remote.txt", bytes.ErrTooLarge)
+	err := pb.ErrorHandler(testLocalTxt, testRemoteTxt, bytes.ErrTooLarge)
 	if err != nil {
 		t.Errorf("expected nil error from ErrorHandler, got %v", err)
 	}
@@ -310,7 +309,7 @@ func TestPBCloseWithErrors(t *testing.T) {
 	w := &bytes.Buffer{}
 	pb := ProgressBar(w)
 
-	pb.ErrorHandler("test.txt", "remote.txt", bytes.ErrTooLarge)
+	pb.ErrorHandler(testTxt, testRemoteTxt, bytes.ErrTooLarge)
 
 	err := pb.Close()
 	if err == nil {
@@ -324,13 +323,13 @@ func TestProgressBarOutput(t *testing.T) {
 
 	// Register a file
 	pb.Handler(Progress{
-		Label: "test.txt",
+		Label: testTxt,
 		Size:  1000,
 	})
 
 	// Complete it
 	pb.Handler(Progress{
-		Label:       "test.txt",
+		Label:       testTxt,
 		Size:        1000,
 		StartedAt:   time.Now(),
 		FinishedAt:  time.Now(),
@@ -359,11 +358,11 @@ func TestActionFormat(t *testing.T) {
 		label    string
 		contains string
 	}{
-		{ComputeChecksum, "file.txt", "c file.txt"},
-		{SetModificationTime, "file.txt", "t file.txt"},
+		{ComputeChecksum, testFileTxt, "c file.txt"},
+		{SetModificationTime, testFileTxt, "t file.txt"},
 		{CreateDirectory, "dir", "+ dir/"},
-		{TransferFile, "file.txt", "+ file.txt"},
-		{RemoveFile, "file.txt", "- file.txt"},
+		{TransferFile, testFileTxt, "+ file.txt"},
+		{RemoveFile, testFileTxt, "- file.txt"},
 		{RemoveDirectory, "dir", "- dir/"},
 		{Action(99), "unknown", "unknown"},
 	}

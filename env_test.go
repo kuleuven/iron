@@ -1,4 +1,3 @@
-//nolint:goconst
 package iron
 
 import (
@@ -26,7 +25,7 @@ func TestEnvLoadFromFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if env.Zone != "testZone" {
+	if env.Zone != testZoneName {
 		t.Fatalf("expected testZone, got %s", env.Zone)
 	}
 }
@@ -38,9 +37,9 @@ func TestEnvMarshal(t *testing.T) {
 	)
 
 	envs := []Env{
-		{Zone: "testZone"},
-		{Zone: "testZone", IrodsAuthenticationUID: &zero},
-		{Zone: "testZone", IrodsAuthenticationUID: &one},
+		{Zone: testZoneName},
+		{Zone: testZoneName, IrodsAuthenticationUID: &zero},
+		{Zone: testZoneName, IrodsAuthenticationUID: &one},
 	}
 
 	for i, env := range envs {

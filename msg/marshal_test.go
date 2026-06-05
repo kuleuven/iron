@@ -1,4 +1,3 @@
-//nolint:goconst
 package msg
 
 import (
@@ -20,7 +19,7 @@ func TestMarshal(t *testing.T) {
 			&AuthChallenge{},
 			AuthChallengeResponse{
 				Response: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("abcdef01"), 2)),
-				Username: "test",
+				Username: testStr,
 			},
 			&AuthChallengeResponse{},
 			AuthResponse{},
@@ -56,7 +55,7 @@ func TestMarshal(t *testing.T) {
 }
 
 func testMarshal(t *testing.T, obj, ptr any, proto Protocol) {
-	marshaled, err := Marshal(obj, proto, "test")
+	marshaled, err := Marshal(obj, proto, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +65,7 @@ func testMarshal(t *testing.T, obj, ptr any, proto Protocol) {
 		t.Fatal(err)
 	}
 
-	marshaled2, err := Marshal(ptr, proto, "test")
+	marshaled2, err := Marshal(ptr, proto, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,13 +122,13 @@ func TestReadWrite(t *testing.T) {
 }
 
 func testWrite(t *testing.T, w io.Writer, obj any, proto Protocol, i int) {
-	if err := Write(w, obj, nil, proto, "test", int32(i)); err != nil {
+	if err := Write(w, obj, nil, proto, testStr, int32(i)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func testRead(t *testing.T, r io.Reader, ptr any, proto Protocol, i int) {
-	if info, err := Read(r, ptr, nil, proto, "test"); err != nil {
+	if info, err := Read(r, ptr, nil, proto, testStr); err != nil {
 		t.Fatal(err)
 	} else if info != int32(i) {
 		t.Fatalf("expected %d, got %d", i, info)
@@ -137,13 +136,13 @@ func testRead(t *testing.T, r io.Reader, ptr any, proto Protocol, i int) {
 }
 
 func testWriteContext(t *testing.T, w io.Writer, obj any, proto Protocol, i int) {
-	if err := WriteContext(t.Context(), w, obj, nil, proto, "test", int32(i)); err != nil {
+	if err := WriteContext(t.Context(), w, obj, nil, proto, testStr, int32(i)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func testReadContext(t *testing.T, r io.Reader, ptr any, proto Protocol, i int) {
-	if info, err := ReadContext(t.Context(), r, ptr, nil, proto, "test"); err != nil {
+	if info, err := ReadContext(t.Context(), r, ptr, nil, proto, testStr); err != nil {
 		t.Fatal(err)
 	} else if info != int32(i) {
 		t.Fatalf("expected %d, got %d", i, info)

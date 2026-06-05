@@ -1,4 +1,3 @@
-//nolint:goconst
 package transfer
 
 import (
@@ -44,7 +43,7 @@ type fakeFileInfo struct {
 	sys any
 }
 
-func (f *fakeFileInfo) Name() string       { return "test" }
+func (f *fakeFileInfo) Name() string       { return testStr }
 func (f *fakeFileInfo) Size() int64        { return 0 }
 func (f *fakeFileInfo) Mode() os.FileMode  { return 0 }
 func (f *fakeFileInfo) ModTime() time.Time { return time.Time{} }

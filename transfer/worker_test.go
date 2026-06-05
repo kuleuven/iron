@@ -1,4 +1,3 @@
-//nolint:goconst
 package transfer
 
 import (
@@ -60,12 +59,12 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	testConn0 := &api.MockConn{}
 
 	testIndexAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn0, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	testConn0.AddResponse(msg.EmptyResponse{}) // mkdir
@@ -77,8 +76,8 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	var n int
 
 	testTransferAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			n++
 
@@ -88,18 +87,18 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 
 			return testConn2, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	testConn1.Add(msg.DATA_OBJ_UNLINK_AN, msg.DataObjectRequest{
-		Path: "/test/file1",
+		Path: testFile1,
 	}, msg.EmptyResponse{})
 
 	kv := msg.SSKeyVal{}
 	kv.Add(msg.DATA_TYPE_KW, "generic")
-	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	kv.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
 	testConn2.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-		Path:       "/test/file2",
+		Path:       testFile2,
 		CreateMode: 420,
 		OpenFlags:  577,
 		KeyVals:    kv,
@@ -108,29 +107,29 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		FileDescriptor: 1,
 	}, msg.GetDescriptorInfoResponse{
 		DataObjectInfo: map[string]any{
-			"replica_number":     1,
-			"resource_hierarchy": "blub",
+			testReplicaNumber: 1,
+			testResourceHier:  testBlub,
 		},
-		ReplicaToken: "testToken",
+		ReplicaToken: testToken,
 	})
 	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 
 	testConn2.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 	}, msg.EmptyResponse{})
 
 	kv = msg.SSKeyVal{}
-	kv.Add(msg.RESC_HIER_STR_KW, "blub")
-	kv.Add(msg.REPLICA_TOKEN_KW, "testToken")
+	kv.Add(msg.RESC_HIER_STR_KW, testBlub)
+	kv.Add(msg.REPLICA_TOKEN_KW, testToken)
 	testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-		Path:      "/test/file2",
+		Path:      testFile2,
 		OpenFlags: 1,
 		KeyVals:   kv,
 	}, msg.FileDescriptor(2))
@@ -141,18 +140,18 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn1.Add(msg.REPLICA_CLOSE_APN, msg.CloseDataObjectReplicaRequest{
 		FileDescriptor: 2,
 	}, msg.EmptyResponse{})
 
 	dir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(dir, "file2"), bytes.Repeat([]byte("test"), 100), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "file2"), bytes.Repeat([]byte(testStr), 100), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -180,8 +179,8 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 	var n int
 
 	testTransferAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			n++
 
@@ -191,14 +190,14 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 
 			return testConn2, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	kv := msg.SSKeyVal{}
 	kv.Add(msg.DATA_TYPE_KW, "generic")
-	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	kv.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
 	testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-		Path:       "/test/file2",
+		Path:       testFile2,
 		CreateMode: 420,
 		OpenFlags:  577,
 		KeyVals:    kv,
@@ -208,15 +207,15 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 		FileDescriptor: 1,
 	}, msg.GetDescriptorInfoResponse{
 		DataObjectInfo: map[string]any{
-			"replica_number":     1,
-			"resource_hierarchy": "blub",
+			testReplicaNumber: 1,
+			testResourceHier:  testBlub,
 		},
-		ReplicaToken: "testToken",
+		ReplicaToken: testToken,
 	})
 	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn1.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Offset:         200,
@@ -224,16 +223,16 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 	testConn1.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn1.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 	}, msg.EmptyResponse{})
 
 	kv = msg.SSKeyVal{}
-	kv.Add(msg.RESC_HIER_STR_KW, "blub")
-	kv.Add(msg.REPLICA_TOKEN_KW, "testToken")
+	kv.Add(msg.RESC_HIER_STR_KW, testBlub)
+	kv.Add(msg.REPLICA_TOKEN_KW, testToken)
 	testConn2.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-		Path:      "/test/file2",
+		Path:      testFile2,
 		OpenFlags: 1,
 		KeyVals:   kv,
 	}, msg.FileDescriptor(2))
@@ -244,7 +243,7 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Offset:         300,
@@ -252,7 +251,7 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 	testConn2.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Size:           100,
-	}, msg.EmptyResponse{}, bytes.Repeat([]byte("test"), 25), nil)
+	}, msg.EmptyResponse{}, bytes.Repeat([]byte(testStr), 25), nil)
 	testConn2.Add(msg.REPLICA_CLOSE_APN, msg.CloseDataObjectReplicaRequest{
 		FileDescriptor: 2,
 	}, msg.EmptyResponse{})
@@ -266,7 +265,7 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 		Delete:     true,
 	})
 
-	worker.FromStream(t.Context(), "stream", bytes.NewReader(bytes.Repeat([]byte("test"), 100)), "/test/file2", false)
+	worker.FromStream(t.Context(), "stream", bytes.NewReader(bytes.Repeat([]byte(testStr), 100)), testFile2, false)
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -283,12 +282,12 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		testConn0 := &api.MockConn{}
 
 		testIndexAPI := &api.API{
-			Username: "testuser",
-			Zone:     "testzone",
+			Username: testUser,
+			Zone:     testZone,
 			Connect: func(context.Context) (api.Conn, error) {
 				return testConn0, nil
 			},
-			DefaultResource: "demoResc",
+			DefaultResource: testDemoResc,
 		}
 
 		testConn0.AddResponses(responses) // walk
@@ -296,19 +295,19 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		testConn1 := &api.MockConn{}
 
 		testTransferAPI := &api.API{
-			Username: "testuser",
-			Zone:     "testzone",
+			Username: testUser,
+			Zone:     testZone,
 			Connect: func(context.Context) (api.Conn, error) {
 				return testConn1, nil
 			},
-			DefaultResource: "demoResc",
+			DefaultResource: testDemoResc,
 		}
 
 		kv := msg.SSKeyVal{}
 		kv.Add(msg.DATA_TYPE_KW, "generic")
-		kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+		kv.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
 		testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-			Path:       "/test/file1",
+			Path:       testFile1,
 			CreateMode: 420,
 			KeyVals:    kv,
 		}, msg.FileDescriptor(1))
@@ -322,7 +321,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		testConn1.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
 			FileDescriptor: 1,
 			Size:           100,
-		}, msg.ReadResponse(4), nil, []byte("test"))
+		}, msg.ReadResponse(4), nil, []byte(testStr))
 		testConn1.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
 			FileDescriptor: 1,
 		}, msg.EmptyResponse{})
@@ -347,7 +346,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 
 		if contents, err := os.ReadFile(filepath.Join(dir, "file1")); err != nil {
 			t.Fatal(err)
-		} else if string(contents) != "test" {
+		} else if string(contents) != testStr {
 			t.Errorf("expected 'test', got '%s'", string(contents))
 		}
 	}
@@ -360,8 +359,8 @@ func TestToStream(t *testing.T) { //nolint:funlen
 	var n int
 
 	testTransferAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			n++
 
@@ -371,14 +370,14 @@ func TestToStream(t *testing.T) { //nolint:funlen
 
 			return testConn2, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	kv := msg.SSKeyVal{}
 	kv.Add(msg.DATA_TYPE_KW, "generic")
-	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	kv.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
 	testConn1.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-		Path:       "/test/file1",
+		Path:       testFile1,
 		CreateMode: 420,
 		KeyVals:    kv,
 	}, msg.FileDescriptor(1))
@@ -394,15 +393,15 @@ func TestToStream(t *testing.T) { //nolint:funlen
 		FileDescriptor: 1,
 	}, msg.GetDescriptorInfoResponse{
 		DataObjectInfo: map[string]any{
-			"replica_number":     1,
-			"resource_hierarchy": "blub",
+			testReplicaNumber: 1,
+			testResourceHier:  testBlub,
 		},
-		ReplicaToken: "testToken",
+		ReplicaToken: testToken,
 	})
 	testConn1.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Size:           100,
-	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("test"), 25))
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte(testStr), 25))
 	testConn1.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Offset:         200,
@@ -410,16 +409,16 @@ func TestToStream(t *testing.T) { //nolint:funlen
 	testConn1.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 		Size:           100,
-	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("test"), 25))
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte(testStr), 25))
 	testConn1.Add(msg.DATA_OBJ_CLOSE_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 1,
 	}, msg.EmptyResponse{})
 
 	kv = msg.SSKeyVal{}
-	kv.Add(msg.RESC_HIER_STR_KW, "blub")
-	kv.Add(msg.REPLICA_TOKEN_KW, "testToken")
+	kv.Add(msg.RESC_HIER_STR_KW, testBlub)
+	kv.Add(msg.REPLICA_TOKEN_KW, testToken)
 	testConn2.Add(msg.DATA_OBJ_OPEN_AN, msg.DataObjectRequest{
-		Path:    "/test/file1",
+		Path:    testFile1,
 		KeyVals: kv,
 	}, msg.FileDescriptor(2))
 	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
@@ -429,7 +428,7 @@ func TestToStream(t *testing.T) { //nolint:funlen
 	testConn2.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Size:           100,
-	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte("test"), 25))
+	}, msg.ReadResponse(100), nil, bytes.Repeat([]byte(testStr), 25))
 	testConn2.Add(msg.DATA_OBJ_LSEEK_AN, msg.OpenedDataObjectRequest{
 		FileDescriptor: 2,
 		Offset:         300,
@@ -449,7 +448,7 @@ func TestToStream(t *testing.T) { //nolint:funlen
 		MaxThreads: 2,
 	})
 
-	worker.ToStream(t.Context(), "test", io.Discard, "/test/file1")
+	worker.ToStream(t.Context(), testStr, io.Discard, testFile1)
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -460,32 +459,32 @@ func TestClientVerify(t *testing.T) {
 	testConn := &api.MockConn{}
 
 	testAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	kv := msg.SSKeyVal{}
-	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	kv.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
 
 	testConn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{
-		Path:    "/test/file1",
+		Path:    testFile1,
 		KeyVals: kv,
 	}, msg.String{
-		String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+		String: testSha,
 	})
 
-	f, err := os.CreateTemp(t.TempDir(), "test")
+	f, err := os.CreateTemp(t.TempDir(), testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer os.Remove(f.Name())
 
-	_, err = f.Write(bytes.Repeat([]byte("test"), 100))
+	_, err = f.Write(bytes.Repeat([]byte(testStr), 100))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -503,7 +502,7 @@ func TestClientVerify(t *testing.T) {
 		Replicas: []api.Replica{},
 	}
 
-	if _, _, err := VerifyLocalToRemote(testAPI, nil)(t.Context(), f.Name(), "/test/file1", fi, obj); err != nil {
+	if _, _, err := VerifyLocalToRemote(testAPI, nil)(t.Context(), f.Name(), testFile1, fi, obj); err != nil {
 		t.Error(err)
 	}
 }
@@ -512,20 +511,20 @@ func TestClientVerifyRemote(t *testing.T) {
 	testConn := &api.MockConn{}
 
 	testAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	kv := msg.SSKeyVal{}
-	kv.Add(msg.DEST_RESC_NAME_KW, "demoResc")
+	kv.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
 
 	for range 2 {
 		testConn.AddResponse(msg.String{
-			String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+			String: testSha,
 		})
 	}
 
@@ -533,7 +532,7 @@ func TestClientVerifyRemote(t *testing.T) {
 		Replicas: []api.Replica{},
 	}
 
-	if _, _, err := VerifyRemoteToRemote(testAPI, nil)(t.Context(), "/test/file1", "/test/file2", obj, obj); err != nil {
+	if _, _, err := VerifyRemoteToRemote(testAPI, nil)(t.Context(), testFile1, testFile2, obj, obj); err != nil {
 		t.Error(err)
 	}
 }
@@ -542,12 +541,12 @@ func TestClientRemoveDir(t *testing.T) {
 	testConn0 := &api.MockConn{}
 
 	testIndexAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn0, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	testConn0.AddResponses(responses) // walk
@@ -555,16 +554,16 @@ func TestClientRemoveDir(t *testing.T) {
 	testConn1 := &api.MockConn{}
 
 	testTransferAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn1, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	testConn1.Add(msg.DATA_OBJ_UNLINK_AN, msg.DataObjectRequest{
-		Path: "/test/file1",
+		Path: testFile1,
 	}, msg.EmptyResponse{})
 
 	testConn1.Add(msg.RM_COLL_AN, msg.CreateCollectionRequest{
@@ -586,12 +585,12 @@ func TestClientComputeChecksums(t *testing.T) {
 	testConn0 := &api.MockConn{}
 
 	testIndexAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn0, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	testConn0.AddResponses(responses) // walk
@@ -599,16 +598,16 @@ func TestClientComputeChecksums(t *testing.T) {
 	testConn1 := &api.MockConn{}
 
 	testTransferAPI := &api.API{
-		Username: "testuser",
-		Zone:     "testzone",
+		Username: testUser,
+		Zone:     testZone,
 		Connect: func(context.Context) (api.Conn, error) {
 			return testConn1, nil
 		},
-		DefaultResource: "demoResc",
+		DefaultResource: testDemoResc,
 	}
 
 	testConn1.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{
-		Path: "/test/file1",
+		Path: testFile1,
 		KeyVals: msg.SSKeyVal{
 			Length: 2,
 			Keys: []msg.KeyWord{
@@ -616,12 +615,12 @@ func TestClientComputeChecksums(t *testing.T) {
 				"forceChksum",
 			},
 			Values: []string{
-				"demoResc",
+				testDemoResc,
 				"",
 			},
 		},
 	}, msg.String{
-		String: "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8=",
+		String: testSha,
 	})
 
 	worker := New(testIndexAPI, testTransferAPI, Options{
@@ -643,8 +642,8 @@ func TestClientCopyDir(t *testing.T) {
 		var i atomic.Int32
 
 		testIndexAPI := &api.API{
-			Username: "testuser",
-			Zone:     "testzone",
+			Username: testUser,
+			Zone:     testZone,
 			Connect: func(context.Context) (api.Conn, error) {
 				if count := i.Add(1); count == 2 || count == 3 {
 					// Deliberately sleep for first two calls to order
@@ -654,7 +653,7 @@ func TestClientCopyDir(t *testing.T) {
 
 				return testConn0, nil
 			},
-			DefaultResource: "demoResc",
+			DefaultResource: testDemoResc,
 		}
 
 		testConn0.AddResponse(msg.EmptyResponse{}) // mkdir
@@ -665,12 +664,12 @@ func TestClientCopyDir(t *testing.T) {
 		testConn1 := &api.MockConn{}
 
 		testTransferAPI := &api.API{
-			Username: "testuser",
-			Zone:     "testzone",
+			Username: testUser,
+			Zone:     testZone,
 			Connect: func(context.Context) (api.Conn, error) {
 				return testConn1, nil
 			},
-			DefaultResource: "demoResc",
+			DefaultResource: testDemoResc,
 		}
 
 		testConn1.AddResponse(msg.EmptyResponse{}) // Either a copy or a remove

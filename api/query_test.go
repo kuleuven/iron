@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -16,7 +15,7 @@ func TestQuery(t *testing.T) {
 		ContinueIndex:  1,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 501, ResultLen: 1, Values: []string{"coll_name"}},
+			{AttributeIndex: 501, ResultLen: 1, Values: []string{testCollName}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 404, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 998, ResultLen: 1, Values: []string{"5.5"}},
@@ -92,7 +91,7 @@ func TestQueryRow(t *testing.T) {
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 501, ResultLen: 1, Values: []string{"coll_name"}},
+			{AttributeIndex: 501, ResultLen: 1, Values: []string{testCollName}},
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 404, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 998, ResultLen: 1, Values: []string{"5.5"}},

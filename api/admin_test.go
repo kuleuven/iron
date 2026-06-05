@@ -1,4 +1,3 @@
-//nolint:goconst
 package api
 
 import (
@@ -12,16 +11,16 @@ func TestStatPhysicalReplica(t *testing.T) {
 	testAPI := newAPI()
 
 	testAPI.Add(msg.FILE_STAT_AN, msg.FileStatRequest{
-		Path:              "/test",
-		ResourceHierarchy: "demoResc",
-		ObjectPath:        "test",
+		Path:              testTestPath,
+		ResourceHierarchy: testDemoResc,
+		ObjectPath:        testStr,
 	}, msg.FileStatResponse{})
 
-	if _, err := testAPI.StatPhysicalReplica(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != ErrRequiresAdmin {
+	if _, err := testAPI.StatPhysicalReplica(t.Context(), testStr, Replica{PhysicalPath: testTestPath, ResourceHierarchy: testDemoResc}); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if _, err := testAPI.AsAdmin().StatPhysicalReplica(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}); err != nil {
+	if _, err := testAPI.AsAdmin().StatPhysicalReplica(t.Context(), testStr, Replica{PhysicalPath: testTestPath, ResourceHierarchy: testDemoResc}); err != nil {
 		t.Error(err)
 	}
 }
@@ -36,17 +35,17 @@ func TestModifyReplicaAttribute(t *testing.T) {
 
 	testAPI.Add(msg.MOD_DATA_OBJ_META_AN, msg.ModDataObjMetaRequest{
 		DataObj: msg.DataObjectInfo{
-			ObjPath: "test",
+			ObjPath: testStr,
 			ReplNum: 0,
 		},
 		KeyVals: kv,
 	}, msg.EmptyResponse{})
 
-	if err := testAPI.ModifyReplicaAttribute(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != ErrRequiresAdmin {
+	if err := testAPI.ModifyReplicaAttribute(t.Context(), testStr, Replica{PhysicalPath: testTestPath, ResourceHierarchy: testDemoResc}, "dataComments", "v"); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if err := testAPI.AsAdmin().ModifyReplicaAttribute(t.Context(), "test", Replica{PhysicalPath: "/test", ResourceHierarchy: "demoResc"}, "dataComments", "v"); err != nil {
+	if err := testAPI.AsAdmin().ModifyReplicaAttribute(t.Context(), testStr, Replica{PhysicalPath: testTestPath, ResourceHierarchy: testDemoResc}, "dataComments", "v"); err != nil {
 		t.Error(err)
 	}
 }
@@ -56,21 +55,21 @@ func TestRegisterReplica(t *testing.T) {
 
 	kv := msg.SSKeyVal{}
 
-	kv.Add(msg.DATA_TYPE_KW, "generic")
-	kv.Add(msg.FILE_PATH_KW, "/test")
-	kv.Add(msg.DEST_RESC_NAME_KW, "test")
+	kv.Add(msg.DATA_TYPE_KW, testGeneric)
+	kv.Add(msg.FILE_PATH_KW, testTestPath)
+	kv.Add(msg.DEST_RESC_NAME_KW, testStr)
 	kv.Add(msg.REG_REPL_KW, "")
 
 	testAPI.Add(msg.PHY_PATH_REG_AN, msg.DataObjectRequest{
-		Path:    "test",
+		Path:    testStr,
 		KeyVals: kv,
 	}, msg.EmptyResponse{})
 
-	if err := testAPI.RegisterReplica(t.Context(), "test", "test", "/test"); err != ErrRequiresAdmin {
+	if err := testAPI.RegisterReplica(t.Context(), testStr, testStr, testTestPath); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if err := testAPI.AsAdmin().RegisterReplica(t.Context(), "test", "test", "/test"); err != nil {
+	if err := testAPI.AsAdmin().RegisterReplica(t.Context(), testStr, testStr, testTestPath); err != nil {
 		t.Error(err)
 	}
 }
@@ -88,16 +87,16 @@ func TestAdminCalls(t *testing.T) {
 		}
 
 		list := []error{
-			api.CreateUser(t.Context(), "test", "rodsuser"),
-			api.CreateGroup(t.Context(), "test"),
-			api.ChangeUserPassword(t.Context(), "test", "test"),
-			api.ChangeUserType(t.Context(), "test", "rodsuser"),
-			api.RemoveUser(t.Context(), "test"),
-			api.RemoveGroup(t.Context(), "test"),
-			api.AddGroupMember(t.Context(), "test", "test1"),
-			api.RemoveGroupMember(t.Context(), "test", "test1"),
-			api.SetUserQuota(t.Context(), "test", "demooResc", "100"),
-			api.SetGroupQuota(t.Context(), "test", "demooResc", "100"),
+			api.CreateUser(t.Context(), testStr, testRodsUser),
+			api.CreateGroup(t.Context(), testStr),
+			api.ChangeUserPassword(t.Context(), testStr, testStr),
+			api.ChangeUserType(t.Context(), testStr, testRodsUser),
+			api.RemoveUser(t.Context(), testStr),
+			api.RemoveGroup(t.Context(), testStr),
+			api.AddGroupMember(t.Context(), testStr, "test1"),
+			api.RemoveGroupMember(t.Context(), testStr, "test1"),
+			api.SetUserQuota(t.Context(), testStr, "demooResc", "100"),
+			api.SetGroupQuota(t.Context(), testStr, "demooResc", "100"),
 		}
 
 		for _, err := range list {
@@ -113,11 +112,11 @@ func TestExecuteRule(t *testing.T) {
 
 	testAPI.AddResponse(msg.MsParamArray{})
 
-	if _, err := testAPI.ExecuteExternalRule(t.Context(), "test", nil, ""); err != ErrRequiresAdmin {
+	if _, err := testAPI.ExecuteExternalRule(t.Context(), testStr, nil, ""); err != ErrRequiresAdmin {
 		t.Error(err)
 	}
 
-	if _, err := testAPI.AsAdmin().ExecuteExternalRule(t.Context(), "test", nil, ""); err != nil {
+	if _, err := testAPI.AsAdmin().ExecuteExternalRule(t.Context(), testStr, nil, ""); err != nil {
 		t.Error(err)
 	}
 }

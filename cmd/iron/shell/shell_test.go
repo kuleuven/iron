@@ -1,4 +1,3 @@
-//nolint:goconst
 package shell
 
 import (
@@ -94,11 +93,11 @@ func TestBuildCompletionArgs(t *testing.T) {
 	}{
 		{
 			input:    "command arg1",
-			expected: []string{completionCommandName, "command", "arg1"},
+			expected: []string{completionCommandName, testCommand, testArg1},
 		},
 		{
 			input:    "command arg1 ",
-			expected: []string{completionCommandName, "command", "arg1", ""},
+			expected: []string{completionCommandName, testCommand, testArg1, ""},
 		},
 		{
 			input:    "",
@@ -132,7 +131,7 @@ func TestBuildCompletionArgsWithQuotes(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	expected := []string{"__complete", "command", "arg with spaces"}
+	expected := []string{"__complete", testCommand, "arg with spaces"}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("Expected %v, got %v", expected, result)
 	}
@@ -281,9 +280,9 @@ func TestIsFlag(t *testing.T) {
 		input    string
 		expected bool
 	}{
-		{"--flag", true},
+		{testFlag, true},
 		{"-f", true},
-		{"command", false},
+		{testCommand, false},
 		{"", false},
 		{"-", true},
 		{"--", true},
@@ -305,8 +304,8 @@ func TestIsShorthandFlag(t *testing.T) {
 		expected bool
 	}{
 		{"-f", true},
-		{"--flag", false},
-		{"command", false},
+		{testFlag, false},
+		{testCommand, false},
 		{"", false},
 		{"-", true},
 		{"--", false},
@@ -329,17 +328,17 @@ func TestExecute(t *testing.T) {
 	var receivedArgs []string
 
 	testCmd := &cobra.Command{
-		Use: "test",
+		Use: testStr,
 		Run: func(cmd *cobra.Command, args []string) {
 			executed = true
 			receivedArgs = args
 		},
 	}
 
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 	root.AddCommand(testCmd)
 
-	args := []string{"test", "arg1", "arg2"}
+	args := []string{testStr, testArg1, testArg2}
 
 	err := execute(root, args)
 	if err != nil {
@@ -350,7 +349,7 @@ func TestExecute(t *testing.T) {
 		t.Error("Expected command to be executed")
 	}
 
-	expectedArgs := []string{"arg1", "arg2"}
+	expectedArgs := []string{testArg1, testArg2}
 	if !reflect.DeepEqual(receivedArgs, expectedArgs) {
 		t.Errorf("Expected args %v, got %v", expectedArgs, receivedArgs)
 	}
@@ -362,18 +361,18 @@ func TestExecuteWithFlags(t *testing.T) {
 	var executed bool
 
 	testCmd := &cobra.Command{
-		Use: "test",
+		Use: testStr,
 		Run: func(cmd *cobra.Command, args []string) {
 			executed = true
 		},
 	}
 	testCmd.Flags().StringVar(&flagValue, "flag", "default", "test flag")
 
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 	root.AddCommand(testCmd)
 
 	// First execution with flag value
-	args := []string{"test", "--flag", "value1"}
+	args := []string{testStr, testFlag, "value1"}
 
 	err := execute(root, args)
 	if err != nil {
@@ -390,7 +389,7 @@ func TestExecuteWithFlags(t *testing.T) {
 
 	// Second execution should reset flag to default
 	executed = false
-	args = []string{"test"}
+	args = []string{testStr}
 
 	err = execute(root, args)
 	if err != nil {
@@ -408,16 +407,16 @@ func TestExecuteWithFlags(t *testing.T) {
 
 func TestReadCommandOutput(t *testing.T) {
 	testCmd := &cobra.Command{
-		Use: "test",
+		Use: testStr,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Print("test output")
 		},
 	}
 
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 	root.AddCommand(testCmd)
 
-	output, err := readCommandOutput(root, []string{"test"})
+	output, err := readCommandOutput(root, []string{testStr})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -429,7 +428,7 @@ func TestReadCommandOutput(t *testing.T) {
 
 func TestCobraShellCompleter(t *testing.T) {
 	// Create a simple command structure for testing
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 
 	subCmd := &cobra.Command{
 		Use: "subcmd",
@@ -461,14 +460,14 @@ func TestCobraShellExecutor(t *testing.T) {
 	var receivedArgs []string
 
 	testCmd := &cobra.Command{
-		Use: "test",
+		Use: testStr,
 		Run: func(cmd *cobra.Command, args []string) {
 			executed = true
 			receivedArgs = args
 		},
 	}
 
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 	root.AddCommand(testCmd)
 
 	shell := &cobraShell{
@@ -482,7 +481,7 @@ func TestCobraShellExecutor(t *testing.T) {
 		t.Error("Expected command to be executed")
 	}
 
-	expectedArgs := []string{"arg1", "arg2"}
+	expectedArgs := []string{testArg1, testArg2}
 	if !reflect.DeepEqual(receivedArgs, expectedArgs) {
 		t.Errorf("Expected args %v, got %v", expectedArgs, receivedArgs)
 	}
@@ -492,7 +491,7 @@ func TestCobraShellExecutorInvalidCommand(t *testing.T) {
 	// Capture output to avoid printing to stdout during tests
 	var buf bytes.Buffer
 
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 
@@ -509,7 +508,7 @@ func TestCobraShellExecutorInvalidCommand(t *testing.T) {
 }
 
 func TestInitDefaultHelpFlag(t *testing.T) {
-	root := &cobra.Command{Use: "root"}
+	root := &cobra.Command{Use: testRoot}
 	subCmd := &cobra.Command{Use: "sub"}
 	root.AddCommand(subCmd)
 

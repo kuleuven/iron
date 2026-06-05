@@ -1,4 +1,3 @@
-//nolint:goconst
 package msg
 
 import (
@@ -40,7 +39,7 @@ func TestXMLMarshal(t *testing.T) {
 func TestXMLUnmarshalError(t *testing.T) {
 	msg := Message{
 		Header: Header{
-			Type:     "test",
+			Type:     testStr,
 			ErrorLen: 5,
 		},
 		Body: Body{
