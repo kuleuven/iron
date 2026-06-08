@@ -80,20 +80,24 @@ func (a *App) auth() *cobra.Command {
 
 			password := conn.NativePassword()
 
-			err = conn.Close()
-			if err != nil {
+			if err = conn.Close(); err != nil {
 				return err
 			}
 
 			return a.passwordStore(cmd.Context(), a.Client.Env(), password)
 		},
-		PostRun: func(cmd *cobra.Command, args []string) {
-			// Reset the workdir if needed
-			defaultDir := fmt.Sprintf("/%s", a.Client.Env().Zone)
+		PostRunE: func(cmd *cobra.Command, args []string) error {
+			// Pass ForceReauthentication in the context to indicate that the workdir should be reset for all future clients
+			ctx := context.WithValue(cmd.Context(), ForceReauthentication, true)
 
-			if a.Workdir != "/" && !strings.HasPrefix(a.Workdir, defaultDir+"/") {
-				a.Workdir = defaultDir
+			if a.Workdir == "/" || a.Workdir == "/"+a.Client.Env().Zone || strings.HasPrefix(a.Workdir, "/"+a.Client.Env().Zone+"/") {
+				// Save workdir again, as the saved record might have been reset by the config store,
+				// or contain outdated connection details
+				return a.saveWorkdir(ctx)
 			}
+
+			// Reset the workdir in the CLI if authenticated in a different zone
+			return a.setDefaultWorkdir(ctx)
 		},
 	}
 

@@ -369,7 +369,7 @@ func TestStoreWorkdirInFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := StoreWorkdirInFile(testFile, "/tmp"); err != nil {
+	if err := StoreWorkdirInFile(t.Context(), testFile, "/tmp"); err != nil {
 		t.Fatal(err)
 	}
 

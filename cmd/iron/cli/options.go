@@ -310,8 +310,8 @@ func WithDefaultWorkdirFromFile(file string) Option {
 			a.Workdir = wd
 		}
 
-		a.workdirStore = func(_ context.Context, workdir string) error {
-			return StoreWorkdirInFile(file, workdir)
+		a.workdirStore = func(ctx context.Context, workdir string) error {
+			return StoreWorkdirInFile(ctx, file, workdir)
 		}
 	}
 }
@@ -351,9 +351,7 @@ func GetWorkdirFromFile(file string) (string, error) {
 
 // StoreWorkdirInFile stores the working directory in an irods environment file.
 // The file is expected to have been created with the iRODS `icd` command.
-func StoreWorkdirInFile(file, workdir string) error {
-	pidFile := fmt.Sprintf("%s.%d", file, os.Getppid())
-
+func StoreWorkdirInFile(ctx context.Context, file, workdir string) error {
 	s, err := os.Open(file)
 	if err != nil {
 		return err
@@ -368,6 +366,18 @@ func StoreWorkdirInFile(file, workdir string) error {
 	}
 
 	m["irods_cwd"] = workdir
+
+	// Don't store the working directory if it's the absolute default
+	if defaultDir := fmt.Sprintf("/%s/home/%s", m["irods_zone"], m["irods_user_name"]); workdir == defaultDir {
+		delete(m, "irods_cwd")
+	}
+
+	pidFile := fmt.Sprintf("%s.%d", file, os.Getppid())
+
+	// If ran after authenticating, set the workdir globally
+	if ctx.Value(ForceReauthentication) == true {
+		pidFile = file
+	}
 
 	t, err := os.OpenFile(pidFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {

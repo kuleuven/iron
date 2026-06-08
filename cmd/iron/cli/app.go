@@ -447,7 +447,7 @@ func (a *App) PreRunShell(cmd *cobra.Command, args []string) error {
 //
 // On failure, returns InitError wrapping the underlying error (and any
 // partially-loaded env, when available). On success, App.Client is set
-// and App.Workdir is defaulted to "/<zone>" if it was empty.
+// and App.Workdir is defaulted if it was empty.
 func (a *App) Init(ctx context.Context, zone string) error {
 	env, dialer, err := a.loadEnv(ctx, zone)
 	if err != nil {
@@ -481,11 +481,11 @@ func (a *App) Init(ctx context.Context, zone string) error {
 		return InitError{a, env, err}
 	}
 
-	if a.Workdir == "" {
-		a.Workdir = fmt.Sprintf("/%s", env.Zone)
+	if a.Workdir != "" {
+		return nil
 	}
 
-	return nil
+	return a.setDefaultWorkdir(ctx)
 }
 
 type InitError struct {
