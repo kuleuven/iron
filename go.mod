@@ -3,12 +3,12 @@ module github.com/kuleuven/iron
 go 1.25.5
 
 require (
-	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/acomagu/bufpipe v1.0.4
 	github.com/c9s/goprocinfo v0.0.0-20210130143923-c95fcf8c64a8
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/dustin/go-humanize v1.0.1
-	github.com/elk-language/go-prompt v1.3.1
+	github.com/elk-language/go-prompt v1.4.0
 	github.com/evanphx/json-patch v0.5.2
 	github.com/go-openapi/jsonpointer v0.23.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510

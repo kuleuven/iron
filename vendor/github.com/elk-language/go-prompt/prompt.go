@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -52,9 +53,10 @@ type Prompt struct {
 	keyBindings            []KeyBind
 	ASCIICodeBindings      []ASCIICodeBind
 	keyBindMode            KeyBindMode
-	completionOnDown       bool
 	exitChecker            ExitChecker
 	executeOnEnterCallback ExecuteOnEnterCallback
+	interruptCallback      InterruptCallback
+	completionOnDown       bool
 	skipClose              bool
 	completionReset        bool
 }
@@ -82,7 +84,7 @@ func (p *Prompt) Run() {
 	stopReadBufCh := make(chan struct{})
 	go p.readBuffer(bufCh, stopReadBufCh)
 
-	exitCh := make(chan int)
+	exitCh := make(chan os.Signal)
 	winSizeCh := make(chan *WinSize)
 	stopHandleSignalCh := make(chan struct{})
 	go p.handleSignals(exitCh, winSizeCh, stopHandleSignalCh)
@@ -128,12 +130,20 @@ func (p *Prompt) Run() {
 			p.buffer.resetStartLine()
 			p.buffer.recalculateStartLine(p.renderer.UserInputColumns(), int(p.renderer.row))
 			p.renderer.Render(p.buffer, p.completion, p.lexer)
-		case code := <-exitCh:
+		case signal := <-exitCh:
 			p.renderer.BreakLine(p.buffer, p.lexer)
+			if p.interruptCallback != nil {
+				p.interruptCallback(p, signal)
+				return
+			}
+
 			p.Close()
-			os.Exit(code)
-		default:
-			time.Sleep(10 * time.Millisecond)
+			switch signal {
+			case syscall.SIGINT, syscall.SIGQUIT:
+				os.Exit(0)
+			case syscall.SIGTERM:
+				os.Exit(1)
+			}
 		}
 	}
 }

@@ -12,13 +12,14 @@ const multilinePrefixCharacter = '.'
 
 // Takes care of the rendering process
 type Renderer struct {
-	out               Writer
-	prefixCallback    PrefixCallback
-	breakLineCallback func(*Document)
-	title             string
-	row               int
-	col               istrings.Width
-	indentSize        int // How many spaces constitute a single indentation level
+	out                    Writer
+	prefixCallback         PrefixCallback
+	extendedPrefixCallback ExtendedPrefixCallback
+	breakLineCallback      func(*Document)
+	title                  string
+	row                    int
+	col                    istrings.Width
+	indentSize             int // How many spaces constitute a single indentation level
 
 	previousCursor Position
 
@@ -65,6 +66,18 @@ func NewRenderer() *Renderer {
 	}
 }
 
+func (r *Renderer) getPrefix() *Prefix {
+	if r.extendedPrefixCallback != nil {
+		return r.extendedPrefixCallback()
+	}
+
+	return &Prefix{
+		Content:         r.prefixCallback(),
+		BackgroundColor: r.prefixBGColor,
+		TextColor:       r.prefixTextColor,
+	}
+}
+
 // Setup to initialize console output.
 func (r *Renderer) Setup() {
 	if r.title != "" {
@@ -73,12 +86,12 @@ func (r *Renderer) Setup() {
 	}
 }
 
-func (r *Renderer) renderPrefix(prefix string) {
-	r.out.SetColor(r.prefixTextColor, r.prefixBGColor, false)
+func (r *Renderer) renderPrefix(prefix *Prefix) {
+	r.out.SetColor(prefix.TextColor, prefix.BackgroundColor, false)
 	if _, err := r.out.WriteString("\r"); err != nil {
 		panic(err)
 	}
-	if _, err := r.out.WriteString(prefix); err != nil {
+	if _, err := r.out.WriteString(prefix.Content); err != nil {
 		panic(err)
 	}
 	r.out.SetColor(DefaultColor, DefaultColor, false)
@@ -111,11 +124,11 @@ func (r *Renderer) renderCompletion(buf *Buffer, completions *CompletionManager)
 	if len(suggestions) == 0 {
 		return
 	}
-	prefix := r.prefixCallback()
-	prefixWidth := istrings.GetWidth(prefix)
+	prefix := r.getPrefix()
+	prefixWidth := istrings.GetWidth(prefix.Content)
 	formatted, width := formatSuggestions(
 		suggestions,
-		r.col-istrings.GetWidth(prefix)-1, // -1 means a width of scrollbar
+		r.col-istrings.GetWidth(prefix.Content)-1, // -1 means a width of scrollbar
 	)
 	// +1 means a width of scrollbar.
 	width++
@@ -186,7 +199,7 @@ func (r *Renderer) renderCompletion(buf *Buffer, completions *CompletionManager)
 	}
 
 	if x+width >= r.col {
-		r.out.CursorForward(int(x + width - r.col + 1))
+		r.out.CursorForward(int(x + width - r.col))
 	}
 
 	r.out.CursorUp(windowHeight)
@@ -204,8 +217,8 @@ func (r *Renderer) Render(buffer *Buffer, completion *CompletionManager, lexer L
 	r.clear(r.previousCursor)
 
 	text := buffer.Text()
-	prefix := r.prefixCallback()
-	prefixWidth := istrings.GetWidth(prefix)
+	prefix := r.getPrefix()
+	prefixWidth := istrings.GetWidth(prefix.Content)
 	col := r.col - prefixWidth
 	endLine := buffer.startLine + int(r.row) - 1
 	cursor := positionAtEndOfStringLine(text, col, endLine)
@@ -234,8 +247,8 @@ func (r *Renderer) renderText(lexer Lexer, input string, startLine int) {
 		return
 	}
 
-	prefix := r.prefixCallback()
-	prefixWidth := istrings.GetWidth(prefix)
+	prefix := r.getPrefix()
+	prefixWidth := istrings.GetWidth(prefix.Content)
 	col := r.col - prefixWidth
 	multilinePrefix := r.getMultilinePrefix(prefix)
 	if startLine != 0 {
@@ -285,7 +298,7 @@ func (r *Renderer) flush() {
 	debug.AssertNoError(r.out.Flush())
 }
 
-func (r *Renderer) renderLine(prefix, line string, color Color) {
+func (r *Renderer) renderLine(prefix *Prefix, line string, color Color) {
 	r.renderPrefix(prefix)
 	r.writeStringColor(line, color)
 }
@@ -303,13 +316,15 @@ func (r *Renderer) write(b []byte) {
 	}
 }
 
-func (r *Renderer) getMultilinePrefix(prefix string) string {
+func (r *Renderer) getMultilinePrefix(prefix *Prefix) *Prefix {
+	content := prefix.Content
+
 	var spaceCount int
 	var dotCount int
 	var nonSpaceCharSeen bool
-	for len(prefix) != 0 {
-		char, size := utf8.DecodeLastRuneInString(prefix)
-		prefix = prefix[:len(prefix)-size]
+	for len(content) != 0 {
+		char, size := utf8.DecodeLastRuneInString(content)
+		content = content[:len(content)-size]
 		charWidth := istrings.GetRuneWidth(char)
 		if nonSpaceCharSeen {
 			dotCount += int(charWidth)
@@ -332,14 +347,18 @@ func (r *Renderer) getMultilinePrefix(prefix string) string {
 		multilinePrefixBuilder.WriteByte(IndentUnit)
 	}
 
-	return multilinePrefixBuilder.String()
+	return &Prefix{
+		Content:         multilinePrefixBuilder.String(),
+		TextColor:       prefix.TextColor,
+		BackgroundColor: prefix.BackgroundColor,
+	}
 }
 
 // lex processes the given input with the given lexer
 // and writes the result
 func (r *Renderer) lex(lexer Lexer, input string, startLine int) {
-	prefix := r.prefixCallback()
-	prefixWidth := istrings.GetWidth(prefix)
+	prefix := r.getPrefix()
+	prefixWidth := istrings.GetWidth(prefix.Content)
 	col := r.col - prefixWidth
 	multilinePrefix := r.getMultilinePrefix(prefix)
 	var lineCharIndex istrings.Width
@@ -456,8 +475,8 @@ func (r *Renderer) resetFormatting() {
 // BreakLine to break line.
 func (r *Renderer) BreakLine(buffer *Buffer, lexer Lexer) {
 	// Erasing and Renderer
-	prefix := r.prefixCallback()
-	prefixWidth := istrings.GetWidth(prefix)
+	prefix := r.getPrefix()
+	prefixWidth := istrings.GetWidth(prefix.Content)
 	cursor := positionAtEndOfString(buffer.Document().TextBeforeCursor(), r.col-prefixWidth)
 	cursor.X += prefixWidth
 	r.clear(cursor)
@@ -480,7 +499,8 @@ func (r *Renderer) BreakLine(buffer *Buffer, lexer Lexer) {
 // Get the number of columns that are available
 // for user input.
 func (r *Renderer) UserInputColumns() istrings.Width {
-	return r.col - istrings.GetWidth(r.prefixCallback())
+	prefix := r.getPrefix()
+	return r.col - istrings.GetWidth(prefix.Content)
 }
 
 // clear erases the screen from a beginning of input

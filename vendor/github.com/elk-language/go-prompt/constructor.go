@@ -1,6 +1,9 @@
 package prompt
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // Option is the type to replace default parameters.
 // prompt.New accepts any number of options (this is functional option pattern).
@@ -8,6 +11,15 @@ type Option func(prompt *Prompt) error
 
 // Callback function that returns a prompt prefix.
 type PrefixCallback func() (prefix string)
+
+// Callback function that returns a prompt prefix.
+type ExtendedPrefixCallback func() (prefix *Prefix)
+
+type Prefix struct {
+	Content         string
+	BackgroundColor Color
+	TextColor       Color
+}
 
 const DefaultIndentSize = 2
 
@@ -24,6 +36,15 @@ func WithIndentSize(i int) Option {
 func WithLexer(lex Lexer) Option {
 	return func(p *Prompt) error {
 		p.lexer = lex
+		return nil
+	}
+}
+
+type InterruptCallback func(prompt *Prompt, code os.Signal)
+
+func WithInterruptCallback(fn InterruptCallback) Option {
+	return func(p *Prompt) error {
+		p.interruptCallback = fn
 		return nil
 	}
 }
@@ -99,6 +120,15 @@ func WithCompletionWordSeparator(sep string) Option {
 func WithPrefixCallback(f PrefixCallback) Option {
 	return func(p *Prompt) error {
 		p.renderer.prefixCallback = f
+		return nil
+	}
+}
+
+// WithExtendedPrefixCallback can be used to change the prefix dynamically by a callback function
+// with more options like colors etc.
+func WithExtendedPrefixCallback(f ExtendedPrefixCallback) Option {
+	return func(p *Prompt) error {
+		p.renderer.extendedPrefixCallback = f
 		return nil
 	}
 }
