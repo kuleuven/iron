@@ -43,7 +43,7 @@ func (a *App) whoami() *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
 		Short: "Print information about the current user and session",
-		Long:  "Print information about the current user, including the zone, user type, connection details and group memberships.",
+		Long:  "Print information about the current user, including the zone, user type, connection details, working directories and group memberships.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			user, err := a.GetUser(cmd.Context(), a.Username)
@@ -56,13 +56,18 @@ func (a *App) whoami() *cobra.Command {
 				return err
 			}
 
+			localWorkdir, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+
 			out := &tabwriter.TabWriter{
 				Writer: cmd.OutOrStdout(),
 			}
 
 			defer out.Flush()
 
-			for _, row := range a.whoamiRows(user, groups) {
+			for _, row := range a.whoamiRows(user, groups, localWorkdir) {
 				fmt.Fprintf(out, "%s%s%s\t%s\n", Bold, row[0], Reset, row[1])
 			}
 
@@ -73,7 +78,7 @@ func (a *App) whoami() *cobra.Command {
 
 // whoamiRows builds the ordered key/value rows printed by the whoami command,
 // omitting connection details that are not available.
-func (a *App) whoamiRows(user *api.User, groups []string) [][2]string {
+func (a *App) whoamiRows(user *api.User, groups []string, localWorkdir string) [][2]string {
 	env := a.Client.Env()
 
 	rows := [][2]string{
@@ -97,6 +102,14 @@ func (a *App) whoamiRows(user *api.User, groups []string) [][2]string {
 
 	if env.DefaultResource != "" {
 		rows = append(rows, [2]string{"Default resource", env.DefaultResource})
+	}
+
+	if a.Workdir != "" {
+		rows = append(rows, [2]string{"Remote workdir", a.Workdir})
+	}
+
+	if localWorkdir != "" {
+		rows = append(rows, [2]string{"Local workdir", localWorkdir})
 	}
 
 	if !user.CreatedAt.IsZero() {
