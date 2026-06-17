@@ -21,6 +21,59 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestWhoami(t *testing.T) {
+	app := testApp(t)
+
+	app.AddResponses([]any{
+		msg.QueryResponse{
+			RowCount:       1,
+			AttributeCount: 6,
+			TotalRowCount:  1,
+			ContinueIndex:  0,
+			SQLResult: []msg.SQLResult{
+				{AttributeIndex: 201, ResultLen: 1, Values: []string{"10001"}},
+				{AttributeIndex: 202, ResultLen: 1, Values: []string{testRods}},
+				{AttributeIndex: 204, ResultLen: 1, Values: []string{testTestZoneName}},
+				{AttributeIndex: 203, ResultLen: 1, Values: []string{testRodsAdmin}},
+				{AttributeIndex: 208, ResultLen: 1, Values: []string{"10000"}},
+				{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
+			},
+		},
+		msg.QueryResponse{
+			RowCount:       2,
+			AttributeCount: 1,
+			TotalRowCount:  2,
+			ContinueIndex:  0,
+			SQLResult: []msg.SQLResult{
+				{AttributeIndex: 901, ResultLen: 1, Values: []string{testRods, testPublic}},
+			},
+		},
+	})
+
+	var buf bytes.Buffer
+
+	cmd := app.Command()
+	cmd.SetArgs([]string{"whoami"})
+	cmd.SetOut(&buf)
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	out := buf.String()
+
+	for _, want := range []string{testRods, testTestZoneName, testRodsAdmin, testPublic} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected whoami output to contain %q, got:\n%s", want, out)
+		}
+	}
+
+	// The implicit personal group equal to the user name must be filtered out.
+	if strings.Contains(out, "Groups\t"+testRods) {
+		t.Errorf("expected personal group %q to be omitted, got:\n%s", testRods, out)
+	}
+}
+
 func TestMkdir(t *testing.T) {
 	app := testApp(t)
 

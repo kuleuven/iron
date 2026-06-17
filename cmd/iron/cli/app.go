@@ -174,6 +174,7 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 		a.checksum(),
 		a.checksums(),
 		a.version(),
+		a.whoami(),
 		a.sleep(),
 		a.ps(),
 		a.query(),
@@ -196,14 +197,18 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 	}
 
 	if !shellCommand {
-		rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
-		rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
-		rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
-		rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
-		rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "In case pam authentication is used, request a session that is valid for the given duration. This value is rounded down to the nearest hour.")
+		a.addRootFlags(rootCmd)
 	}
 
 	return rootCmd
+}
+
+func (a *App) addRootFlags(rootCmd *cobra.Command) {
+	rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
+	rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
+	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
+	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
+	rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "In case pam authentication is used, request a session that is valid for the given duration. This value is rounded down to the nearest hour.")
 }
 
 func (a *App) xopen() *cobra.Command {

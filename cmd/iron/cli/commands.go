@@ -39,6 +39,121 @@ func (a *App) version() *cobra.Command {
 	}
 }
 
+func (a *App) whoami() *cobra.Command {
+	return &cobra.Command{
+		Use:   "whoami",
+		Short: "Print information about the current user and session",
+		Long:  "Print information about the current user, including the zone, user type, connection details and group memberships.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			user, err := a.GetUser(cmd.Context(), a.Username)
+			if err != nil {
+				return err
+			}
+
+			groups, err := a.userGroups(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			out := &tabwriter.TabWriter{
+				Writer: cmd.OutOrStdout(),
+			}
+
+			defer out.Flush()
+
+			for _, row := range a.whoamiRows(user, groups) {
+				fmt.Fprintf(out, "%s%s%s\t%s\n", Bold, row[0], Reset, row[1])
+			}
+
+			return nil
+		},
+	}
+}
+
+// whoamiRows builds the ordered key/value rows printed by the whoami command,
+// omitting connection details that are not available.
+func (a *App) whoamiRows(user *api.User, groups []string) [][2]string {
+	env := a.Client.Env()
+
+	rows := [][2]string{
+		{"User", user.Name},
+		{"Zone", user.Zone},
+		{"ID", strconv.FormatInt(user.ID, 10)},
+		{"Type", user.Type},
+	}
+
+	if env.ProxyUsername != "" && (env.ProxyUsername != user.Name || env.ProxyZone != user.Zone) {
+		rows = append(rows, [2]string{"Proxy user", env.ProxyUsername + "#" + env.ProxyZone})
+	}
+
+	if host := hostPort(env.Host, env.Port); host != "" {
+		rows = append(rows, [2]string{"Host", host})
+	}
+
+	if env.AuthScheme != "" {
+		rows = append(rows, [2]string{"Authentication", env.AuthScheme})
+	}
+
+	if env.DefaultResource != "" {
+		rows = append(rows, [2]string{"Default resource", env.DefaultResource})
+	}
+
+	if !user.CreatedAt.IsZero() {
+		rows = append(rows, [2]string{"Created", user.CreatedAt.Format(time.RFC3339)})
+	}
+
+	if len(groups) > 0 {
+		rows = append(rows, [2]string{"Groups", strings.Join(groups, ", ")})
+	}
+
+	return rows
+}
+
+func hostPort(host string, port int) string {
+	if host == "" || port == 0 {
+		return host
+	}
+
+	return fmt.Sprintf("%s:%d", host, port)
+}
+
+// userGroups returns the groups the authenticated user is a member of,
+// sorted alphabetically. The implicit personal group that shares the user's
+// name is omitted.
+func (a *App) userGroups(ctx context.Context) ([]string, error) {
+	results := a.Query(msg.ICAT_COLUMN_COLL_USER_GROUP_NAME).With(
+		api.Equal(msg.ICAT_COLUMN_USER_NAME, a.Username),
+		api.Equal(msg.ICAT_COLUMN_USER_ZONE, a.Zone),
+	).Execute(ctx)
+
+	defer results.Close()
+
+	var groups []string
+
+	for results.Next() {
+		var group string
+
+		if err := results.Scan(&group); err != nil {
+			return nil, err
+		}
+
+		if group == a.Username {
+			continue
+		}
+
+		groups = append(groups, group)
+	}
+
+	if err := results.Err(); err != nil {
+		return nil, err
+	}
+
+	slices.Sort(groups)
+
+	return groups, nil
+}
+
 func (a *App) auth() *cobra.Command {
 	use := "auth [flags] [zone]"
 	args := cobra.MaximumNArgs(1)

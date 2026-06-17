@@ -34,4 +34,6 @@ const (
 	testCol2           = "col2"
 	testCol3           = "col3"
 	testWrite          = "write"
+	testRodsAdmin      = "rodsadmin"
+	testPublic         = "public"
 )
