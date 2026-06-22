@@ -180,3 +180,4 @@ golang.org/x/time/rate
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
+# github.com/elk-language/go-prompt => github.com/kuleuven/go-prompt v0.0.0-20260622113916-5c6165c6fb44

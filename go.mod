@@ -59,4 +59,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/elk-language/go-prompt v1.4.0 => github.com/kuleuven/go-prompt v0.0.0-20260622113916-5c6165c6fb44
+// Keep this replace version-less on the left-hand side. Pinning it to a specific
+// version (e.g. v1.3.1) silently disables the fork when the require above is
+// bumped, because the left-hand version no longer matches. A version-less
+// replace applies to whatever version is required.
+replace github.com/elk-language/go-prompt => github.com/kuleuven/go-prompt v0.0.0-20260622113916-5c6165c6fb44
