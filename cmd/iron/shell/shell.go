@@ -120,16 +120,17 @@ func (s *cobraShell) restoreStdin() {
 }
 
 func (s *cobraShell) completer(d prompt.Document) ([]prompt.Suggest, istrings.RuneNumber, istrings.RuneNumber) {
-	if d.CurrentLine() == "" {
+	line := d.TextBeforeCursor()
+	if line == "" {
 		return nil, 0, 0
 	}
 
-	args, err := buildCompletionArgs(d.CurrentLine())
+	args, err := buildCompletionArgs(line)
 	if err != nil {
 		return nil, 0, 0
 	}
 
-	key := strings.Join(args, " ")
+	key := strings.Join(args, "\x00")
 
 	suggestions, ok := s.cache[key]
 	if !ok {
@@ -142,25 +143,39 @@ func (s *cobraShell) completer(d prompt.Document) ([]prompt.Suggest, istrings.Ru
 		s.cache[key] = suggestions
 	}
 
+	// Determine the token currently being completed in a quote-aware way. Using
+	// GetWordBeforeCursor would split on a space inside a quoted path, corrupting
+	// both the prefix filter and the range of text to replace.
+	rawWord := line[startOfCurrentToken(line):]
+	prefix := unquoteToken(rawWord)
+
 	endIndex := d.CurrentRuneIndex()
-	word := d.GetWordBeforeCursor()
+	startIndex := endIndex - istrings.RuneCount([]byte(rawWord))
 
-	startIndex := endIndex - istrings.RuneCount([]byte(word))
-
-	return prompt.FilterHasPrefix(suggestions, word, true), startIndex, endIndex
+	return escapeSuggestions(prompt.FilterHasPrefix(suggestions, prefix, true)), startIndex, endIndex
 }
 
 const completionCommandName = "__complete"
 
+// buildCompletionArgs converts a partial command line into arguments for cobra's
+// hidden __complete command. The final argument is always the unquoted token
+// currently being completed, which may be empty. Splitting is quote-aware, so a
+// token containing spaces inside quotes is treated as a single argument, even
+// when the quote has not been closed yet because the user is still typing.
 func buildCompletionArgs(input string) ([]string, error) {
-	args, err := shlex.Split(input)
+	start := startOfCurrentToken(input)
 
-	args = append([]string{completionCommandName}, args...)
-	if input == "" || input[len(input)-1] == ' ' {
-		args = append(args, "")
+	// The leading part consists of completed tokens only, so it is always
+	// balanced and can be split with shlex.
+	leading, err := shlex.Split(input[:start])
+	if err != nil {
+		return nil, err
 	}
 
-	return args, err
+	args := append([]string{completionCommandName}, leading...)
+	args = append(args, unquoteToken(input[start:]))
+
+	return args, nil
 }
 
 func readCommandOutput(cmd *cobra.Command, args []string) (string, error) {
@@ -287,7 +302,7 @@ func parseSuggestions(out string) []prompt.Suggest {
 			continue
 		}
 
-		suggestion := prompt.Suggest{Text: escapeSpecialCharacters(x[0])}
+		suggestion := prompt.Suggest{Text: x[0]}
 
 		if len(x) > 1 {
 			suggestion.Description = x[1]
@@ -328,6 +343,97 @@ func escapeSpecialCharacters(val string) string {
 	}
 
 	return val
+}
+
+// escapeSuggestions escapes each suggestion's text so it can be inserted on the
+// command line as a single token, while leaving the descriptions untouched.
+func escapeSuggestions(suggestions []prompt.Suggest) []prompt.Suggest {
+	escaped := make([]prompt.Suggest, len(suggestions))
+
+	for i, s := range suggestions {
+		escaped[i] = prompt.Suggest{
+			Text:        escapeSpecialCharacters(s.Text),
+			Description: s.Description,
+		}
+	}
+
+	return escaped
+}
+
+// startOfCurrentToken returns the byte offset in s at which the final shell
+// token begins. Whitespace that is inside quotes or escaped with a backslash
+// does not start a new token, so a quoted path containing spaces is treated as a
+// single token. An unterminated quote is tolerated so completion keeps working
+// while the user is still typing.
+func startOfCurrentToken(s string) int {
+	start := 0
+
+	var quote rune
+
+	escaped := false
+
+	for i, r := range s {
+		switch {
+		case escaped:
+			escaped = false
+		case quote == '\'':
+			if r == '\'' {
+				quote = 0
+			}
+		case r == '\\':
+			escaped = true
+		case quote == '"':
+			if r == '"' {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		case r == ' ' || r == '\t' || r == '\n':
+			start = i + 1
+		}
+	}
+
+	return start
+}
+
+// unquoteToken removes one level of shell quoting and escaping from a single
+// token. It tolerates an unterminated quote or a trailing backslash so it can be
+// applied to the token the user is currently typing.
+func unquoteToken(s string) string {
+	var b strings.Builder
+
+	var quote rune
+
+	escaped := false
+
+	for _, r := range s {
+		switch {
+		case escaped:
+			b.WriteRune(r)
+
+			escaped = false
+		case quote == '\'':
+			if r == '\'' {
+				quote = 0
+			} else {
+				b.WriteRune(r)
+			}
+		case r == '\\':
+			escaped = true
+		case quote == '"':
+			if r == '"' {
+				quote = 0
+			} else {
+				b.WriteRune(r)
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		default:
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
 }
 
 func isFlag(arg string) bool {

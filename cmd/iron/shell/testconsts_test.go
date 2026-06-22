@@ -9,4 +9,5 @@ const (
 	testArg2    = "arg2"
 	testFlag    = "--flag"
 	testCommand = "command"
+	testMyFile  = "my file"
 )

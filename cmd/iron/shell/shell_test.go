@@ -137,6 +137,108 @@ func TestBuildCompletionArgsWithQuotes(t *testing.T) {
 	}
 }
 
+func TestBuildCompletionArgsUnterminatedQuote(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{
+			// Double quote still open while typing a path with a space.
+			input:    `command "arg with`,
+			expected: []string{completionCommandName, testCommand, "arg with"},
+		},
+		{
+			// Single quote still open.
+			input:    `command 'arg with`,
+			expected: []string{completionCommandName, testCommand, "arg with"},
+		},
+		{
+			// Escaped space without quotes.
+			input:    `command arg\ wi`,
+			expected: []string{completionCommandName, testCommand, "arg wi"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result, err := buildCompletionArgs(tt.input)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestStartOfCurrentToken(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+	}{
+		{"", 0},
+		{"get", 0},
+		{"get ", 4},
+		{"get foo", 4},
+		{`get "my file`, 4},
+		{`get "my file"`, 4},
+		{`get foo "my file`, 8},
+		{`get my\ file`, 4},
+		{"get 'my file", 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := startOfCurrentToken(tt.input); got != tt.expected {
+				t.Errorf("startOfCurrentToken(%q) = %d, want %d", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestUnquoteToken(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"foo", "foo"},
+		{`"my file`, testMyFile},
+		{`"my file"`, testMyFile},
+		{`'my file'`, testMyFile},
+		{`my\ file`, testMyFile},
+		{`"a\"b"`, `a"b`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := unquoteToken(tt.input); got != tt.expected {
+				t.Errorf("unquoteToken(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEscapeSuggestions(t *testing.T) {
+	input := []prompt.Suggest{
+		{Text: "plainword", Description: "desc-plain"},
+		{Text: "spaced name.txt", Description: "desc-spaced"},
+	}
+
+	result := escapeSuggestions(input)
+
+	expected := []prompt.Suggest{
+		{Text: "plainword", Description: "desc-plain"},
+		{Text: `"spaced name.txt"`, Description: "desc-spaced"},
+	}
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Expected %v, got %v", expected, result)
+	}
+}
+
 func TestParseSuggestions(t *testing.T) {
 	output := "suggestion1\tdescription1\nsuggestion2\tdescription2\nCompletion ended with directive: ShellCompDirectiveNoFileComp\n"
 
