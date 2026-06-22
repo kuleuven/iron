@@ -125,6 +125,11 @@ func (s *cobraShell) completer(d prompt.Document) ([]prompt.Suggest, istrings.Ru
 		return nil, 0, 0
 	}
 
+	// Check if the line starts with a comment (possibly after whitespace)
+	if isComment(line) {
+		return nil, 0, 0
+	}
+
 	args, err := buildCompletionArgs(line)
 	if err != nil {
 		return nil, 0, 0
@@ -153,6 +158,13 @@ func (s *cobraShell) completer(d prompt.Document) ([]prompt.Suggest, istrings.Ru
 	startIndex := endIndex - istrings.RuneCount([]byte(rawWord))
 
 	return escapeSuggestions(prompt.FilterHasPrefix(suggestions, prefix, true)), startIndex, endIndex
+}
+
+// isComment checks if the input line is a shell comment (starts with #, ignoring leading whitespace).
+func isComment(s string) bool {
+	// Check if line starts with # (after skipping whitespace)
+	trimmed := strings.TrimLeft(s, " \t\n")
+	return strings.HasPrefix(trimmed, "#")
 }
 
 const completionCommandName = "__complete"

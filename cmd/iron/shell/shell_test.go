@@ -556,6 +556,67 @@ func TestCobraShellCompleter(t *testing.T) {
 	// which is complex to set up in unit tests. This test verifies the basic structure.
 }
 
+func TestIsComment(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"#", true},
+		{"# comment", true},
+		{" #", true},
+		{"\t#", true},
+		{" \t # comment", true},
+		{"", false},
+		{"command", false},
+		{"command #comment", false},
+		{"get foo", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := isComment(tt.input)
+			if result != tt.expected {
+				t.Errorf("isComment(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCobraShellCompleterWithComment(t *testing.T) {
+	// Create a simple command structure for testing
+	root := &cobra.Command{Use: testRoot}
+	root.AddCommand(&cobra.Command{Use: "subcmd"})
+
+	shell := &cobraShell{
+		root:  root,
+		cache: make(map[string][]prompt.Suggest),
+	}
+
+	// Test that comments don't generate suggestions, including with leading whitespace
+	tests := []struct {
+		input string
+	}{
+		{"#"},
+		{"# some text"},
+		{"# some hel"},
+		{" #"},
+		{" # some text"},
+		{"\t#"},
+		{"\t# some text"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			doc := prompt.Document{Text: tt.input}
+			suggestions, _, _ := shell.completer(doc)
+
+			if len(suggestions) > 0 {
+				t.Errorf("Expected nil or empty suggestions for comment %q, got %v", tt.input, suggestions)
+			}
+		})
+	}
+}
+
 func TestCobraShellExecutor(t *testing.T) {
 	var executed bool
 
