@@ -1661,6 +1661,14 @@ func (a *App) local() *cobra.Command { //nolint:funlen
 				return nil
 			},
 		},
+		&cobra.Command{
+			Use:   "mkdir <local directory>",
+			Short: "Create a local directory",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return os.MkdirAll(args[0], 0755)
+			},
+		},
 	)
 
 	return local
