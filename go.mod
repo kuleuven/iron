@@ -59,4 +59,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/elk-language/go-prompt v1.3.1 => github.com/kuleuven/go-prompt v0.0.0-20251216171457-68c6646829ac
+replace github.com/elk-language/go-prompt v1.4.0 => github.com/kuleuven/go-prompt v0.0.0-20260622113916-5c6165c6fb44
