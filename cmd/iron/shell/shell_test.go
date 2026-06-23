@@ -153,9 +153,9 @@ func TestBuildCompletionArgsUnterminatedQuote(t *testing.T) {
 			expected: []string{completionCommandName, testCommand, "arg with"},
 		},
 		{
-			// Escaped space without quotes.
-			input:    `command arg\ wi`,
-			expected: []string{completionCommandName, testCommand, "arg wi"},
+			// A Windows path is completed without mangling its backslashes.
+			input:    `command C:\Use`,
+			expected: []string{completionCommandName, testCommand, `C:\Use`},
 		},
 	}
 
@@ -185,8 +185,13 @@ func TestStartOfCurrentToken(t *testing.T) {
 		{`get "my file`, 4},
 		{`get "my file"`, 4},
 		{`get foo "my file`, 8},
-		{`get my\ file`, 4},
-		{"get 'my file", 4},
+		{`get 'my file`, 4},
+		// A bare backslash no longer escapes the following space, so the space
+		// still starts a new token.
+		{`get my\ file`, 8},
+		// Backslashes inside a Windows path are literal and do not split it.
+		{`get C:\new\file`, 4},
+		{`get "C:\Program Files\app"`, 4},
 	}
 
 	for _, tt := range tests {
@@ -208,8 +213,13 @@ func TestUnquoteToken(t *testing.T) {
 		{`"my file`, testMyFile},
 		{`"my file"`, testMyFile},
 		{`'my file'`, testMyFile},
-		{`my\ file`, testMyFile},
+		// A bare backslash is kept verbatim unless it escapes a special char.
+		{`my\ file`, `my\ file`},
 		{`"a\"b"`, `a"b`},
+		// Windows paths survive unescaping unchanged.
+		{`C:\new`, `C:\new`},
+		{`C:\Users\me`, `C:\Users\me`},
+		{`a\$b`, `a$b`},
 	}
 
 	for _, tt := range tests {

@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"unicode/utf8"
 
 	"github.com/elk-language/go-prompt"
 	istrings "github.com/elk-language/go-prompt/strings"
-	"github.com/google/shlex"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -99,7 +99,7 @@ func (s *cobraShell) executor(line string) {
 	// Allow command to read from stdin
 	s.restoreStdin()
 
-	args, err := shlex.Split(line)
+	args, err := splitTokens(line)
 	if err != nil {
 		fmt.Print(err)
 	} else if len(args) > 0 {
@@ -178,8 +178,8 @@ func buildCompletionArgs(input string) ([]string, error) {
 	start := startOfCurrentToken(input)
 
 	// The leading part consists of completed tokens only, so it is always
-	// balanced and can be split with shlex.
-	leading, err := shlex.Split(input[:start])
+	// balanced and can be split with splitTokens.
+	leading, err := splitTokens(input[:start])
 	if err != nil {
 		return nil, err
 	}
@@ -372,28 +372,134 @@ func escapeSuggestions(suggestions []prompt.Suggest) []prompt.Suggest {
 	return escaped
 }
 
+// escapableRunes are the only characters a backslash escapes. Keeping the set
+// this small means a backslash followed by anything else (for example the "n"
+// in C:\new) is preserved literally, so Windows paths survive splitting and
+// unescaping unchanged.
+func isEscapable(r rune) bool {
+	switch r {
+	case '\\', '"', '$', '`', '!':
+		return true
+	default:
+		return false
+	}
+}
+
+// appendEscaped writes the character escaped by the backslash at runes[i] and
+// returns the index of the last rune it consumed. Only characters in isEscapable
+// are unescaped; for anything else the backslash itself is written verbatim so a
+// Windows path such as C:\new is preserved.
+func appendEscaped(b *strings.Builder, runes []rune, i int) int {
+	if i+1 < len(runes) && isEscapable(runes[i+1]) {
+		b.WriteRune(runes[i+1])
+
+		return i + 1
+	}
+
+	b.WriteRune(runes[i])
+
+	return i
+}
+
+// closeQuoteOrWrite processes rune r while inside a quote of kind quote. It
+// returns the new quote state, which is 0 once the matching closing quote is
+// seen; any other rune is written to b unchanged.
+func closeQuoteOrWrite(b *strings.Builder, r, quote rune) rune {
+	if r == quote {
+		return 0
+	}
+
+	b.WriteRune(r)
+
+	return quote
+}
+
+// splitTokens splits a command line into shell-style tokens. It is a minimal
+// state machine that understands single quotes, double quotes and backslash
+// escapes, but unlike a full shell parser it only unescapes the limited set of
+// characters in isEscapable. A backslash before any other character is kept
+// verbatim, so a Windows path such as C:\new\table is not mangled into control
+// characters the way a general-purpose lexer would. An unterminated quote is
+// reported as an error.
+func splitTokens(s string) ([]string, error) {
+	var (
+		tokens  []string
+		b       strings.Builder
+		started bool
+		quote   rune
+	)
+
+	runes := []rune(s)
+
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+
+		switch {
+		case quote == '\'':
+			started = true
+			quote = closeQuoteOrWrite(&b, r, quote)
+		case r == '\\':
+			started = true
+			i = appendEscaped(&b, runes, i)
+		case quote == '"':
+			started = true
+			quote = closeQuoteOrWrite(&b, r, quote)
+		case r == '"' || r == '\'':
+			started = true
+			quote = r
+		case r == ' ' || r == '\t' || r == '\n':
+			if started {
+				tokens = append(tokens, b.String())
+				b.Reset()
+
+				started = false
+			}
+		default:
+			started = true
+
+			b.WriteRune(r)
+		}
+	}
+
+	if quote != 0 {
+		return nil, fmt.Errorf("unterminated quote: %q", string(quote))
+	}
+
+	if started {
+		tokens = append(tokens, b.String())
+	}
+
+	return tokens, nil
+}
+
 // startOfCurrentToken returns the byte offset in s at which the final shell
-// token begins. Whitespace that is inside quotes or escaped with a backslash
-// does not start a new token, so a quoted path containing spaces is treated as a
-// single token. An unterminated quote is tolerated so completion keeps working
-// while the user is still typing.
+// token begins. Whitespace that is inside quotes does not start a new token, so
+// a quoted path containing spaces is treated as a single token. A backslash only
+// escapes the characters in isEscapable, so a bare backslash (as in a Windows
+// path) keeps its literal meaning and does not protect a following space. An
+// unterminated quote is tolerated so completion keeps working while the user is
+// still typing.
 func startOfCurrentToken(s string) int {
 	start := 0
 
 	var quote rune
 
-	escaped := false
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
 
-	for i, r := range s {
 		switch {
-		case escaped:
-			escaped = false
 		case quote == '\'':
 			if r == '\'' {
 				quote = 0
 			}
-		case r == '\\':
-			escaped = true
+		case r == '\\' && quote != '\'':
+			// Skip the next rune only when the backslash actually escapes it;
+			// otherwise the backslash is literal and the following rune keeps
+			// its normal meaning (for example a separating space).
+			if next, nsize := utf8.DecodeRuneInString(s[i+size:]); isEscapable(next) {
+				i += size + nsize
+				continue
+			}
 		case quote == '"':
 			if r == '"' {
 				quote = 0
@@ -401,43 +507,37 @@ func startOfCurrentToken(s string) int {
 		case r == '"' || r == '\'':
 			quote = r
 		case r == ' ' || r == '\t' || r == '\n':
-			start = i + 1
+			start = i + size
 		}
+
+		i += size
 	}
 
 	return start
 }
 
 // unquoteToken removes one level of shell quoting and escaping from a single
-// token. It tolerates an unterminated quote or a trailing backslash so it can be
-// applied to the token the user is currently typing.
+// token. Only the characters in isEscapable are unescaped; a backslash before
+// anything else is kept verbatim so Windows paths like C:\new survive intact. It
+// tolerates an unterminated quote or a trailing backslash so it can be applied
+// to the token the user is currently typing.
 func unquoteToken(s string) string {
 	var b strings.Builder
 
 	var quote rune
 
-	escaped := false
+	runes := []rune(s)
 
-	for _, r := range s {
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+
 		switch {
-		case escaped:
-			b.WriteRune(r)
-
-			escaped = false
 		case quote == '\'':
-			if r == '\'' {
-				quote = 0
-			} else {
-				b.WriteRune(r)
-			}
+			quote = closeQuoteOrWrite(&b, r, quote)
 		case r == '\\':
-			escaped = true
+			i = appendEscaped(&b, runes, i)
 		case quote == '"':
-			if r == '"' {
-				quote = 0
-			} else {
-				b.WriteRune(r)
-			}
+			quote = closeQuoteOrWrite(&b, r, quote)
 		case r == '"' || r == '\'':
 			quote = r
 		default:
