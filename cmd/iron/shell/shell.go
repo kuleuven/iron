@@ -346,15 +346,42 @@ func parseSuggestions(out string) []prompt.Suggest {
 }
 
 func escapeSpecialCharacters(val string) string {
-	for _, c := range []string{`\`, `"`, "$", "`", "!"} {
-		val = strings.ReplaceAll(val, c, `\`+c)
+	var b strings.Builder
+
+	runes := []rune(val)
+
+	for i, r := range runes {
+		switch r {
+		case '\\':
+			// A backslash only needs escaping when the next character would
+			// otherwise be consumed as an escape. A bare backslash (a Windows
+			// path separator) is kept as a single character.
+			if i+1 < len(runes) && isEscapable(runes[i+1]) {
+				b.WriteByte('\\')
+			}
+
+			b.WriteRune(r)
+		case '"', '$', '`', '!':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
+		}
 	}
+
+	escaped := b.String()
 
 	if strings.ContainsAny(val, " #&*;<>?[]|~") {
-		val = fmt.Sprintf(`"%s"`, val)
+		// A trailing literal backslash would otherwise escape the closing quote,
+		// so double it before wrapping the value in quotes.
+		if strings.HasSuffix(escaped, `\`) && !strings.HasSuffix(escaped, `\\`) {
+			escaped += `\`
+		}
+
+		escaped = fmt.Sprintf(`"%s"`, escaped)
 	}
 
-	return val
+	return escaped
 }
 
 // escapeSuggestions escapes each suggestion's text so it can be inserted on the

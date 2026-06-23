@@ -317,7 +317,28 @@ func TestEscapeSpecialCharacters(t *testing.T) { //nolint:funlen
 		},
 		{
 			input:    `with\backslash`,
-			expected: `with\\backslash`,
+			expected: `with\backslash`,
+		},
+		{
+			// A Windows path keeps single separators.
+			input:    `C:\Users\me\file.txt`,
+			expected: `C:\Users\me\file.txt`,
+		},
+		{
+			// A Windows path with a space is quoted, separators stay single.
+			input:    `C:\Program Files\app`,
+			expected: `"C:\Program Files\app"`,
+		},
+		{
+			// A backslash before an escapable character is still escaped.
+			input:    `a\$b`,
+			expected: `a\\\$b`,
+		},
+		{
+			// A trailing separator inside a quoted value is doubled so it does
+			// not escape the closing quote.
+			input:    `C:\Program Files\`,
+			expected: `"C:\Program Files\\"`,
 		},
 		{
 			input:    `with"quote`,
