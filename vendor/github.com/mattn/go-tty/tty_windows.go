@@ -241,7 +241,11 @@ func (tty *TTY) readRune() (rune, error) {
 				}
 			}
 		} else {
-			if kr.controlKeyState&altPressed != 0 && kr.unicodeChar > 0 {
+			// AltGr is reported by Windows as Left-Ctrl + Right-Alt. On many
+			// keyboard layouts (e.g. German, French, Belgian) characters such as
+			// backslash are produced with AltGr. Only treat Alt as an ESC prefix
+			// when Ctrl is not also held, otherwise AltGr characters get dropped.
+			if kr.controlKeyState&altPressed != 0 && kr.controlKeyState&ctrlPressed == 0 && kr.unicodeChar > 0 {
 				tty.rs = []rune{rune(kr.unicodeChar)}
 				return rune(0x1b), nil
 			}

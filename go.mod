@@ -64,3 +64,6 @@ require (
 // bumped, because the left-hand version no longer matches. A version-less
 // replace applies to whatever version is required.
 replace github.com/elk-language/go-prompt => github.com/kuleuven/go-prompt v0.0.0-20260622113916-5c6165c6fb44
+
+// Fix AltGr backslash key on Windows
+replace github.com/mattn/go-tty v0.0.7 => github.com/kuleuven/go-tty v0.0.0-20260623060740-3cd885a87f53
