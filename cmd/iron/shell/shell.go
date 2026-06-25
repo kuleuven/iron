@@ -462,15 +462,15 @@ func splitTokens(s string) ([]string, error) {
 		r := runes[i]
 
 		switch {
-		case quote == '\'':
+		case quote != 0 && (quote == '\'' || r != '\\'):
+			// Inside a quote: write the rune (or close the quote). A backslash
+			// is literal inside single quotes but escapes inside double quotes,
+			// so double-quote backslashes fall through to the next case.
 			started = true
 			quote = closeQuoteOrWrite(&b, r, quote)
 		case r == '\\':
 			started = true
 			i = appendEscaped(&b, runes, i)
-		case quote == '"':
-			started = true
-			quote = closeQuoteOrWrite(&b, r, quote) //NOSONAR
 		case r == '"' || r == '\'':
 			started = true
 			quote = r
