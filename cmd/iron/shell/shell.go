@@ -470,7 +470,7 @@ func splitTokens(s string) ([]string, error) {
 			i = appendEscaped(&b, runes, i)
 		case quote == '"':
 			started = true
-			quote = closeQuoteOrWrite(&b, r, quote)
+			quote = closeQuoteOrWrite(&b, r, quote) //NOSONAR
 		case r == '"' || r == '\'':
 			started = true
 			quote = r

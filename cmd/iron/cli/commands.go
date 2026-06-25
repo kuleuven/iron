@@ -315,7 +315,7 @@ func (a *App) stat() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&jsonFormat, "json", "j", false, "Output in JSON format")
-	cmd.Flags().BoolVar(&listReplica, "replica", false, "Show replica resource hierarchies")
+	cmd.Flags().BoolVar(&listReplica, "replica", false, replicaDescription)
 
 	return cmd
 }
@@ -1131,6 +1131,8 @@ For data objects it indicates the status of the replicas, as follows:
 
 var columnsDisplayDescription = "Columns to display. Available options: creator, size, date, status, name, checksum, all."
 
+var replicaDescription = "Show replica resource hierarchies"
+
 func (a *App) list() *cobra.Command {
 	var (
 		jsonFormat, listACL, listMeta, collectionSizes, listReplica bool
@@ -1184,7 +1186,7 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
-	cmd.Flags().BoolVar(&listReplica, "replica", false, "Show replica resource hierarchies")
+	cmd.Flags().BoolVar(&listReplica, "replica", false, replicaDescription)
 	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 
 	return cmd
@@ -1431,7 +1433,7 @@ func (a *App) find() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
-	cmd.Flags().BoolVar(&listReplica, "replica", false, "Show replica resource hierarchies")
+	cmd.Flags().BoolVar(&listReplica, "replica", false, replicaDescription)
 	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 
 	return cmd
