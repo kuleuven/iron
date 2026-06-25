@@ -48,28 +48,26 @@ func TestEnvMarshal(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expected := i > 0
-
-		if !expected && bytes.Contains(payload, []byte("irods_authentication_uid")) {
-			t.Errorf("[%d] expected payload to not contain irods_authentication_uid, got %s", i, payload)
-		}
-
-		if expected && !bytes.Contains(payload, []byte("irods_authentication_uid")) {
-			t.Errorf("[%d] expected payload to contain irods_authentication_uid, got %s", i, payload)
-		}
-
 		var unmarshaled Env
 
 		if err = json.Unmarshal(payload, &unmarshaled); err != nil {
 			t.Fatal(err)
 		}
 
-		if expected && unmarshaled.IrodsAuthenticationUID == nil {
-			t.Errorf("[%d] expected unmarshaled.IrodsAuthenticationUID to not be nil", i)
-		}
+		assertUID(t, i, payload, unmarshaled, i > 0)
+	}
+}
 
-		if !expected && unmarshaled.IrodsAuthenticationUID != nil {
-			t.Errorf("[%d] expected unmarshaled.IrodsAuthenticationUID to be nil", i)
-		}
+func assertUID(t *testing.T, i int, payload []byte, unmarshaled Env, expected bool) {
+	t.Helper()
+
+	const field = "irods_authentication_uid"
+
+	if got := bytes.Contains(payload, []byte(field)); got != expected {
+		t.Errorf("[%d] expected payload containing %s to be %v, got %s", i, field, expected, payload)
+	}
+
+	if got := unmarshaled.IrodsAuthenticationUID != nil; got != expected {
+		t.Errorf("[%d] expected unmarshaled.IrodsAuthenticationUID non-nil to be %v", i, expected)
 	}
 }
