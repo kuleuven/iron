@@ -12,33 +12,117 @@ import (
 	"github.com/kuleuven/iron/scramble"
 )
 
-func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
-	tests := []struct {
-		skip           bool
-		name           string
-		setupFile      func(t *testing.T) (string, func())
-		expectedResult string
-		expectNotEqual bool
-		expectError    bool
-		errorContains  string
-	}{
+func writeEncodedAuthFile(t *testing.T, pattern, password string, uidOffset int) string {
+	t.Helper()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), pattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encoded := scramble.EncodeIrodsA(password, os.Getuid()+uidOffset, time.Now())
+	if _, err := tmpFile.Write(encoded); err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile.Close()
+
+	return tmpFile.Name()
+}
+
+func assertErrorContains(t *testing.T, err error, errorContains string) {
+	t.Helper()
+
+	if err == nil {
+		t.Errorf("expected error but got none")
+
+		return
+	}
+
+	if errorContains != "" && !strings.Contains(err.Error(), errorContains) {
+		t.Errorf("expected error to contain '%s', got: %v", errorContains, err)
+	}
+}
+
+func validateReadBack(uid *int, expected string) func(t *testing.T, filePath string) {
+	return func(t *testing.T, filePath string) {
+		t.Helper()
+
+		result, err := ReadAuthFile(filePath, uid)
+		if err != nil {
+			t.Errorf("failed to read back written file: %v", err)
+
+			return
+		}
+
+		if result != expected {
+			t.Errorf("expected to read back %q, got %q", expected, result)
+		}
+	}
+}
+
+func validatePermAndReadBack(uid *int, expected string) func(t *testing.T, filePath string) {
+	return func(t *testing.T, filePath string) {
+		t.Helper()
+
+		fi, err := os.Stat(filePath)
+		if err != nil {
+			t.Errorf("failed to stat created file: %v", err)
+
+			return
+		}
+
+		if fi.Mode().Perm() != 0o600 {
+			t.Errorf("expected file permissions 0600, got %o", fi.Mode().Perm())
+		}
+
+		validateReadBack(uid, expected)(t, filePath)
+	}
+}
+
+type readAuthFileCase struct {
+	skip           bool
+	name           string
+	setupFile      func(t *testing.T) (string, func())
+	expectedResult string
+	expectNotEqual bool
+	expectError    bool
+	errorContains  string
+}
+
+func (tt readAuthFileCase) run(t *testing.T) {
+	if tt.skip {
+		t.Skip("skipping test")
+	}
+
+	authFile, cleanup := tt.setupFile(t)
+	defer cleanup()
+
+	result, err := ReadAuthFile(authFile, nil)
+
+	if tt.expectError {
+		assertErrorContains(t, err, tt.errorContains)
+
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+
+		return
+	}
+
+	if (result == tt.expectedResult) == tt.expectNotEqual {
+		t.Errorf("expected result to be '%v', got '%v'", tt.expectedResult, result)
+	}
+}
+
+func TestReadAuthFile(t *testing.T) {
+	tests := []readAuthFileCase{
 		{
 			name: "successful read and decode",
 			setupFile: func(t *testing.T) (string, func()) {
-				tmpFile, err := os.CreateTemp(t.TempDir(), "test_auth_*")
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				// Write encoded content (uid=1000, password="testpass")
-				encoded := scramble.EncodeIrodsA("testpass0", os.Getuid(), time.Now())
-				if _, err := tmpFile.Write(encoded); err != nil {
-					t.Fatal(err)
-				}
-
-				tmpFile.Close()
-
-				return tmpFile.Name(), func() { os.Remove(tmpFile.Name()) }
+				return writeEncodedAuthFile(t, "test_auth_*", "testpass0", 0), func() {}
 			},
 			expectedResult: "testpass0",
 			expectError:    false,
@@ -55,22 +139,14 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 			skip: os.Getuid() == 0,
 			name: testPermissionDeny,
 			setupFile: func(t *testing.T) (string, func()) {
-				tmpFile, err := os.CreateTemp(t.TempDir(), "test_auth_perm_*")
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				tmpFile.Close()
+				name := writeEncodedAuthFile(t, "test_auth_perm_*", "", 0)
 
 				// Remove read permissions
-				if err := os.Chmod(tmpFile.Name(), 0o000); err != nil {
+				if err := os.Chmod(name, 0o000); err != nil {
 					t.Fatal(err)
 				}
 
-				return tmpFile.Name(), func() {
-					os.Chmod(tmpFile.Name(), 0o644) // Restore permissions for cleanup
-					os.Remove(tmpFile.Name())
-				}
+				return name, func() { os.Chmod(name, 0o644) }
 			},
 			expectError:   true,
 			errorContains: testPermissionDeny,
@@ -78,21 +154,8 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 		{
 			name: "decode error",
 			setupFile: func(t *testing.T) (string, func()) {
-				tmpFile, err := os.CreateTemp(t.TempDir(), "test_auth_decode_error_*")
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				// Write invalid encoded content (wrong uid)
-				encoded := scramble.EncodeIrodsA("testpass1", os.Getuid()+3935, time.Now())
-
-				if _, err := tmpFile.Write(encoded); err != nil {
-					t.Fatal(err)
-				}
-
-				tmpFile.Close()
-
-				return tmpFile.Name(), func() { os.Remove(tmpFile.Name()) }
+				// Invalid encoded content (wrong uid)
+				return writeEncodedAuthFile(t, "test_auth_decode_error_*", "testpass1", 3935), func() {}
 			},
 			expectError:    false,
 			expectedResult: "testpass1",
@@ -101,119 +164,71 @@ func TestReadAuthFile(t *testing.T) { //nolint:gocognit,funlen
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.skip {
-				t.Skip("skipping test")
-			}
-
-			authFile, cleanup := tt.setupFile(t)
-			defer cleanup()
-
-			result, err := ReadAuthFile(authFile, nil)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-
-					return
-				}
-
-				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
-					t.Errorf("expected error to contain '%s', got: %v", tt.errorContains, err)
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-
-				return
-			}
-
-			if (result == tt.expectedResult) == tt.expectNotEqual {
-				t.Errorf("expected result to be '%v', got '%v'", tt.expectedResult, result)
-			}
-		})
+		t.Run(tt.name, tt.run)
 	}
 }
 
-func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
+type writeAuthFileCase struct {
+	skip          bool
+	name          string
+	authFile      string
+	uid           *int
+	password      string
+	setupDir      func(t *testing.T, tmpDir string)
+	expectError   bool
+	errorContains string
+	validateFile  func(t *testing.T, filePath string)
+}
+
+func (tt writeAuthFileCase) run(t *testing.T) {
+	if tt.skip {
+		t.Skip("skipping test")
+	}
+
+	dir := t.TempDir()
+
+	tt.setupDir(t, dir)
+
+	authFile := filepath.Join(dir, ".irodsA")
+	if tt.authFile != "" {
+		authFile = tt.authFile
+	}
+
+	err := WriteAuthFile(authFile, tt.password, tt.uid)
+
+	if tt.expectError {
+		assertErrorContains(t, err, tt.errorContains)
+
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+
+		return
+	}
+
+	if tt.validateFile != nil {
+		tt.validateFile(t, authFile)
+	}
+}
+
+func TestWriteAuthFile(t *testing.T) {
 	uid := 9999
 
-	tests := []struct {
-		skip          bool
-		name          string
-		authFile      string
-		uid           *int
-		password      string
-		setupDir      func(t *testing.T, tmpDir string)
-		expectError   bool
-		errorContains string
-		validateFile  func(t *testing.T, filePath string)
-	}{
+	tests := []writeAuthFileCase{
 		{
-			name:        "create new file successfully",
-			password:    testNewPassword,
-			setupDir:    func(t *testing.T, dir string) {},
-			expectError: false,
-			validateFile: func(t *testing.T, filePath string) {
-				// Check file permissions
-				fi, err := os.Stat(filePath)
-				if err != nil {
-					t.Errorf("failed to stat created file: %v", err)
-
-					return
-				}
-
-				if fi.Mode().Perm() != 0o600 {
-					t.Errorf("expected file permissions 0600, got %o", fi.Mode().Perm())
-				}
-
-				// Check file content by reading it back
-				result, err := ReadAuthFile(filePath, nil)
-				if err != nil {
-					t.Errorf("failed to read back written file: %v", err)
-
-					return
-				}
-
-				if result != testNewPassword {
-					t.Errorf("expected to read back 'newpassword', got '%s'", result)
-				}
-			},
+			name:         "create new file successfully",
+			password:     testNewPassword,
+			setupDir:     func(t *testing.T, dir string) {},
+			validateFile: validatePermAndReadBack(nil, testNewPassword),
 		},
 		{
-			name:        "create new file successfully",
-			password:    testNewPassword,
-			setupDir:    func(t *testing.T, dir string) {},
-			expectError: false,
-			uid:         &uid,
-			validateFile: func(t *testing.T, filePath string) {
-				// Check file permissions
-				fi, err := os.Stat(filePath)
-				if err != nil {
-					t.Errorf("failed to stat created file: %v", err)
-
-					return
-				}
-
-				if fi.Mode().Perm() != 0o600 {
-					t.Errorf("expected file permissions 0600, got %o", fi.Mode().Perm())
-				}
-
-				// Check file content by reading it back
-				result, err := ReadAuthFile(filePath, &uid)
-				if err != nil {
-					t.Errorf("failed to read back written file: %v", err)
-
-					return
-				}
-
-				if result != testNewPassword {
-					t.Errorf("expected to read back 'newpassword', got '%s'", result)
-				}
-			},
+			name:         "create new file successfully",
+			password:     testNewPassword,
+			setupDir:     func(t *testing.T, dir string) {},
+			uid:          &uid,
+			validateFile: validatePermAndReadBack(&uid, testNewPassword),
 		},
 		{
 			name:     "overwrite existing file",
@@ -225,57 +240,20 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 					t.Fatal(err)
 				}
 			},
-			expectError: false,
-			validateFile: func(t *testing.T, filePath string) {
-				// Check that content was overwritten
-				result, err := ReadAuthFile(filePath, nil)
-				if err != nil {
-					t.Errorf("failed to read back written file: %v", err)
-
-					return
-				}
-
-				if result != "updatedpassword" {
-					t.Errorf("expected to read back 'updatedpassword', got '%s'", result)
-				}
-			},
+			expectError:  false,
+			validateFile: validateReadBack(nil, "updatedpassword"),
 		},
 		{
-			name:        "empty password",
-			password:    "",
-			setupDir:    func(t *testing.T, tmpDir string) {},
-			expectError: false,
-			validateFile: func(t *testing.T, filePath string) {
-				result, err := ReadAuthFile(filePath, nil)
-				if err != nil {
-					t.Errorf("failed to read back written file: %v", err)
-
-					return
-				}
-
-				if result != "" {
-					t.Errorf("expected to read back empty string, got '%s'", result)
-				}
-			},
+			name:         "empty password",
+			password:     "",
+			setupDir:     func(t *testing.T, tmpDir string) {},
+			validateFile: validateReadBack(nil, ""),
 		},
 		{
-			name:        "long password",
-			password:    strings.Repeat("a", 1000),
-			setupDir:    func(t *testing.T, tmpDir string) {},
-			expectError: false,
-			validateFile: func(t *testing.T, filePath string) {
-				result, err := ReadAuthFile(filePath, nil)
-				if err != nil {
-					t.Errorf("failed to read back written file: %v", err)
-
-					return
-				}
-
-				expected := strings.Repeat("a", 1000)
-				if result != expected {
-					t.Errorf("expected to read back long password, got length %d instead of %d", len(result), len(expected))
-				}
-			},
+			name:         "long password",
+			password:     strings.Repeat("a", 1000),
+			setupDir:     func(t *testing.T, tmpDir string) {},
+			validateFile: validateReadBack(nil, strings.Repeat("a", 1000)),
 		},
 		{
 			skip:     os.Getuid() == 0,
@@ -293,46 +271,7 @@ func TestWriteAuthFile(t *testing.T) { //nolint:gocognit,funlen
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.skip {
-				t.Skip("skipping test")
-			}
-
-			dir := t.TempDir()
-
-			tt.setupDir(t, dir)
-
-			authFile := filepath.Join(dir, ".irodsA")
-			if tt.authFile != "" {
-				authFile = tt.authFile
-			}
-
-			err := WriteAuthFile(authFile, tt.password, tt.uid)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-
-					return
-				}
-
-				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
-					t.Errorf("expected error to contain '%s', got: %v", tt.errorContains, err)
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-
-				return
-			}
-
-			if tt.validateFile != nil {
-				tt.validateFile(t, authFile)
-			}
-		})
+		t.Run(tt.name, tt.run)
 	}
 }
 
