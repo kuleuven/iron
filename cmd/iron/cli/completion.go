@@ -162,7 +162,7 @@ func (a *App) completeIrodsArgument(ctx context.Context, client *iron.Client, to
 			return api.SkipSubDirs
 		}
 
-		if err != nil || !strings.HasPrefix(info.Name(), filePrefix) || argType == ObjectPath && info.IsDir() || argType == CollectionPath && !info.IsDir() || argType == TargetPath && !info.IsDir() {
+		if err != nil || !strings.HasPrefix(info.Name(), filePrefix) || argType == CollectionPath && !info.IsDir() || argType == TargetPath && !info.IsDir() {
 			return err
 		}
 
