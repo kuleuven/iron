@@ -72,14 +72,36 @@ func TestPrompt_Print(t *testing.T) {
 	}
 }
 
-func TestPrompt_Ask(t *testing.T) { //nolint:gocognit,funlen
-	tests := []struct {
-		name          string
-		message       string
-		input         string
-		expectedValue string
-		expectError   bool
-	}{
+type promptAskCase struct {
+	name          string
+	message       string
+	input         string
+	expectedValue string
+	expectError   bool
+}
+
+func (tt promptAskCase) run(t *testing.T) {
+	p, outputFile := newPromptIO(t, tt.input)
+
+	value, err := p.Ask(tt.message)
+
+	assertAsk(t, value, tt.expectedValue, err, tt.expectError)
+
+	// Check that prompt message was written
+	outputFile.Seek(0, 0)
+
+	output := make([]byte, 1024)
+	n, _ := outputFile.Read(output)
+	actualOutput := string(output[:n])
+	expectedOutput := tt.message + ": "
+
+	if !strings.HasPrefix(actualOutput, expectedOutput) {
+		t.Errorf("Ask() prompt output got = %q, want prefix = %q", actualOutput, expectedOutput)
+	}
+}
+
+func TestPrompt_Ask(t *testing.T) {
+	tests := []promptAskCase{
 		{
 			name:          "simple input",
 			message:       "Enter name",
@@ -118,62 +140,49 @@ func TestPrompt_Ask(t *testing.T) { //nolint:gocognit,funlen
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
+		t.Run(tt.name, tt.run)
+	}
+}
 
-			// Create temporary files for input and output
-			inputFile, err := os.CreateTemp(dir, "test_input")
-			if err != nil {
-				t.Fatal(err)
-			}
+// newPromptIO creates a prompt backed by temporary input and output files,
+// seeded with the given input. The output file is returned so callers can
+// inspect what the prompt wrote.
+func newPromptIO(t *testing.T, input string) (*prompt, *os.File) {
+	t.Helper()
 
-			defer inputFile.Close()
+	dir := t.TempDir()
 
-			outputFile, err := os.CreateTemp(dir, "test_output")
-			if err != nil {
-				t.Fatal(err)
-			}
+	inputFile, err := os.CreateTemp(dir, "test_input")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-			defer outputFile.Close()
+	t.Cleanup(func() { inputFile.Close() })
 
-			// Write input data
-			inputFile.WriteString(tt.input)
-			inputFile.Seek(0, 0)
+	outputFile, err := os.CreateTemp(dir, "test_output")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-			p := &prompt{
-				r: inputFile,
-				w: outputFile,
-			}
+	t.Cleanup(func() { outputFile.Close() })
 
-			value, err := p.Ask(tt.message)
-			if tt.expectError && err == nil {
-				t.Errorf("Ask() expected error but got none")
+	inputFile.WriteString(input)
+	inputFile.Seek(0, 0)
 
-				return
-			}
+	return &prompt{r: inputFile, w: outputFile}, outputFile
+}
 
-			if !tt.expectError && err != nil {
-				t.Errorf("Ask() unexpected error = %v", err)
+// assertAsk verifies the result of an Ask call against the expectations.
+func assertAsk(t *testing.T, value, expectedValue string, err error, expectError bool) {
+	t.Helper()
 
-				return
-			}
-
-			if !tt.expectError && value != tt.expectedValue {
-				t.Errorf("Ask() got = %q, want = %q", value, tt.expectedValue)
-			}
-
-			// Check that prompt message was written
-			outputFile.Seek(0, 0)
-
-			output := make([]byte, 1024)
-			n, _ := outputFile.Read(output)
-			actualOutput := string(output[:n])
-			expectedOutput := tt.message + ": "
-
-			if !strings.HasPrefix(actualOutput, expectedOutput) {
-				t.Errorf("Ask() prompt output got = %q, want prefix = %q", actualOutput, expectedOutput)
-			}
-		})
+	switch {
+	case expectError && err == nil:
+		t.Errorf("Ask() expected error but got none")
+	case !expectError && err != nil:
+		t.Errorf("Ask() unexpected error = %v", err)
+	case !expectError && value != expectedValue:
+		t.Errorf("Ask() got = %q, want = %q", value, expectedValue)
 	}
 }
 
@@ -252,7 +261,7 @@ func TestBot_Print(t *testing.T) {
 	}
 }
 
-func TestBot_Ask(t *testing.T) { //nolint:funlen
+func TestBot_Ask(t *testing.T) {
 	tests := []struct {
 		name          string
 		bot           Bot
@@ -298,23 +307,10 @@ func TestBot_Ask(t *testing.T) { //nolint:funlen
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			value, err := tt.bot.Ask(tt.message)
-			if tt.expectError && err == nil {
-				t.Errorf("Bot.Ask() expected error but got none")
 
-				return
-			}
+			assertAsk(t, value, tt.expectedValue, err, tt.expectError)
 
-			if !tt.expectError && err != nil {
-				t.Errorf("Bot.Ask() unexpected error = %v", err)
-
-				return
-			}
-
-			if !tt.expectError && value != tt.expectedValue {
-				t.Errorf("Bot.Ask() got = %q, want = %q", value, tt.expectedValue)
-			}
-
-			if tt.expectError {
+			if tt.expectError && err != nil {
 				expectedError := fmt.Sprintf("no default value for %s", tt.message)
 				if err.Error() != expectedError {
 					t.Errorf("Bot.Ask() error got = %q, want = %q", err.Error(), expectedError)
