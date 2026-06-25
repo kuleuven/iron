@@ -56,7 +56,7 @@ type capturingPrinter struct {
 	names []string
 }
 
-func (c *capturingPrinter) Setup(_, _, _ bool)              {}
+func (c *capturingPrinter) Setup(_, _, _, _ bool)           {}
 func (c *capturingPrinter) Print(name string, _ api.Record) { c.names = append(c.names, name) }
 func (c *capturingPrinter) Flush()                          {}
 

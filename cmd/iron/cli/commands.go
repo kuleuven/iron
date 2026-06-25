@@ -275,7 +275,7 @@ func (a *App) rmdir() *cobra.Command {
 }
 
 func (a *App) stat() *cobra.Command {
-	var jsonFormat bool
+	var jsonFormat, listReplica bool
 
 	cmd := &cobra.Command{
 		Use:               "stat <path>",
@@ -304,7 +304,7 @@ func (a *App) stat() *cobra.Command {
 				}
 			}
 
-			printer.Setup(true, true, true)
+			printer.Setup(true, true, true, listReplica)
 
 			defer printer.Flush()
 
@@ -315,6 +315,7 @@ func (a *App) stat() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&jsonFormat, "json", "j", false, "Output in JSON format")
+	cmd.Flags().BoolVar(&listReplica, "replica", false, "Show replica resource hierarchies")
 
 	return cmd
 }
@@ -1132,8 +1133,8 @@ var columnsDisplayDescription = "Columns to display. Available options: creator,
 
 func (a *App) list() *cobra.Command {
 	var (
-		jsonFormat, listACL, listMeta, collectionSizes bool
-		columns                                        []string
+		jsonFormat, listACL, listMeta, collectionSizes, listReplica bool
+		columns                                                     []string
 	)
 
 	defaultColumns := []string{"creator", "size", "date", "status", "name"}
@@ -1171,7 +1172,7 @@ func (a *App) list() *cobra.Command {
 				}
 			}
 
-			printer.Setup(listACL, listMeta, collectionSizes)
+			printer.Setup(listACL, listMeta, collectionSizes, listReplica)
 
 			defer printer.Flush()
 
@@ -1183,6 +1184,7 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVarP(&listACL, "acl", "a", false, "List ACLs")
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
 	cmd.Flags().BoolVarP(&collectionSizes, "sizes", "s", false, "Show the total size of objects in a collection (this does not include sub-collections).")
+	cmd.Flags().BoolVar(&listReplica, "replica", false, "Show replica resource hierarchies")
 	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 
 	return cmd
@@ -1316,7 +1318,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 				}
 			}
 
-			printer.Setup(false, false, collectionSizes)
+			printer.Setup(false, false, collectionSizes, false)
 
 			defer printer.Flush()
 
@@ -1382,8 +1384,8 @@ func indentString(s string, depth int, jsonFormat bool) string {
 
 func (a *App) find() *cobra.Command {
 	var (
-		jsonFormat, listACL, listMeta, collectionSizes bool
-		columns                                        []string
+		jsonFormat, listACL, listMeta, collectionSizes, listReplica bool
+		columns                                                     []string
 	)
 
 	defaultColumns := []string{"creator", "size", "date", "status", "name"}
@@ -1420,7 +1422,7 @@ func (a *App) find() *cobra.Command {
 				}
 			}
 
-			printer.Setup(listACL, listMeta, collectionSizes)
+			printer.Setup(listACL, listMeta, collectionSizes, listReplica)
 
 			defer printer.Flush()
 
@@ -1429,6 +1431,7 @@ func (a *App) find() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON")
+	cmd.Flags().BoolVar(&listReplica, "replica", false, "Show replica resource hierarchies")
 	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
 
 	return cmd

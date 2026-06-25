@@ -12,7 +12,7 @@ import (
 )
 
 type Printer interface {
-	Setup(hasACL, hasMeta, hasCollectionSize bool)
+	Setup(hasACL, hasMeta, hasCollectionSize, hasReplicas bool)
 	Print(name string, i api.Record)
 	Flush()
 }
@@ -25,10 +25,15 @@ type TablePrinter struct {
 	Zone string
 
 	hasCollectionSizes bool
+	hasReplicas        bool
 }
 
-func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes bool) {
+func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas bool) {
 	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tCHECKSUM\tNAME"
+
+	if hasReplicas {
+		header1 += "\tRESOURCE"
+	}
 
 	if hasMeta {
 		header1 += "\t─── METADATA KEY\tVALUE\tUNITS\n"
@@ -45,6 +50,7 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes bool) {
 	fmt.Fprintf(tp.Writer, "%s%s%s%s", Bold, header1, header2, Reset)
 
 	tp.hasCollectionSizes = hasCollectionSizes
+	tp.hasReplicas = hasReplicas
 }
 
 func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
@@ -56,6 +62,8 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 	var status, owner, checksum, color string
 
+	var resources []string
+
 	switch v := i.Sys().(type) {
 	case *api.DataObject:
 		for _, r := range v.Replicas {
@@ -63,6 +71,8 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 			owner = tp.formatUser(r.Owner, r.OwnerZone, false)
 			checksum = parseIrodsChecksum(r.Checksum)
 			color = NoColor
+
+			resources = append(resources, r.ResourceHierarchy)
 		}
 
 	case *api.Collection:
@@ -111,6 +121,19 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		NoColor+NoBold,
 	)
 
+	var extraResources []string
+
+	if tp.hasReplicas {
+		var resource string
+
+		if len(resources) > 0 {
+			resource = resources[0]
+			extraResources = resources[1:]
+		}
+
+		header += "\t" + resource
+	}
+
 	if len(meta) > 0 {
 		header += "\t" + meta[0] + "\n"
 
@@ -121,9 +144,14 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 	fmt.Fprint(tp.Writer, header)
 
-	for i := range max(len(acl), len(meta)) {
+	tp.printSubRows(acl, meta, extraResources)
+}
+
+func (tp *TablePrinter) printSubRows(acl, meta, extraResources []string) {
+	for i := range max(len(acl), len(meta), len(extraResources)) {
 		aclLine := "\t"
 		metaLine := "\t\t"
+		resourceLine := ""
 
 		if i < len(acl) {
 			aclLine = acl[i]
@@ -133,7 +161,15 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 			metaLine = meta[i]
 		}
 
-		fmt.Fprintf(tp.Writer, "%s\t\t\t\t\t%s\n", aclLine, metaLine)
+		if i < len(extraResources) {
+			resourceLine = extraResources[i]
+		}
+
+		if tp.hasReplicas {
+			fmt.Fprintf(tp.Writer, "%s\t\t\t\t\t%s\t%s\n", aclLine, resourceLine, metaLine)
+		} else {
+			fmt.Fprintf(tp.Writer, "%s\t\t\t\t\t%s\n", aclLine, metaLine)
+		}
 	}
 }
 
@@ -229,12 +265,12 @@ func (tp *TablePrinter) Flush() {
 }
 
 type JSONPrinter struct {
-	Writer          io.Writer
-	hasACL, hasMeta bool
+	Writer                       io.Writer
+	hasACL, hasMeta, hasReplicas bool
 }
 
-func (jp *JSONPrinter) Setup(hasACL, hasMeta, _ bool) {
-	jp.hasACL, jp.hasMeta = hasACL, hasMeta
+func (jp *JSONPrinter) Setup(hasACL, hasMeta, _, hasReplicas bool) {
+	jp.hasACL, jp.hasMeta, jp.hasReplicas = hasACL, hasMeta, hasReplicas
 }
 
 func (jp *JSONPrinter) Print(name string, i api.Record) {
@@ -246,6 +282,10 @@ func (jp *JSONPrinter) Print(name string, i api.Record) {
 
 	if !jp.hasMeta {
 		delete(m, "metadata")
+	}
+
+	if !jp.hasReplicas {
+		delete(m, "replicas")
 	}
 
 	json.NewEncoder(jp.Writer).Encode(m) //nolint:errcheck,errchkjson
@@ -260,6 +300,7 @@ func toMap(name string, i api.Record) map[string]any {
 		creator  string
 		checksum *string
 		id       int64
+		replicas []map[string]any
 	)
 
 	switch v := i.Sys().(type) {
@@ -269,6 +310,15 @@ func toMap(name string, i api.Record) map[string]any {
 
 		str := parseIrodsChecksum(v.Replicas[0].Checksum)
 		checksum = &str
+
+		for _, r := range v.Replicas {
+			replicas = append(replicas, map[string]any{
+				"number":   r.Number,
+				"resource": r.ResourceHierarchy,
+				"status":   r.Status,
+				"checksum": parseIrodsChecksum(r.Checksum),
+			})
+		}
 
 	case *api.Collection:
 		id = v.ID
@@ -283,6 +333,7 @@ func toMap(name string, i api.Record) map[string]any {
 		"id":       id,
 		"acl":      i.Access(),
 		"metadata": i.Metadata(),
+		"replicas": replicas,
 	}
 
 	if checksum != nil {
