@@ -48,6 +48,7 @@ type App struct {
 	configStoreArgs []string
 	passwordStore   PasswordStore
 	workdirStore    WorkdirStore
+	commandHook     func(*cobra.Command, bool)
 
 	releaseVersion string
 	updater        *selfupdate.Updater
@@ -143,7 +144,7 @@ func (a *App) Exec(ctx context.Context, stdout, stderr io.Writer, args ...string
 	return rootCmd.ExecuteContext(ctx)
 }
 
-func (a *App) root(shellCommand bool) *cobra.Command {
+func (a *App) root(shellCommand bool) *cobra.Command { //nolint:funlen
 	rootCmd := &cobra.Command{
 		Use:               a.name,
 		Short:             "Golang client for iRODS",
@@ -198,6 +199,10 @@ func (a *App) root(shellCommand bool) *cobra.Command {
 
 	if !shellCommand {
 		a.addRootFlags(rootCmd)
+	}
+
+	if a.commandHook != nil {
+		a.commandHook(rootCmd, shellCommand)
 	}
 
 	return rootCmd

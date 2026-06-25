@@ -13,6 +13,7 @@ import (
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/scramble"
+	"github.com/spf13/cobra"
 )
 
 // Loader is a function that loads an iRODS environment e.g. from a file.
@@ -393,5 +394,11 @@ func WithUpdater(updater *selfupdate.Updater, repo selfupdate.RepositorySlug) Op
 	return func(a *App) {
 		a.updater = updater
 		a.repo = repo
+	}
+}
+
+func WithCommandHook(hook func(*cobra.Command, bool)) Option {
+	return func(a *App) {
+		a.commandHook = hook
 	}
 }
