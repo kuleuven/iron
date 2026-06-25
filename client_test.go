@@ -110,16 +110,8 @@ func TestClient1(t *testing.T) {
 	}
 }
 
-func TestClientNative(t *testing.T) { //nolint:funlen
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("expected TCP address, got %T", listener.Addr())
-	}
+func TestClientNative(t *testing.T) {
+	listener, port := newTestListener(t)
 
 	var wg errgroup.Group
 
@@ -130,20 +122,7 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 		}
 
 		wg.Go(func() error {
-			return runDialog(conn, []Dialog{
-				{
-					msg.AUTH_REQUEST_AN,
-					&msg.AuthRequest{},
-					msg.AuthChallenge{
-						Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
-					},
-				},
-				{
-					msg.AUTH_RESPONSE_AN,
-					&msg.AuthChallengeResponse{},
-					msg.AuthResponse{},
-				},
-			})
+			return runDialog(conn, authDialog())
 		})
 
 		return nil
@@ -152,61 +131,100 @@ func TestClientNative(t *testing.T) { //nolint:funlen
 	wg.Go(func() error {
 		defer listener.Close()
 
-		env := Env{Host: testIP, Port: tcpAddr.Port, ClientServerNegotiation: testNoNegotiation, Password: testPassword}
-
-		env.ApplyDefaults()
-
-		client, err := New(t.Context(), env, Option{ClientName: testStr, MaxConns: 1})
-		if err != nil {
-			return err
-		}
-
-		defer client.Close()
-
-		conns, err := client.ConnectAvailable(t.Context(), 1)
-		if err != nil {
-			return err
-		}
-
-		if len(conns) != 1 {
-			return fmt.Errorf("expected 1 connection, got %d", len(conns))
-		}
-
-		conn := conns[0]
-
-		conns, err = client.ConnectAvailable(t.Context(), 1)
-		if err != nil {
-			return err
-		}
-
-		if len(conns) != 0 {
-			return fmt.Errorf("expected 0 connection, got %d", len(conns))
-		}
-
-		done := make(chan struct{})
-
-		wg.Go(func() error {
-			defer close(done)
-
-			conn1, err := client.Connect(t.Context())
-			if err != nil {
-				return err
-			}
-
-			return conn1.Close()
-		})
-
-		time.Sleep(time.Second)
-
-		conn.Close()
-
-		<-done
-
-		return client.Close()
+		return runClientNative(t, &wg, port)
 	})
 
 	if err := wg.Wait(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func runClientNative(t *testing.T, wg *errgroup.Group, port int) error {
+	t.Helper()
+
+	env := Env{Host: testIP, Port: port, ClientServerNegotiation: testNoNegotiation, Password: testPassword}
+
+	env.ApplyDefaults()
+
+	client, err := New(t.Context(), env, Option{ClientName: testStr, MaxConns: 1})
+	if err != nil {
+		return err
+	}
+
+	defer client.Close()
+
+	conns, err := client.ConnectAvailable(t.Context(), 1)
+	if err != nil {
+		return err
+	}
+
+	if len(conns) != 1 {
+		return fmt.Errorf("expected 1 connection, got %d", len(conns))
+	}
+
+	conn := conns[0]
+
+	conns, err = client.ConnectAvailable(t.Context(), 1)
+	if err != nil {
+		return err
+	}
+
+	if len(conns) != 0 {
+		return fmt.Errorf("expected 0 connection, got %d", len(conns))
+	}
+
+	done := make(chan struct{})
+
+	wg.Go(func() error {
+		defer close(done)
+
+		conn1, err := client.Connect(t.Context())
+		if err != nil {
+			return err
+		}
+
+		return conn1.Close()
+	})
+
+	time.Sleep(time.Second)
+
+	conn.Close()
+
+	<-done
+
+	return client.Close()
+}
+
+func newTestListener(t *testing.T) (net.Listener, int) {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("expected TCP address, got %T", listener.Addr())
+	}
+
+	return listener, tcpAddr.Port
+}
+
+func authDialog() []Dialog {
+	return []Dialog{
+		{
+			msg.AUTH_REQUEST_AN,
+			&msg.AuthRequest{},
+			msg.AuthChallenge{
+				Challenge: base64.StdEncoding.EncodeToString([]byte("testChallengetestChallengetestChallengetestChallengetestChallenge")),
+			},
+		},
+		{
+			msg.AUTH_RESPONSE_AN,
+			&msg.AuthChallengeResponse{},
+			msg.AuthResponse{},
+		},
 	}
 }
 
