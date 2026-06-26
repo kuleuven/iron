@@ -1,4 +1,3 @@
-//nolint:goconst
 package cli
 
 import (
@@ -10,6 +9,45 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/kuleuven/iron/api"
 )
+
+// Main row column headers.
+const (
+	colCreator  = "CREATOR"
+	colSize     = "SIZE"
+	colDate     = "DATE"
+	colStatus   = "STATUS"
+	colChecksum = "CHECKSUM"
+	colName     = "NAME"
+)
+
+// Subtable section labels.
+const (
+	sectionMeta    = "META"
+	sectionACL     = "ACL"
+	sectionReplica = "REPL"
+)
+
+// Subtable column headers.
+const (
+	colMetaKey   = "KEY"
+	colMetaValue = "VALUE"
+	colMetaUnits = "UNITS"
+
+	colACLUser   = "USER"
+	colACLAccess = "ACCESS"
+
+	colReplicaNum      = "#"
+	colReplicaStatus   = "STATUS"
+	colReplicaChecksum = "CHECKSUM"
+	colReplicaResource = "RESOURCE"
+)
+
+// rodsGroupType is the iRODS user type for groups.
+const rodsGroupType = "rodsgroup"
+
+// subtableIndent skips the six main row columns (CREATOR through NAME) so that
+// subtable content appears to the right of the name column.
+const subtableIndent = "\t\t\t\t\t\t"
 
 type Printer interface {
 	Setup(hasACL, hasMeta, hasCollectionSize, hasReplicas bool)
@@ -24,36 +62,26 @@ type TablePrinter struct {
 	}
 	Zone string
 
+	hasACL             bool
+	hasMeta            bool
 	hasCollectionSizes bool
 	hasReplicas        bool
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas bool) {
-	header1 := "CREATOR\tSIZE\tDATE\tSTATUS\tCHECKSUM\tNAME"
-
-	if hasReplicas {
-		header1 += "\tRESOURCE"
-	}
-
-	if hasMeta {
-		header1 += "\t─── METADATA KEY\tVALUE\tUNITS\n"
-	} else {
-		header1 += "\t\t\n"
-	}
-
-	var header2 string
-
-	if hasACL {
-		header2 = " └─ USER\tACCESS\n"
-	}
-
-	fmt.Fprintf(tp.Writer, "%s%s%s%s", Bold, header1, header2, Reset)
-
+	tp.hasACL = hasACL
+	tp.hasMeta = hasMeta
 	tp.hasCollectionSizes = hasCollectionSizes
 	tp.hasReplicas = hasReplicas
+
+	fmt.Fprintf(tp.Writer, "%s%s\t%s\t%s\t%s\t%s\t%s\n%s",
+		Bold,
+		colCreator, colSize, colDate, colStatus, colChecksum, colName,
+		Reset,
+	)
 }
 
-func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
+func (tp *TablePrinter) Print(name string, i api.Record) {
 	t := i.ModTime().Format("Jan 02  2006")
 
 	if i.ModTime().Year() == time.Now().Year() {
@@ -62,18 +90,15 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 
 	var status, owner, checksum, color string
 
-	var resources []string
-
 	switch v := i.Sys().(type) {
 	case *api.DataObject:
 		for _, r := range v.Replicas {
 			status = appendStatus(status, r.Status)
 			owner = tp.formatUser(r.Owner, r.OwnerZone, false)
 			checksum = parseIrodsChecksum(r.Checksum)
-			color = NoColor
-
-			resources = append(resources, r.ResourceHierarchy)
 		}
+
+		color = NoColor
 
 	case *api.Collection:
 		if v.Inheritance {
@@ -85,91 +110,107 @@ func (tp *TablePrinter) Print(name string, i api.Record) { //nolint:funlen
 		color = Green
 	}
 
-	var acl []string
-
-	for p, a := range i.Access() {
-		acl = append(acl, fmt.Sprintf("%s %s%s\t%s%s",
-			bracket(p+1, len(i.Access())+1),
-			Cyan,
-			tp.formatUser(a.User.Name, a.User.Zone, a.User.Type == "rodsgroup"),
-			formatPermission(a.Permission),
-			NoColor,
-		))
-	}
-
-	var meta []string
-
-	for p, m := range i.Metadata() {
-		meta = append(meta, fmt.Sprintf("%s %s%s\t%s\t%s%s",
-			bracket(p, len(i.Metadata())),
-			Yellow,
-			m.Name,
-			m.Value,
-			m.Units,
-			NoColor,
-		))
-	}
-
-	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s%s%s",
+	fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s\t%s\t%s%s%s\n",
 		owner,
 		tp.formatSize(i),
 		t,
 		status,
 		checksum,
-		color+Bold,
-		name,
-		NoColor+NoBold,
+		color+Bold, name, NoColor+NoBold,
 	)
 
-	var extraResources []string
-
 	if tp.hasReplicas {
-		var resource string
-
-		if len(resources) > 0 {
-			resource = resources[0]
-			extraResources = resources[1:]
+		if obj, ok := i.Sys().(*api.DataObject); ok {
+			tp.printReplicaSubtable(obj.Replicas)
 		}
-
-		header += "\t" + resource
 	}
 
-	if len(meta) > 0 {
-		header += "\t" + meta[0] + "\n"
-
-		meta = meta[1:]
-	} else {
-		header += "\n"
+	if tp.hasMeta {
+		tp.printMetaSubtable(i.Metadata())
 	}
 
-	fmt.Fprint(tp.Writer, header)
-
-	tp.printSubRows(acl, meta, extraResources)
+	if tp.hasACL {
+		tp.printACLSubtable(i.Access())
+	}
 }
 
-func (tp *TablePrinter) printSubRows(acl, meta, extraResources []string) {
-	for i := range max(len(acl), len(meta), len(extraResources)) {
-		aclLine := "\t"
-		metaLine := "\t\t"
-		resourceLine := ""
+// printReplicaSubtable renders per-replica details beneath a data object's main row.
+// Each replica occupies its own row showing replica number, status, checksum and resource.
+func (tp *TablePrinter) printReplicaSubtable(replicas []api.Replica) {
+	if len(replicas) == 0 {
+		return
+	}
 
-		if i < len(acl) {
-			aclLine = acl[i]
-		}
+	// Section label + column headers (cols 6–10).
+	fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\t%s\n",
+		subtableIndent,
+		Bold, sectionReplica, NoBold,
+		colReplicaNum, colReplicaStatus, colReplicaChecksum, colReplicaResource,
+	)
 
-		if i < len(meta) {
-			metaLine = meta[i]
-		}
+	n := len(replicas)
 
-		if i < len(extraResources) {
-			resourceLine = extraResources[i]
-		}
+	for idx, r := range replicas {
+		fmt.Fprintf(tp.Writer, "%s\t%s %d\t%s\t%s\t%s\n",
+			subtableIndent,
+			bracket(idx, n), r.Number,
+			statusIcon(r.Status),
+			parseIrodsChecksum(r.Checksum),
+			r.ResourceHierarchy,
+		)
+	}
+}
 
-		if tp.hasReplicas {
-			fmt.Fprintf(tp.Writer, "%s\t\t\t\t\t%s\t%s\n", aclLine, resourceLine, metaLine)
-		} else {
-			fmt.Fprintf(tp.Writer, "%s\t\t\t\t\t%s\n", aclLine, metaLine)
-		}
+// printMetaSubtable renders metadata attributes beneath an item's main row.
+// Each attribute occupies its own row showing name, value and units.
+func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata) {
+	if len(meta) == 0 {
+		return
+	}
+
+	// Section label + column headers (cols 6–9).
+	fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\n",
+		subtableIndent,
+		Bold, sectionMeta, NoBold,
+		colMetaKey, colMetaValue, colMetaUnits,
+	)
+
+	n := len(meta)
+
+	for idx, m := range meta {
+		fmt.Fprintf(tp.Writer, "%s\t%s%s %s%s\t%s\t%s\n",
+			subtableIndent,
+			Yellow, bracket(idx, n), m.Name, NoColor,
+			m.Value,
+			m.Units,
+		)
+	}
+}
+
+// printACLSubtable renders access control entries beneath an item's main row.
+// Each entry occupies its own row showing the user (or group) and their permission.
+func (tp *TablePrinter) printACLSubtable(acl []api.Access) {
+	if len(acl) == 0 {
+		return
+	}
+
+	// Section label + column headers (cols 6–8).
+	fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\n",
+		subtableIndent,
+		Bold, sectionACL, NoBold,
+		colACLUser, colACLAccess,
+	)
+
+	n := len(acl)
+
+	for idx, a := range acl {
+		user := tp.formatUser(a.User.Name, a.User.Zone, a.User.Type == rodsGroupType)
+
+		fmt.Fprintf(tp.Writer, "%s\t%s%s %s%s\t%s\n",
+			subtableIndent,
+			Cyan, bracket(idx, n), user, NoColor,
+			formatPermission(a.Permission),
+		)
 	}
 }
 
@@ -181,19 +222,23 @@ func (tp *TablePrinter) formatSize(i api.Record) string {
 	return humanize.Bytes(uint64(i.Size()))
 }
 
-func appendStatus(list, status string) string {
+func statusIcon(status string) string {
 	switch status {
 	case "1":
-		return list + "✔ " // Good replica
+		return "✔" // Good replica
 	case "0":
-		return list + "✘ " // Stale replica
+		return "✘" // Stale replica
 	case "2":
-		return list + "⚿ " // Write locked
+		return "⚿" // Write locked
 	case "4":
-		return list + "… " // Intermediate
+		return "…" // Intermediate
 	default:
-		return list + status + " "
+		return status
 	}
+}
+
+func appendStatus(list, status string) string {
+	return list + statusIcon(status) + " "
 }
 
 func bracket(i, n int) string {
@@ -277,15 +322,15 @@ func (jp *JSONPrinter) Print(name string, i api.Record) {
 	m := toMap(name, i)
 
 	if !jp.hasACL {
-		delete(m, "acl")
+		delete(m, jsonFieldACL)
 	}
 
 	if !jp.hasMeta {
-		delete(m, "metadata")
+		delete(m, jsonFieldMetadata)
 	}
 
 	if !jp.hasReplicas {
-		delete(m, "replicas")
+		delete(m, jsonFieldReplicas)
 	}
 
 	json.NewEncoder(jp.Writer).Encode(m) //nolint:errcheck,errchkjson
@@ -294,6 +339,22 @@ func (jp *JSONPrinter) Print(name string, i api.Record) {
 func (jp *JSONPrinter) Flush() {
 	// empty
 }
+
+// JSON field names used in the JSONPrinter output.
+const (
+	jsonFieldName     = "name"
+	jsonFieldSize     = "size"
+	jsonFieldModified = "modified"
+	jsonFieldCreator  = "creator"
+	jsonFieldID       = "id"
+	jsonFieldACL      = "acl"
+	jsonFieldMetadata = "metadata"
+	jsonFieldReplicas = "replicas"
+	jsonFieldChecksum = "checksum"
+	jsonFieldNumber   = "number"
+	jsonFieldResource = "resource"
+	jsonFieldStatus   = "status"
+)
 
 func toMap(name string, i api.Record) map[string]any {
 	var (
@@ -313,10 +374,10 @@ func toMap(name string, i api.Record) map[string]any {
 
 		for _, r := range v.Replicas {
 			replicas = append(replicas, map[string]any{
-				"number":   r.Number,
-				"resource": r.ResourceHierarchy,
-				"status":   r.Status,
-				"checksum": parseIrodsChecksum(r.Checksum),
+				jsonFieldNumber:   r.Number,
+				jsonFieldResource: r.ResourceHierarchy,
+				jsonFieldStatus:   r.Status,
+				jsonFieldChecksum: parseIrodsChecksum(r.Checksum),
 			})
 		}
 
@@ -326,18 +387,18 @@ func toMap(name string, i api.Record) map[string]any {
 	}
 
 	m := map[string]any{
-		"name":     name,
-		"size":     i.Size(),
-		"modified": i.ModTime().Format(time.RFC3339),
-		"creator":  creator,
-		"id":       id,
-		"acl":      i.Access(),
-		"metadata": i.Metadata(),
-		"replicas": replicas,
+		jsonFieldName:     name,
+		jsonFieldSize:     i.Size(),
+		jsonFieldModified: i.ModTime().Format(time.RFC3339),
+		jsonFieldCreator:  creator,
+		jsonFieldID:       id,
+		jsonFieldACL:      i.Access(),
+		jsonFieldMetadata: i.Metadata(),
+		jsonFieldReplicas: replicas,
 	}
 
 	if checksum != nil {
-		m["checksum"] = *checksum
+		m[jsonFieldChecksum] = *checksum
 	}
 
 	return m
