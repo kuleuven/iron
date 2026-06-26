@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -66,6 +67,11 @@ type TablePrinter struct {
 	hasMeta            bool
 	hasCollectionSizes bool
 	hasReplicas        bool
+
+	// inlineSubtableHeader is true when exactly one subtable is requested, in
+	// which case its column headers are appended to the main header row instead
+	// of being repeated as a section header above each record's subtable.
+	inlineSubtableHeader bool
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas bool) {
@@ -73,12 +79,46 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas b
 	tp.hasMeta = hasMeta
 	tp.hasCollectionSizes = hasCollectionSizes
 	tp.hasReplicas = hasReplicas
+	tp.inlineSubtableHeader = countTrue(hasACL, hasMeta, hasReplicas) == 1
 
-	fmt.Fprintf(tp.Writer, "%s%s\t%s\t%s\t%s\t%s\t%s\n%s",
-		Bold,
+	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s",
 		colCreator, colSize, colDate, colStatus, colChecksum, colName,
-		Reset,
 	)
+
+	if tp.inlineSubtableHeader {
+		header += "\t" + tp.subtableHeader()
+	}
+
+	fmt.Fprintf(tp.Writer, "%s%s\n%s", Bold, header, Reset)
+}
+
+// countTrue returns the number of true values among the given booleans.
+func countTrue(bs ...bool) int {
+	n := 0
+
+	for _, b := range bs {
+		if b {
+			n++
+		}
+	}
+
+	return n
+}
+
+// subtableHeader returns the section label followed by the column headers of the
+// single active subtable, joined by tabs. It is only meaningful when exactly
+// one subtable is requested.
+func (tp *TablePrinter) subtableHeader() string {
+	switch {
+	case tp.hasReplicas:
+		return strings.Join([]string{sectionReplica, colReplicaNum, colReplicaStatus, colReplicaChecksum, colReplicaResource}, "\t")
+	case tp.hasMeta:
+		return strings.Join([]string{sectionMeta, colMetaKey, colMetaValue, colMetaUnits}, "\t")
+	case tp.hasACL:
+		return strings.Join([]string{sectionACL, colACLUser, colACLAccess}, "\t")
+	default:
+		return ""
+	}
 }
 
 func (tp *TablePrinter) Print(name string, i api.Record) {
@@ -142,18 +182,18 @@ func (tp *TablePrinter) printReplicaSubtable(replicas []api.Replica) {
 	}
 
 	// Section label + column headers (cols 6–10).
-	fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\t%s\n",
-		subtableIndent,
-		Bold, sectionReplica, NoBold,
-		colReplicaNum, colReplicaStatus, colReplicaChecksum, colReplicaResource,
-	)
-
-	n := len(replicas)
-
-	for idx, r := range replicas {
-		fmt.Fprintf(tp.Writer, "%s\t%s %d\t%s\t%s\t%s\n",
+	if !tp.inlineSubtableHeader {
+		fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\t%s\n",
 			subtableIndent,
-			bracket(idx, n), r.Number,
+			Bold, sectionReplica, NoBold,
+			colReplicaNum, colReplicaStatus, colReplicaChecksum, colReplicaResource,
+		)
+	}
+
+	for _, r := range replicas {
+		fmt.Fprintf(tp.Writer, "%s\t%d\t%s\t%s\t%s\n",
+			subtableIndent,
+			r.Number,
 			statusIcon(r.Status),
 			parseIrodsChecksum(r.Checksum),
 			r.ResourceHierarchy,
@@ -169,18 +209,18 @@ func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata) {
 	}
 
 	// Section label + column headers (cols 6–9).
-	fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\n",
-		subtableIndent,
-		Bold, sectionMeta, NoBold,
-		colMetaKey, colMetaValue, colMetaUnits,
-	)
-
-	n := len(meta)
-
-	for idx, m := range meta {
-		fmt.Fprintf(tp.Writer, "%s\t%s%s %s%s\t%s\t%s\n",
+	if !tp.inlineSubtableHeader {
+		fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\n",
 			subtableIndent,
-			Yellow, bracket(idx, n), m.Name, NoColor,
+			Bold, sectionMeta, NoBold,
+			colMetaKey, colMetaValue, colMetaUnits,
+		)
+	}
+
+	for _, m := range meta {
+		fmt.Fprintf(tp.Writer, "%s\t%s%s%s\t%s\t%s\n",
+			subtableIndent,
+			Yellow, m.Name, NoColor,
 			m.Value,
 			m.Units,
 		)
@@ -195,20 +235,20 @@ func (tp *TablePrinter) printACLSubtable(acl []api.Access) {
 	}
 
 	// Section label + column headers (cols 6–8).
-	fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\n",
-		subtableIndent,
-		Bold, sectionACL, NoBold,
-		colACLUser, colACLAccess,
-	)
+	if !tp.inlineSubtableHeader {
+		fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\n",
+			subtableIndent,
+			Bold, sectionACL, NoBold,
+			colACLUser, colACLAccess,
+		)
+	}
 
-	n := len(acl)
-
-	for idx, a := range acl {
+	for _, a := range acl {
 		user := tp.formatUser(a.User.Name, a.User.Zone, a.User.Type == rodsGroupType)
 
-		fmt.Fprintf(tp.Writer, "%s\t%s%s %s%s\t%s\n",
+		fmt.Fprintf(tp.Writer, "%s\t%s%s%s\t%s\n",
 			subtableIndent,
-			Cyan, bracket(idx, n), user, NoColor,
+			Cyan, user, NoColor,
 			formatPermission(a.Permission),
 		)
 	}
