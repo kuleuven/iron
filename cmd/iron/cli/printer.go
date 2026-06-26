@@ -150,36 +150,85 @@ func (tp *TablePrinter) Print(name string, i api.Record) {
 		color = Green
 	}
 
-	fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s\t%s\t%s%s%s\n",
+	mainRowEnd := "\n"
+	if tp.inlineSubtableHeader {
+		// In inline mode the first subtable value row continues on the main row,
+		// so the main row must not be terminated with a newline yet.
+		mainRowEnd = ""
+	}
+
+	fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s\t%s\t%s%s%s%s",
 		owner,
 		tp.formatSize(i),
 		t,
 		status,
 		checksum,
 		color+Bold, name, NoColor+NoBold,
+		mainRowEnd,
 	)
+
+	tp.printSubtables(i)
+}
+
+// printSubtables renders the requested subtables beneath an item's main row.
+//
+// In inline mode (a single subtable) the first value row continues the main row,
+// which Print therefore leaves unterminated. In multi-subtable mode each subtable
+// is rendered with its own section header and consecutive subtables are separated
+// by a blank line.
+func (tp *TablePrinter) printSubtables(i api.Record) {
+	first := true
 
 	if tp.hasReplicas {
 		if obj, ok := i.Sys().(*api.DataObject); ok {
-			tp.printReplicaSubtable(obj.Replicas)
+			first = tp.printReplicaSubtable(obj.Replicas, first)
 		}
 	}
 
 	if tp.hasMeta {
-		tp.printMetaSubtable(i.Metadata())
+		first = tp.printMetaSubtable(i.Metadata(), first)
 	}
 
 	if tp.hasACL {
-		tp.printACLSubtable(i.Access())
+		first = tp.printACLSubtable(i.Access(), first)
+	}
+
+	// Inline mode left the main row unterminated; if no subtable produced output
+	// to continue it (e.g. a collection or an empty subtable), terminate it now.
+	if tp.inlineSubtableHeader && first {
+		fmt.Fprintln(tp.Writer)
+	}
+}
+
+// subtableRowLead returns the leading whitespace for the value row at index idx.
+// The first row of the first subtable in inline mode continues the main row (a
+// single tab into the section column); every other row is indented past the six
+// main columns.
+func (tp *TablePrinter) subtableRowLead(idx int, first bool) string {
+	if idx == 0 && first && tp.inlineSubtableHeader {
+		return "\t"
+	}
+
+	return subtableIndent
+}
+
+// subtableSeparator emits a blank line before a subtable when an earlier subtable
+// has already been printed, keeping multiple subtables visually distinct.
+func (tp *TablePrinter) subtableSeparator(first bool) {
+	if !first {
+		fmt.Fprintln(tp.Writer)
 	}
 }
 
 // printReplicaSubtable renders per-replica details beneath a data object's main row.
 // Each replica occupies its own row showing replica number, status, checksum and resource.
-func (tp *TablePrinter) printReplicaSubtable(replicas []api.Replica) {
+// It reports whether the subtable is still the first to be printed (true when empty).
+func (tp *TablePrinter) printReplicaSubtable(replicas []api.Replica, first bool) bool {
 	if len(replicas) == 0 {
-		return
+		return first
 	}
+
+	tp.subtableSeparator(first)
 
 	// Section label + column headers (cols 6–10).
 	if !tp.inlineSubtableHeader {
@@ -190,23 +239,28 @@ func (tp *TablePrinter) printReplicaSubtable(replicas []api.Replica) {
 		)
 	}
 
-	for _, r := range replicas {
+	for idx, r := range replicas {
 		fmt.Fprintf(tp.Writer, "%s\t%d\t%s\t%s\t%s\n",
-			subtableIndent,
+			tp.subtableRowLead(idx, first),
 			r.Number,
 			statusIcon(r.Status),
 			parseIrodsChecksum(r.Checksum),
 			r.ResourceHierarchy,
 		)
 	}
+
+	return false
 }
 
 // printMetaSubtable renders metadata attributes beneath an item's main row.
 // Each attribute occupies its own row showing name, value and units.
-func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata) {
+// It reports whether the subtable is still the first to be printed (true when empty).
+func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata, first bool) bool {
 	if len(meta) == 0 {
-		return
+		return first
 	}
+
+	tp.subtableSeparator(first)
 
 	// Section label + column headers (cols 6–9).
 	if !tp.inlineSubtableHeader {
@@ -217,22 +271,27 @@ func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata) {
 		)
 	}
 
-	for _, m := range meta {
+	for idx, m := range meta {
 		fmt.Fprintf(tp.Writer, "%s\t%s%s%s\t%s\t%s\n",
-			subtableIndent,
+			tp.subtableRowLead(idx, first),
 			Yellow, m.Name, NoColor,
 			m.Value,
 			m.Units,
 		)
 	}
+
+	return false
 }
 
 // printACLSubtable renders access control entries beneath an item's main row.
 // Each entry occupies its own row showing the user (or group) and their permission.
-func (tp *TablePrinter) printACLSubtable(acl []api.Access) {
+// It reports whether the subtable is still the first to be printed (true when empty).
+func (tp *TablePrinter) printACLSubtable(acl []api.Access, first bool) bool {
 	if len(acl) == 0 {
-		return
+		return first
 	}
+
+	tp.subtableSeparator(first)
 
 	// Section label + column headers (cols 6–8).
 	if !tp.inlineSubtableHeader {
@@ -243,15 +302,17 @@ func (tp *TablePrinter) printACLSubtable(acl []api.Access) {
 		)
 	}
 
-	for _, a := range acl {
+	for idx, a := range acl {
 		user := tp.formatUser(a.User.Name, a.User.Zone, a.User.Type == rodsGroupType)
 
 		fmt.Fprintf(tp.Writer, "%s\t%s%s%s\t%s\n",
-			subtableIndent,
+			tp.subtableRowLead(idx, first),
 			Cyan, user, NoColor,
 			formatPermission(a.Permission),
 		)
 	}
+
+	return false
 }
 
 func (tp *TablePrinter) formatSize(i api.Record) string {
