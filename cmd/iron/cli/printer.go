@@ -46,9 +46,12 @@ const (
 // rodsGroupType is the iRODS user type for groups.
 const rodsGroupType = "rodsgroup"
 
-// subtableIndent skips the six main row columns (CREATOR through NAME) so that
-// subtable content appears to the right of the name column.
-const subtableIndent = "\t\t\t\t\t\t"
+// mainColumns is the number of main row columns (CREATOR through NAME). When
+// replicas are shown the redundant STATUS and CHECKSUM columns are omitted.
+const (
+	mainColumns            = 6
+	mainColumnsWithReplica = 4
+)
 
 type Printer interface {
 	Setup(hasACL, hasMeta, hasCollectionSize, hasReplicas bool)
@@ -72,6 +75,11 @@ type TablePrinter struct {
 	// which case its column headers are appended to the main header row instead
 	// of being repeated as a section header above each record's subtable.
 	inlineSubtableHeader bool
+
+	// subtableIndent skips the main row columns so that subtable content aligns
+	// to the right of the name column. Its width depends on whether the STATUS
+	// and CHECKSUM columns are present.
+	subtableIndent string
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas bool) {
@@ -80,16 +88,36 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas b
 	tp.hasCollectionSizes = hasCollectionSizes
 	tp.hasReplicas = hasReplicas
 	tp.inlineSubtableHeader = countTrue(hasACL, hasMeta, hasReplicas) == 1
+	tp.subtableIndent = strings.Repeat("\t", tp.mainColumnCount())
 
-	header := fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s",
-		colCreator, colSize, colDate, colStatus, colChecksum, colName,
-	)
+	header := tp.mainHeader()
 
 	if tp.inlineSubtableHeader {
 		header += "\t" + tp.subtableHeader()
 	}
 
 	fmt.Fprintf(tp.Writer, "%s%s\n%s", Bold, header, Reset)
+}
+
+// mainColumnCount returns the number of main row columns, which is reduced when
+// replicas are shown because the per-replica subtable already carries the STATUS
+// and CHECKSUM values.
+func (tp *TablePrinter) mainColumnCount() int {
+	if tp.hasReplicas {
+		return mainColumnsWithReplica
+	}
+
+	return mainColumns
+}
+
+// mainHeader returns the tab-separated main row column headers, omitting STATUS
+// and CHECKSUM when replicas are shown.
+func (tp *TablePrinter) mainHeader() string {
+	if tp.hasReplicas {
+		return strings.Join([]string{colCreator, colSize, colDate, colName}, "\t")
+	}
+
+	return strings.Join([]string{colCreator, colSize, colDate, colStatus, colChecksum, colName}, "\t")
 }
 
 // countTrue returns the number of true values among the given booleans.
@@ -111,7 +139,7 @@ func countTrue(bs ...bool) int {
 func (tp *TablePrinter) subtableHeader() string {
 	switch {
 	case tp.hasReplicas:
-		return strings.Join([]string{sectionReplica, colReplicaNum, colReplicaStatus, colReplicaChecksum, colReplicaResource}, "\t")
+		return strings.Join([]string{sectionReplica, colReplicaNum + " " + colReplicaStatus, colReplicaChecksum, colReplicaResource}, "\t")
 	case tp.hasMeta:
 		return strings.Join([]string{sectionMeta, colMetaKey, colMetaValue, colMetaUnits}, "\t")
 	case tp.hasACL:
@@ -157,15 +185,28 @@ func (tp *TablePrinter) Print(name string, i api.Record) {
 		mainRowEnd = ""
 	}
 
-	fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s\t%s\t%s%s%s%s",
-		owner,
-		tp.formatSize(i),
-		t,
-		status,
-		checksum,
-		color+Bold, name, NoColor+NoBold,
-		mainRowEnd,
-	)
+	nameCell := color + Bold + name + NoColor + NoBold
+
+	if tp.hasReplicas {
+		// STATUS and CHECKSUM are shown per replica in the subtable below.
+		fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s%s",
+			owner,
+			tp.formatSize(i),
+			t,
+			nameCell,
+			mainRowEnd,
+		)
+	} else {
+		fmt.Fprintf(tp.Writer, "%s\t%s\t%s\t%s\t%s\t%s%s",
+			owner,
+			tp.formatSize(i),
+			t,
+			status,
+			checksum,
+			nameCell,
+			mainRowEnd,
+		)
+	}
 
 	tp.printSubtables(i)
 }
@@ -209,7 +250,7 @@ func (tp *TablePrinter) subtableRowLead(idx int, first bool) string {
 		return "\t"
 	}
 
-	return subtableIndent
+	return tp.subtableIndent
 }
 
 // subtableSeparator emits a blank line before a subtable when an earlier subtable
@@ -233,17 +274,16 @@ func (tp *TablePrinter) printReplicaSubtable(replicas []api.Replica, first bool)
 	// Section label + column headers (cols 6–10).
 	if !tp.inlineSubtableHeader {
 		fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\t%s\n",
-			subtableIndent,
+			tp.subtableIndent,
 			Bold, sectionReplica, NoBold,
-			colReplicaNum, colReplicaStatus, colReplicaChecksum, colReplicaResource,
+			colReplicaNum+" "+colReplicaStatus, colReplicaChecksum, colReplicaResource,
 		)
 	}
 
 	for idx, r := range replicas {
 		fmt.Fprintf(tp.Writer, "%s\t%d\t%s\t%s\t%s\n",
 			tp.subtableRowLead(idx, first),
-			r.Number,
-			statusIcon(r.Status),
+			fmt.Sprintf("%d %s", r.Number, statusIcon(r.Status)),
 			parseIrodsChecksum(r.Checksum),
 			r.ResourceHierarchy,
 		)
@@ -265,7 +305,7 @@ func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata, first bool) bool 
 	// Section label + column headers (cols 6–9).
 	if !tp.inlineSubtableHeader {
 		fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\t%s\n",
-			subtableIndent,
+			tp.subtableIndent,
 			Bold, sectionMeta, NoBold,
 			colMetaKey, colMetaValue, colMetaUnits,
 		)
@@ -296,7 +336,7 @@ func (tp *TablePrinter) printACLSubtable(acl []api.Access, first bool) bool {
 	// Section label + column headers (cols 6–8).
 	if !tp.inlineSubtableHeader {
 		fmt.Fprintf(tp.Writer, "%s%s%s%s\t%s\t%s\n",
-			subtableIndent,
+			tp.subtableIndent,
 			Bold, sectionACL, NoBold,
 			colACLUser, colACLAccess,
 		)
