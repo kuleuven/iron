@@ -1160,6 +1160,8 @@ func (a *App) list() *cobra.Command {
 				return err
 			}
 
+			hideColumns = hideReplicaColumns(hideColumns, listReplica)
+
 			var printer Printer = &TablePrinter{
 				Writer: &tabwriter.TabWriter{
 					Writer:      cmd.OutOrStdout(),
@@ -1260,6 +1262,31 @@ func hiddenColumns(columns, defaultColumns []string, available ...string) ([]int
 	}
 
 	return hidden, nil
+}
+
+// statusColumnIndex and checksumColumnIndex are the positions of the STATUS and
+// CHECKSUM columns in the standard "creator,size,date,status,checksum,name"
+// column list. When replicas are shown these values move into the per-replica
+// subtable, so the corresponding main columns are hidden.
+const (
+	statusColumnIndex   = 3
+	checksumColumnIndex = 4
+)
+
+// hideReplicaColumns hides the STATUS and CHECKSUM main columns when replicas
+// are listed, since those values are then shown per replica in the subtable.
+func hideReplicaColumns(hidden []int, listReplica bool) []int {
+	if !listReplica {
+		return hidden
+	}
+
+	for _, idx := range []int{statusColumnIndex, checksumColumnIndex} {
+		if !slices.Contains(hidden, idx) {
+			hidden = append(hidden, idx)
+		}
+	}
+
+	return hidden
 }
 
 func hiddenColumnsSelection(columns, defaultColumns []string) []string {
@@ -1409,6 +1436,8 @@ func (a *App) find() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			hideColumns = hideReplicaColumns(hideColumns, listReplica)
 
 			var printer Printer = &TablePrinter{
 				Writer: &tabwriter.TabWriter{
