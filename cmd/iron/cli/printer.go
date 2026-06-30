@@ -74,6 +74,10 @@ type TablePrinter struct {
 	// which case its column headers are appended to the main header row instead
 	// of being repeated as a section header above each record's subtable.
 	inlineSubtableHeader bool
+
+	// firstRecord tracks whether any record has been printed yet, used to emit
+	// an inter-object separator when subtables are active.
+	firstRecord bool
 }
 
 func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas bool) {
@@ -82,6 +86,7 @@ func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas b
 	tp.hasCollectionSizes = hasCollectionSizes
 	tp.hasReplicas = hasReplicas
 	tp.inlineSubtableHeader = countTrue(hasACL, hasMeta, hasReplicas) == 1
+	tp.firstRecord = true
 
 	header := strings.Join([]string{colCreator, colSize, colDate, colStatus, colChecksum, colName}, "\t")
 
@@ -122,6 +127,14 @@ func (tp *TablePrinter) subtableHeader() string {
 }
 
 func (tp *TablePrinter) Print(name string, i api.Record) {
+	// Emit a blank line between objects when multiple subtables are active so
+	// that multi-row records don't visually merge into one another.
+	if !tp.firstRecord && countTrue(tp.hasACL, tp.hasMeta, tp.hasReplicas) > 1 {
+		fmt.Fprintln(tp.Writer)
+	}
+
+	tp.firstRecord = false
+
 	t := i.ModTime().Format("Jan 02  2006")
 
 	if i.ModTime().Year() == time.Now().Year() {
