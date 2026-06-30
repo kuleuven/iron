@@ -29,6 +29,8 @@ Note that the released windows binaries are not signed. Signed binaries are avai
 
 ## CLI usage
 
+![screencast](screencast.gif)
+
 The CLI expects a `~.irods/irods_environment.json` file being present, with native or pam_password authentication. The password should either be given in this file under the `pam_password` key, or the irods authentication file `.irods/.irodsA` must be present.
 
 ```shell
