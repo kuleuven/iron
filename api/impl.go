@@ -556,7 +556,12 @@ func (api *API) CopyMetadata(ctx context.Context, oldName string, oldItemType Ob
 
 	api.setFlags(&request.KeyVals)
 
-	return api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+	err := api.Request(ctx, msg.MOD_AVU_METADATA_AN, request, &msg.EmptyResponse{})
+	if code, ok := ErrorCode(err); ok && code == msg.CAT_SUCCESS_BUT_WITH_NO_INFO {
+		return nil
+	}
+
+	return err
 }
 
 // ModifyMetadata does a bulk update of metadata, removing and adding the given values.
