@@ -4,7 +4,6 @@ The `iron` utility is both a golang library and a command line client, that prov
 
 [![Quality Gate Status](https://sonarqube.icts.kuleuven.be/api/project_badges/measure?project=coz%3Airon%3Amain&metric=alert_status&token=sqb_f14f2e85edf4f52db70a1b133fb98a805ebe8372)](https://sonarqube.icts.kuleuven.be/dashboard?id=coz%3Airon%3Amain)
 
-
 ## CLI Installation
 
 > This documentation page contains all technical information about the library and contains only generic installation instructions.
@@ -15,8 +14,8 @@ The CLI binary can be downloaded directly from <https://github.com/kuleuven/iron
 
 ```bash
 VERSION=$(curl -Ls -w %{url_effective} -o /dev/null https://github.com/kuleuven/iron/releases/latest | sed 's/.*\/v//')
-mkdir -p .local/bin/
-curl -L -s "https://github.com/kuleuven/iron/releases/download/v${VERSION}/iron_${VERSION}_linux_amd64.tar.gz" | tar zxvf - -C .local/bin/
+mkdir -p ~/.local/bin/
+curl -L -s "https://github.com/kuleuven/iron/releases/download/v${VERSION}/iron_${VERSION}_linux_amd64.tar.gz" | tar zxvf - -C ~/.local/bin/
 ```
 
 Alternatively, it can be installed with `go install`:
@@ -25,7 +24,7 @@ Alternatively, it can be installed with `go install`:
 go install github.com/kuleuven/iron/cmd/iron@latest
 ```
 
-Note that the released windows binaries are not signed. Signed binaries are available at the KU Leuven RDM documentation pages.
+Note that the released windows binaries are not signed. Windows users may alternatively use an installer for a signed `iron.exe` binary that we publish on <https://icts-p-coz-iron-releases.cloud.icts.kuleuven.be/iron/>. Linux users can find deb and rpm packages at the same location.
 
 ## CLI usage
 
@@ -97,12 +96,9 @@ peter.txt
 
 ## GUI
 
-A Fyne-based desktop GUI is available as a separate project
-<https://github.com/kuleuven/iron-gui>. It reuses the same
-`~/.irods/irods_environment.json`, `.irodsA` and `.irodsA.json` files
-as the CLI, supports `pam_interactive` authentication (browser launch
-+ dialog input), and lets you browse collections, transfer files
-edit metadata/permissions, and compute checksums.
+A Fyne-based desktop GUI is available as a separate project <https://github.com/kuleuven/iron-gui>. It reuses the same `~/.irods/irods_environment.json`, `.irodsA` and `.irodsA.json` files as the CLI, supports `pam_interactive` authentication from a login form, and lets you browse collections, transfer files edit metadata/permissions, and compute checksums.
+
+The GUI project should be considered as a Proof of Concept only at this time. For that reason, the source code is currently private, but binary releases are available at <https://icts-p-coz-iron-releases.cloud.icts.kuleuven.be/iron/>.
 
 ## Library usage
 
@@ -163,16 +159,10 @@ func example() error {
 
 ## Implementation choices
 
-* The client currently requires 4.3.2 or later. It is relatively easy to extend support to 4.2.9 - 4.3.1, if the truncate and touch operations are not needed.
+* The client currently requires 4.3.2 or later. We currently use it against 5.0.2 production services. 
 * New features might require a recent version of irods, i.e. support for older versions is not guaranteed.
 * Breaking changes in further versions are avoided as much as possible, but the API might change in the future if it is beneficial.
 * Simplified communication code: types of messages are defined in `msg/types.go`, and are marshaled using the right format (xml, json or binary) by `msg.Marshal`. The binary part (`Bs`) of messages is not marshaled by `msg.Marshal`/`msg.Unmarshal` but directly read or written to the provided buffers in `msg.Read`/`msg.Write`.
 * Clients can choose between `iron.Conn` (one single connection) and `iron.Client` (a pool of connections) to use the provided API.
 * The `Truncate` and `Touch` methods are only available on open file handles, to help identifying the right replica to adjust. Because irods only supports those operations when the file is closed, the operations are actually done on the replica when the file is closed.
 * This client also attempts to support the native protocol, but this should be considered experimental.
-
-## Known issues
-
-For the `iron` CLI utility, the following issues are known:
-
-* Windows: The `iron shell` command does not resize properly. The window size is now fixed to 80x25.
