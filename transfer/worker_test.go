@@ -686,3 +686,95 @@ func TestClientCopyDir(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerCopyCollectionMetadata(t *testing.T) {
+	testConn := &api.MockConn{}
+
+	testAPI := &api.API{
+		Username: testUser,
+		Zone:     testZone,
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn, nil
+		},
+		DefaultResource: testDemoResc,
+	}
+
+	// With CopyMetadata enabled, copyCollection should create the collection
+	// and copy the AVU metadata (two requests).
+	testConn.AddResponse(msg.EmptyResponse{}) // CreateCollection
+	testConn.AddResponse(msg.EmptyResponse{}) // CopyMetadata
+
+	worker := New(testAPI, testAPI, Options{
+		MaxThreads:   1,
+		CopyMetadata: true,
+	})
+
+	if err := worker.copyCollection(t.Context(), Task{Path: testCopySrc, IrodsPath: testCopyDest}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(testConn.Dialog) != 0 {
+		t.Errorf("expected all dialog to be consumed, %d remaining", len(testConn.Dialog))
+	}
+}
+
+func TestWorkerCopyCollectionWithoutMetadata(t *testing.T) {
+	testConn := &api.MockConn{}
+
+	testAPI := &api.API{
+		Username: testUser,
+		Zone:     testZone,
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn, nil
+		},
+		DefaultResource: testDemoResc,
+	}
+
+	// Without CopyMetadata, copyCollection should only create the collection.
+	testConn.AddResponse(msg.EmptyResponse{}) // CreateCollection
+
+	worker := New(testAPI, testAPI, Options{
+		MaxThreads: 1,
+	})
+
+	if err := worker.copyCollection(t.Context(), Task{Path: testCopySrc, IrodsPath: testCopyDest}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(testConn.Dialog) != 0 {
+		t.Errorf("expected all dialog to be consumed, %d remaining", len(testConn.Dialog))
+	}
+}
+
+func TestWorkerCopyActionMetadata(t *testing.T) {
+	testConn := &api.MockConn{}
+
+	testAPI := &api.API{
+		Username: testUser,
+		Zone:     testZone,
+		Connect: func(context.Context) (api.Conn, error) {
+			return testConn, nil
+		},
+		DefaultResource: testDemoResc,
+	}
+
+	// With CopyMetadata enabled, copyAction should copy the data object and
+	// then copy the AVU metadata (two requests).
+	testConn.AddResponse(msg.EmptyResponse{}) // CopyDataObject
+	testConn.AddResponse(msg.EmptyResponse{}) // CopyMetadata
+
+	worker := New(testAPI, testAPI, Options{
+		MaxThreads:   1,
+		CopyMetadata: true,
+	})
+
+	worker.copyAction(t.Context(), Task{Path: testCopySrc, IrodsPath: testCopyDest, Size: 4})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(testConn.Dialog) != 0 {
+		t.Errorf("expected all dialog to be consumed, %d remaining", len(testConn.Dialog))
+	}
+}

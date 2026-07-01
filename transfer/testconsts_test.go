@@ -18,4 +18,6 @@ const (
 	testFileTxt       = "file.txt"
 	testSha           = "sha2:jMuGXraweIxVs1RAFTHRM8Nbk/mrfSZwERQ3YzMHvy8="
 	testResourceHier  = "resource_hierarchy"
+	testCopySrc       = "/test/src"
+	testCopyDest      = "/test/dest"
 )

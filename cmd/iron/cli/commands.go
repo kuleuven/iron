@@ -544,8 +544,8 @@ in the target collection. Otherwise, a subcollection with the same name will be 
 
 func (a *App) cp() *cobra.Command {
 	var (
-		skip, newer, dryRun bool
-		maxThreads          int
+		skip, newer, dryRun, metadata bool
+		maxThreads                    int
 	)
 
 	examples := []string{
@@ -563,45 +563,70 @@ func (a *App) cp() *cobra.Command {
 		Example:           strings.Join(examples, "\n"),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			src := a.Path(args[0])
-			dest := a.Path(args[1])
-
-			if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
-				dest = a.Path(args[1] + Name(src))
-			}
-
-			obj, err := a.GetRecord(cmd.Context(), src)
-			if err != nil {
-				return err
-			}
-
-			if obj.IsDir() {
-				opts := transfer.Options{
-					MaxQueued:   10000,
-					MaxThreads:  maxThreads,
-					Output:      cmd.OutOrStdout(),
-					SkipTrash:   skip,
-					OnlyIfNewer: newer,
-					DryRun:      dryRun,
-				}
-
-				if !strings.HasSuffix(args[1], "/") {
-					return ErrAmbiguousTarget
-				}
-
-				return a.CopyDir(cmd.Context(), src, dest, opts)
-			}
-
-			return a.CopyDataObject(cmd.Context(), src, dest)
+			return a.runCopy(cmd, args, copyOptions{
+				skip:       skip,
+				newer:      newer,
+				dryRun:     dryRun,
+				metadata:   metadata,
+				maxThreads: maxThreads,
+			})
 		},
 	}
 
 	cmd.Flags().BoolVar(&newer, "newer", false, "Only copy files that are newer than the existing files in the destination")
 	cmd.Flags().BoolVarP(&skip, "delete-skip-trash", "S", false, "Do not move to trash (applies only when copying a collection)")
 	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use (applies only when copying a collection)")
+	cmd.Flags().BoolVarP(&metadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
 	cmd.Flags().BoolVar(&dryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Checksums are still computed and stored.")
 
 	return cmd
+}
+
+// copyOptions holds the flags for the cp command.
+type copyOptions struct {
+	skip, newer, dryRun, metadata bool
+	maxThreads                    int
+}
+
+// runCopy performs the cp command, copying a data object or a collection.
+func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
+	src := a.Path(args[0])
+	dest := a.Path(args[1])
+
+	if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
+		dest = a.Path(args[1] + Name(src))
+	}
+
+	obj, err := a.GetRecord(cmd.Context(), src)
+	if err != nil {
+		return err
+	}
+
+	if obj.IsDir() {
+		if !strings.HasSuffix(args[1], "/") {
+			return ErrAmbiguousTarget
+		}
+
+		return a.CopyDir(cmd.Context(), src, dest, transfer.Options{
+			MaxQueued:    10000,
+			MaxThreads:   o.maxThreads,
+			Output:       cmd.OutOrStdout(),
+			SkipTrash:    o.skip,
+			OnlyIfNewer:  o.newer,
+			DryRun:       o.dryRun,
+			CopyMetadata: o.metadata,
+		})
+	}
+
+	if err := a.CopyDataObject(cmd.Context(), src, dest); err != nil {
+		return err
+	}
+
+	if o.metadata {
+		return a.CopyMetadata(cmd.Context(), src, api.DataObjectType, dest, api.DataObjectType)
+	}
+
+	return nil
 }
 
 func (a *App) create() *cobra.Command {

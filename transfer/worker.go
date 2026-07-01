@@ -47,6 +47,9 @@ type Options struct {
 	// IntegrityChecksums indicates whether checksums should be computed before
 	// and after the transfer to verify the integrity of the transfer (Upload, Download, UploadDir, DownloadDir, CopyDir).
 	IntegrityChecksums bool
+	// CopyMetadata indicates whether AVU metadata should be copied along with
+	// data objects and collections when copying a directory (CopyDir).
+	CopyMetadata bool
 	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
 	DryRun bool
 	// IgnorePatterns indicates patterns to ignore when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
@@ -711,7 +714,7 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
 	// Execute the uploads
-	worker.wg.Go(func() error { //nolint:dupl
+	worker.wg.Go(func() error {
 		for u := range queue {
 			if ctx.Err() != nil {
 				continue
@@ -1458,10 +1461,18 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 		return
 	}
 
+	if worker.options.CopyMetadata && !worker.options.DryRun {
+		if err := worker.IndexPool.CopyMetadata(ctx, remote1, api.CollectionType, remote2, api.CollectionType); err != nil {
+			worker.Error(remote1, remote2, err)
+
+			return
+		}
+	}
+
 	queue := make(chan Task, worker.options.MaxQueued)
 
 	// Execute the uploads
-	worker.wg.Go(func() error { //nolint:dupl
+	worker.wg.Go(func() error {
 		for u := range queue {
 			if ctx.Err() != nil {
 				continue
@@ -1483,7 +1494,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
 			case CreateDirectory:
-				worker.action(u, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
+				worker.action(u, func() error { return worker.copyCollection(ctx, u) })
 			}
 		}
 
@@ -1533,6 +1544,13 @@ func (worker *Worker) copyAction(ctx context.Context, u Task) {
 			return worker.options.ErrorHandler(remote1, remote2, err)
 		}
 
+		// Copy the AVU metadata after copying the data object if requested
+		if worker.options.CopyMetadata {
+			if err := connAPI.CopyMetadata(ctx, remote1, api.DataObjectType, remote2, api.DataObjectType); err != nil {
+				return worker.options.ErrorHandler(remote1, remote2, err)
+			}
+		}
+
 		worker.Progress(Progress{
 			Action:      TransferFile,
 			Label:       ProgressLabel(remote1, remote2),
@@ -1553,6 +1571,20 @@ func (worker *Worker) copyAction(ctx context.Context, u Task) {
 
 		return nil
 	})
+}
+
+// copyCollection creates the target collection and, if requested, copies the
+// AVU metadata of the source collection onto it.
+func (worker *Worker) copyCollection(ctx context.Context, u Task) error {
+	if err := worker.TransferPool.CreateCollection(ctx, u.IrodsPath); err != nil {
+		return err
+	}
+
+	if !worker.options.CopyMetadata {
+		return nil
+	}
+
+	return worker.TransferPool.CopyMetadata(ctx, u.Path, api.CollectionType, u.IrodsPath, api.CollectionType)
 }
 
 // log logs a task without performing it, for dry-run mode.
