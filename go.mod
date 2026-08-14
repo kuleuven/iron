@@ -10,7 +10,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/elk-language/go-prompt v1.4.0
 	github.com/evanphx/json-patch v0.5.2
-	github.com/go-openapi/jsonpointer v0.23.1
+	github.com/go-openapi/jsonpointer v1.0.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hashicorp/go-rootcerts v1.0.2
 	github.com/inconshreveable/mousetrap v1.1.0
