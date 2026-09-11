@@ -36,4 +36,8 @@ const (
 	testWrite          = "write"
 	testRodsAdmin      = "rodsadmin"
 	testPublic         = "public"
+	testExampleHost    = "example.org"
+	testTempZone       = "tempZone"
+	testAlice          = "alice"
+	testRodsUser       = "rodsuser"
 )
