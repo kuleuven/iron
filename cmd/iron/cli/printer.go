@@ -53,7 +53,7 @@ const rodsGroupType = "rodsgroup"
 const subtableIndent = "\t\t\t\t\t\t"
 
 type Printer interface {
-	Setup(hasACL, hasMeta, hasCollectionSize, hasReplicas bool)
+	Setup(hasACL, hasMeta, hasReplicas bool)
 	Print(name string, i api.Record)
 	Flush()
 }
@@ -65,10 +65,9 @@ type TablePrinter struct {
 	}
 	Zone string
 
-	hasACL             bool
-	hasMeta            bool
-	hasCollectionSizes bool
-	hasReplicas        bool
+	hasACL      bool
+	hasMeta     bool
+	hasReplicas bool
 
 	// inlineSubtableHeader is true when exactly one subtable is requested, in
 	// which case its column headers are appended to the main header row instead
@@ -80,10 +79,9 @@ type TablePrinter struct {
 	firstRecord bool
 }
 
-func (tp *TablePrinter) Setup(hasACL, hasMeta, hasCollectionSizes, hasReplicas bool) {
+func (tp *TablePrinter) Setup(hasACL, hasMeta, hasReplicas bool) {
 	tp.hasACL = hasACL
 	tp.hasMeta = hasMeta
-	tp.hasCollectionSizes = hasCollectionSizes
 	tp.hasReplicas = hasReplicas
 	tp.inlineSubtableHeader = countTrue(hasACL, hasMeta, hasReplicas) == 1
 	tp.firstRecord = true
@@ -329,11 +327,24 @@ func (tp *TablePrinter) printACLSubtable(acl []api.Access, first bool) bool {
 }
 
 func (tp *TablePrinter) formatSize(i api.Record) string {
-	if i.IsDir() && !tp.hasCollectionSizes {
-		return ""
+	if i.IsDir() {
+		collection, ok := i.Sys().(*api.Collection)
+		if !ok || !collection.SizeKnown() {
+			return ""
+		}
 	}
 
 	return humanize.Bytes(uint64(i.Size()))
+}
+
+func hasKnownSize(i api.Record) bool {
+	if !i.IsDir() {
+		return true
+	}
+
+	collection, ok := i.Sys().(*api.Collection)
+
+	return ok && collection.SizeKnown()
 }
 
 func statusIcon(status string) string {
@@ -428,7 +439,7 @@ type JSONPrinter struct {
 	hasACL, hasMeta, hasReplicas bool
 }
 
-func (jp *JSONPrinter) Setup(hasACL, hasMeta, _, hasReplicas bool) {
+func (jp *JSONPrinter) Setup(hasACL, hasMeta, hasReplicas bool) {
 	jp.hasACL, jp.hasMeta, jp.hasReplicas = hasACL, hasMeta, hasReplicas
 }
 
@@ -502,13 +513,16 @@ func toMap(name string, i api.Record) map[string]any {
 
 	m := map[string]any{
 		jsonFieldName:     name,
-		jsonFieldSize:     i.Size(),
 		jsonFieldModified: i.ModTime().Format(time.RFC3339),
 		jsonFieldCreator:  creator,
 		jsonFieldID:       id,
 		jsonFieldACL:      i.Access(),
 		jsonFieldMetadata: i.Metadata(),
 		jsonFieldReplicas: replicas,
+	}
+
+	if hasKnownSize(i) {
+		m[jsonFieldSize] = i.Size()
 	}
 
 	if checksum != nil {

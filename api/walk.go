@@ -20,9 +20,8 @@ type Record interface {
 
 type record struct {
 	os.FileInfo
-	metadata       []Metadata
-	access         []Access
-	collectionSize int64
+	metadata []Metadata
+	access   []Access
 }
 
 func (r *record) Metadata() []Metadata {
@@ -34,10 +33,6 @@ func (r *record) Access() []Access {
 }
 
 func (r *record) Size() int64 {
-	if r.IsDir() {
-		return r.collectionSize
-	}
-
 	return r.FileInfo.Size()
 }
 
@@ -85,10 +80,6 @@ const (
 	// Note that this option caches at level N, a list of subcollections of level N + 1,
 	// this might require a significant amount of memory for large collections.
 	BreadthFirst
-
-	// If the option FetchCollectionSize is given, Size() will be populated
-	// for collections.
-	FetchCollectionSize
 )
 
 var ErrSkipNotAllowed = errors.New("skip not allowed")
@@ -675,10 +666,6 @@ func (api *API) GetRecord(ctx context.Context, path string, options ...WalkOptio
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	if slices.Contains(options, FetchCollectionSize) {
-		return r, api.QueryRow(Sum(msg.ICAT_COLUMN_DATA_SIZE)).With(Equal(msg.ICAT_COLUMN_COLL_NAME, path)).Execute(ctx).Scan(&r.collectionSize)
 	}
 
 	return r, nil

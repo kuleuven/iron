@@ -17,7 +17,7 @@ import (
 var responses = []any{
 	msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 6,
+		AttributeCount: 7,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -27,6 +27,7 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 		},
 	},
 	msg.QueryResponse{},

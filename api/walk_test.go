@@ -9,7 +9,7 @@ import (
 var responses = []any{
 	msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 6,
+		AttributeCount: 7,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -19,11 +19,12 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 		},
 	},
 	msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 7,
+		AttributeCount: 8,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -34,6 +35,7 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{"", ""}},
 		},
 	},
 
@@ -85,27 +87,17 @@ var responses = []any{
 			{AttributeIndex: 209, ResultLen: 1, Values: []string{"10000"}},
 		},
 	},
-	msg.QueryResponse{
-		RowCount:       1,
-		AttributeCount: 2,
-		TotalRowCount:  1,
-		ContinueIndex:  0,
-		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 407, ResultLen: 1, Values: []string{"100"}},
-			{AttributeIndex: 500, ResultLen: 1, Values: []string{"1"}},
-		},
-	},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
-	msg.QueryResponse{AttributeCount: 7},
+	msg.QueryResponse{AttributeCount: 8},
 	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{},
 	msg.QueryResponse{AttributeCount: 4},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{AttributeCount: 4},
-	msg.QueryResponse{AttributeCount: 7},
+	msg.QueryResponse{AttributeCount: 8},
 	msg.QueryResponse{AttributeCount: 15},
 	msg.QueryResponse{AttributeCount: 3},
 	msg.QueryResponse{},
@@ -119,7 +111,7 @@ func TestWalk(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, FetchCollectionSize)
+	}, FetchAccess, FetchMetadata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +124,7 @@ func TestWalkL(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, LexographicalOrder, FetchCollectionSize)
+	}, FetchAccess, FetchMetadata, LexographicalOrder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +137,7 @@ func TestWalkLS(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, FetchCollectionSize, LexographicalOrder, NoSkip)
+	}, FetchAccess, FetchMetadata, LexographicalOrder, NoSkip)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +150,7 @@ func TestWalkBF(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return err
-	}, FetchAccess, FetchMetadata, FetchCollectionSize, BreadthFirst)
+	}, FetchAccess, FetchMetadata, BreadthFirst)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +191,7 @@ func TestWalkSkipAll(t *testing.T) {
 
 	err := testAPI.Walk(t.Context(), testTestPath, func(path string, info Record, err error) error {
 		return SkipAll
-	}, FetchAccess, FetchMetadata, FetchCollectionSize)
+	}, FetchAccess, FetchMetadata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +204,7 @@ func TestGetRecord(t *testing.T) {
 		msg.QueryResponse{},
 		msg.QueryResponse{
 			RowCount:       1,
-			AttributeCount: 6,
+			AttributeCount: 7,
 			TotalRowCount:  1,
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
@@ -222,6 +214,7 @@ func TestGetRecord(t *testing.T) {
 				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 				{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+				{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 			},
 		},
 		msg.QueryResponse{},
@@ -238,7 +231,7 @@ func TestGetRecord(t *testing.T) {
 		},
 	})
 
-	_, err := testAPI.GetRecord(t.Context(), "/test/coll", FetchAccess, FetchMetadata, FetchCollectionSize)
+	_, err := testAPI.GetRecord(t.Context(), "/test/coll", FetchAccess, FetchMetadata)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -126,10 +126,9 @@ func TestRecordAccessors(t *testing.T) {
 	acl := []Access{{User: User{Name: "alice"}}}
 
 	dir := &record{
-		FileInfo:       &fakeFileInfo{name: "coll", isDir: true},
-		metadata:       meta,
-		access:         acl,
-		collectionSize: 1234,
+		FileInfo: &fakeFileInfo{name: "coll", isDir: true},
+		metadata: meta,
+		access:   acl,
 	}
 
 	if got := dir.Metadata(); len(got) != 1 || got[0].Name != "k" {
@@ -140,8 +139,8 @@ func TestRecordAccessors(t *testing.T) {
 		t.Errorf("Access() = %v, want %v", got, acl)
 	}
 
-	if dir.Size() != 1234 {
-		t.Errorf("dir Size() = %d, want 1234", dir.Size())
+	if dir.Size() != 0 {
+		t.Errorf("dir Size() = %d, want 0", dir.Size())
 	}
 
 	if dir.Type() != CollectionType {
@@ -149,12 +148,11 @@ func TestRecordAccessors(t *testing.T) {
 	}
 
 	file := &record{
-		FileInfo:       &fakeFileInfo{name: "obj", size: 500, isDir: false},
-		collectionSize: 9999,
+		FileInfo: &fakeFileInfo{name: "obj", size: 500, isDir: false},
 	}
 
 	if file.Size() != 500 {
-		t.Errorf("file Size() = %d, want 500 (collectionSize must be ignored)", file.Size())
+		t.Errorf("file Size() = %d, want 500", file.Size())
 	}
 
 	if file.Type() != DataObjectType {

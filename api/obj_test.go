@@ -13,7 +13,7 @@ func TestGetCollection(t *testing.T) {
 
 	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 6,
+		AttributeCount: 7,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -23,6 +23,7 @@ func TestGetCollection(t *testing.T) {
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{`{"data_size":42}`}},
 		},
 	})
 
@@ -39,8 +40,8 @@ func TestGetCollection(t *testing.T) {
 		t.Errorf("object name should be %s, but is %s", testCollName, obj.Name())
 	}
 
-	if obj.Size() != 0 {
-		t.Errorf("object size should be %d, but is %d", 0, obj.Size())
+	if obj.Size() != 42 {
+		t.Errorf("object size should be %d, but is %d", 42, obj.Size())
 	}
 
 	if obj.Identifier() != 1 {
@@ -239,7 +240,7 @@ func TestListSubCollections(t *testing.T) {
 
 	testAPI.AddResponse(msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 7,
+		AttributeCount: 8,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -250,6 +251,7 @@ func TestListSubCollections(t *testing.T) {
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"1"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 		},
 	})
 

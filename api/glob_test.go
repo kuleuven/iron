@@ -11,7 +11,7 @@ import (
 func collectionsResponse(paths ...string) msg.QueryResponse {
 	n := len(paths)
 	if n == 0 {
-		return msg.QueryResponse{AttributeCount: 7}
+		return msg.QueryResponse{AttributeCount: 8}
 	}
 
 	ids := make([]string, n)
@@ -32,7 +32,7 @@ func collectionsResponse(paths ...string) msg.QueryResponse {
 
 	return msg.QueryResponse{
 		RowCount:       n,
-		AttributeCount: 7,
+		AttributeCount: 8,
 		TotalRowCount:  n,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -43,6 +43,7 @@ func collectionsResponse(paths ...string) msg.QueryResponse {
 			{AttributeIndex: 508, ResultLen: 1, Values: ctimes},
 			{AttributeIndex: 509, ResultLen: 1, Values: mtimes},
 			{AttributeIndex: 506, ResultLen: 1, Values: inherits},
+			{AttributeIndex: 513, ResultLen: 1, Values: make([]string, n)},
 		},
 	}
 }
@@ -289,7 +290,7 @@ func TestGlobNoWildcard(t *testing.T) {
 		// GetCollection → match
 		msg.QueryResponse{
 			RowCount:       1,
-			AttributeCount: 6,
+			AttributeCount: 7,
 			TotalRowCount:  1,
 			ContinueIndex:  0,
 			SQLResult: []msg.SQLResult{
@@ -299,6 +300,7 @@ func TestGlobNoWildcard(t *testing.T) {
 				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 509, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
+				{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 			},
 		},
 	})

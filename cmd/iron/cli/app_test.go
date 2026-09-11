@@ -72,7 +72,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 			msg.Read(conn, &msg.QueryRequest{}, nil, msg.XML, "RODS_API_REQ")
 			msg.Write(conn, msg.QueryResponse{
 				RowCount:       1,
-				AttributeCount: 6,
+				AttributeCount: 7,
 				TotalRowCount:  1,
 				ContinueIndex:  0,
 				SQLResult: []msg.SQLResult{
@@ -82,6 +82,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 					{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 					{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 					{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+					{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 				},
 			}, nil, msg.XML, "RODS_API_REPLY", 0)
 
@@ -344,7 +345,7 @@ func TestAutocompleteLocal(t *testing.T) {
 var responses = []any{
 	msg.QueryResponse{
 		RowCount:       1,
-		AttributeCount: 6,
+		AttributeCount: 7,
 		TotalRowCount:  1,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -354,11 +355,12 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
 		},
 	},
 	msg.QueryResponse{
 		RowCount:       2,
-		AttributeCount: 7,
+		AttributeCount: 8,
 		TotalRowCount:  2,
 		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
@@ -369,6 +371,7 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
+			{AttributeIndex: 513, ResultLen: 1, Values: []string{"", ""}},
 		},
 	},
 	msg.QueryResponse{

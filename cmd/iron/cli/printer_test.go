@@ -78,7 +78,7 @@ func TestTablePrinterReplicaColumn(t *testing.T) {
 	var buf bytes.Buffer
 
 	tp := &TablePrinter{Writer: &tabwriter.TabWriter{Writer: &buf}}
-	tp.Setup(false, false, false, true)
+	tp.Setup(false, false, true)
 
 	obj := &api.DataObject{
 		Replicas: []api.Replica{
@@ -107,7 +107,7 @@ func TestTablePrinterNoReplicaColumn(t *testing.T) {
 	var buf bytes.Buffer
 
 	tp := &TablePrinter{Writer: &tabwriter.TabWriter{Writer: &buf}}
-	tp.Setup(false, false, false, false)
+	tp.Setup(false, false, false)
 
 	obj := &api.DataObject{
 		Replicas: []api.Replica{

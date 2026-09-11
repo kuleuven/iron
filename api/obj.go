@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -30,6 +31,7 @@ type Collection struct {
 	CreatedAt   time.Time
 	ModifiedAt  time.Time
 	Inheritance bool
+	dataSize    *int64
 }
 
 func (c *Collection) Identifier() int64 {
@@ -63,7 +65,31 @@ func (c *Collection) Name() string {
 }
 
 func (c *Collection) Size() int64 {
+	if c.dataSize != nil {
+		return *c.dataSize
+	}
+
 	return 0
+}
+
+func (c *Collection) SizeKnown() bool {
+	return c.dataSize != nil
+}
+
+func parseCollectionSize(info2 string) *int64 {
+	var info map[string]json.RawMessage
+
+	if err := json.Unmarshal([]byte(info2), &info); err != nil {
+		return nil
+	}
+
+	var size int64
+
+	if err := json.Unmarshal(info["data_size"], &size); err != nil {
+		return nil
+	}
+
+	return &size
 }
 
 func (c *Collection) Sys() any {
@@ -199,6 +225,8 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 		Path: path,
 	}
 
+	var info2 string
+
 	err := api.QueryRow(
 		msg.ICAT_COLUMN_COLL_ID,
 		msg.ICAT_COLUMN_COLL_OWNER_NAME,
@@ -206,6 +234,7 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
 		msg.ICAT_COLUMN_COLL_INHERITANCE,
+		msg.ICAT_COLUMN_COLL_INFO2,
 	).Where(
 		msg.ICAT_COLUMN_COLL_NAME,
 		fmt.Sprintf(equalTo, path),
@@ -216,10 +245,13 @@ func (api *API) GetCollection(ctx context.Context, path string) (*Collection, er
 		&c.CreatedAt,
 		&c.ModifiedAt,
 		&c.Inheritance,
+		&info2,
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	c.dataSize = parseCollectionSize(info2)
 
 	return &c, nil
 }
@@ -562,12 +594,15 @@ func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([
 		msg.ICAT_COLUMN_COLL_CREATE_TIME,
 		msg.ICAT_COLUMN_COLL_MODIFY_TIME,
 		msg.ICAT_COLUMN_COLL_INHERITANCE,
+		msg.ICAT_COLUMN_COLL_INFO2,
 	).With(conditions...).Execute(ctx)
 
 	defer results.Close()
 
 	for results.Next() {
 		var c Collection
+
+		var info2 string
 
 		if err := results.Scan(
 			&c.ID,
@@ -577,9 +612,12 @@ func (api *API) ListCollections(ctx context.Context, conditions ...Condition) ([
 			&c.CreatedAt,
 			&c.ModifiedAt,
 			&c.Inheritance,
+			&info2,
 		); err != nil {
 			return nil, err
 		}
+
+		c.dataSize = parseCollectionSize(info2)
 
 		out = append(out, c)
 	}
