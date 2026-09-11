@@ -1325,7 +1325,7 @@ func hiddenColumnsSelection(columns, defaultColumns []string) []string {
 	return selection
 }
 
-func (a *App) tree() *cobra.Command { //nolint:funlen
+func (a *App) tree() *cobra.Command {
 	var (
 		jsonFormat bool
 		maxDepth   int
@@ -1383,6 +1383,7 @@ func (a *App) tree() *cobra.Command { //nolint:funlen
 	cmd.Flags().IntVarP(&maxDepth, "max-depth", "d", -1, "Max depth")
 	cmd.Flags().BoolVar(&jsonFormat, "json", false, "Output as JSON (no indentation)")
 	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
+
 	return cmd
 }
 
