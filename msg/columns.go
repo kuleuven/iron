@@ -1,4 +1,4 @@
-//nolint:staticcheck
+//nolint:staticcheck,dupl
 package msg
 
 // ColumnNumber is an ICAT Column number type
@@ -59,7 +59,8 @@ const (
 	ICAT_COLUMN_COLL_COMMENTS    ColumnNumber = 507
 	ICAT_COLUMN_COLL_CREATE_TIME ColumnNumber = 508
 	ICAT_COLUMN_COLL_MODIFY_TIME ColumnNumber = 509
-	ICAT_COLUMN_COLL_INFO2       ColumnNumber = 513
+	ICAT_COLUMN_COLL_INFO1       ColumnNumber = 511
+	ICAT_COLUMN_COLL_INFO2       ColumnNumber = 512
 
 	// Data Object Meta
 	ICAT_COLUMN_META_DATA_ATTR_NAME   ColumnNumber = 600

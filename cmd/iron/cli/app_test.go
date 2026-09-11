@@ -82,7 +82,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 					{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 					{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 					{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
-					{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
+					{AttributeIndex: 512, ResultLen: 1, Values: []string{""}},
 				},
 			}, nil, msg.XML, "RODS_API_REPLY", 0)
 
@@ -355,7 +355,7 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
+			{AttributeIndex: 512, ResultLen: 1, Values: []string{""}},
 		},
 	},
 	msg.QueryResponse{
@@ -371,7 +371,7 @@ var responses = []any{
 			{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 509, ResultLen: 1, Values: []string{"2024", "2025"}},
 			{AttributeIndex: 506, ResultLen: 1, Values: []string{"1", "0"}},
-			{AttributeIndex: 513, ResultLen: 1, Values: []string{"", ""}},
+			{AttributeIndex: 512, ResultLen: 1, Values: []string{"", ""}},
 		},
 	},
 	msg.QueryResponse{

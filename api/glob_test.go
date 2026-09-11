@@ -43,7 +43,7 @@ func collectionsResponse(paths ...string) msg.QueryResponse {
 			{AttributeIndex: 508, ResultLen: 1, Values: ctimes},
 			{AttributeIndex: 509, ResultLen: 1, Values: mtimes},
 			{AttributeIndex: 506, ResultLen: 1, Values: inherits},
-			{AttributeIndex: 513, ResultLen: 1, Values: make([]string, n)},
+			{AttributeIndex: 512, ResultLen: 1, Values: make([]string, n)},
 		},
 	}
 }
@@ -300,7 +300,7 @@ func TestGlobNoWildcard(t *testing.T) {
 				{AttributeIndex: 508, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 509, ResultLen: 1, Values: []string{"10000"}},
 				{AttributeIndex: 506, ResultLen: 1, Values: []string{"0"}},
-				{AttributeIndex: 513, ResultLen: 1, Values: []string{""}},
+				{AttributeIndex: 512, ResultLen: 1, Values: []string{""}},
 			},
 		},
 	})
