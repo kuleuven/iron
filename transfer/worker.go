@@ -30,6 +30,12 @@ type Options struct {
 	DisableUpdateInPlace bool
 	// SkipTrash indicates whether files should be moved to the trash or not
 	SkipTrash bool
+	// RemovePerDirectory indicates that, when removing a directory recursively (RemoveDir),
+	// each collection should be removed with a single recursive server-side operation
+	// (DeleteCollectionAll) instead of removing every data object individually. Data objects
+	// are not removed individually in this mode, since they are removed along with their
+	// parent collection.
+	RemovePerDirectory bool
 	// Sync modification time
 	SyncModTime bool
 	// MaxThreads indicates the maximum threads per transferred file
@@ -79,6 +85,12 @@ type Worker struct {
 	onwait func()
 	closer func() error
 }
+
+// maxPerDirectorySkip limits the number of data objects directly inside a single directory
+// for which removeAll skips an individual RemoveFile task when Options.RemovePerDirectory is
+// set, since the recursive server-side removal of that directory may not scale to an
+// unbounded number of objects. The limit applies per directory, not across the whole tree.
+const maxPerDirectorySkip = 10000
 
 func New(indexPool, transferPool *api.API, options Options) *Worker {
 	var (
@@ -735,6 +747,11 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 			case RemoveDirectory:
 				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
 
+			case RemoveDirectoryAll:
+				worker.action(u, func() error {
+					return worker.TransferPool.DeleteCollectionAll(ctx, u.IrodsPath, worker.options.SkipTrash)
+				})
+
 			case CreateDirectory:
 				worker.action(u, func() error { return worker.TransferPool.CreateCollection(ctx, u.IrodsPath) })
 			}
@@ -828,6 +845,9 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 			case RemoveFile, RemoveDirectory:
 				worker.action(u, func() error { return os.Remove(u.Path) })
 
+			case RemoveDirectoryAll:
+				worker.action(u, func() error { return os.RemoveAll(u.Path) })
+
 			case CreateDirectory:
 				worker.action(u, func() error { return os.Mkdir(u.Path, 0o755) })
 			}
@@ -869,6 +889,10 @@ const (
 	TransferFile
 	RemoveFile
 	RemoveDirectory
+	// RemoveDirectoryAll removes a collection and all its remaining contents (data objects
+	// and subcollections) with a single recursive server-side operation. It is used instead
+	// of RemoveDirectory when Options.RemovePerDirectory is set.
+	RemoveDirectoryAll
 	ComputeChecksum
 	SetModificationTime
 )
@@ -890,7 +914,7 @@ func (a Action) Format(label string) string {
 	case RemoveFile:
 		return fmt.Sprintf("\x1B[31m- %s\x1B[0m", label)
 
-	case RemoveDirectory:
+	case RemoveDirectory, RemoveDirectoryAll:
 		return fmt.Sprintf("\x1B[33m- %s/\x1B[0m", label)
 
 	default:
@@ -1232,21 +1256,44 @@ func (worker *Worker) compareAndTransferObject(ctx context.Context, left, right 
 	return nil
 }
 
+// removeAll recursively queues removal tasks for obj and, if obj is a directory, its
+// descendants. If Options.RemovePerDirectory is set, a directory is removed together with
+// its descendants using a single recursive server-side operation (see RemoveDir), so
+// individual data objects directly inside a directory do not need their own RemoveFile
+// task. Since that recursive operation may not scale to an unbounded number of objects,
+// only the first maxPerDirectorySkip data objects encountered directly inside a given
+// directory are skipped this way; any further data objects in that directory are still
+// queued for individual removal. The count resets for each directory.
 func (worker *Worker) removeAll(ch <-chan *object, obj *object, queue chan<- Task) (*object, bool) {
 	if obj.info.IsDir() {
 		next, ok := <-ch
 
+		skipped := 0
+
 		for ok && strings.HasPrefix(next.irodsPath, obj.irodsPath+"/") {
+			if worker.options.RemovePerDirectory && !next.info.IsDir() && skipped < maxPerDirectorySkip {
+				skipped++
+
+				next, ok = <-ch
+
+				continue
+			}
+
 			next, ok = worker.removeAll(ch, next, queue)
 		}
 
+		action := RemoveDirectory
+		if worker.options.RemovePerDirectory && skipped > 0 {
+			action = RemoveDirectoryAll
+		}
+
 		worker.Progress(Progress{
-			Action: RemoveDirectory,
+			Action: action,
 			Label:  ProgressLabel(obj.path, obj.irodsPath),
 		})
 
 		queue <- Task{
-			Action:    RemoveDirectory,
+			Action:    action,
 			Path:      obj.path,
 			IrodsPath: obj.irodsPath,
 		}
@@ -1343,6 +1390,11 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 
 			case RemoveDirectory:
 				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+
+			case RemoveDirectoryAll:
+				worker.action(u, func() error {
+					return worker.TransferPool.DeleteCollectionAll(ctx, u.IrodsPath, worker.options.SkipTrash)
+				})
 			}
 		}
 
@@ -1492,6 +1544,11 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 
 			case RemoveDirectory:
 				worker.action(u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.IrodsPath, worker.options.SkipTrash) })
+
+			case RemoveDirectoryAll:
+				worker.action(u, func() error {
+					return worker.TransferPool.DeleteCollectionAll(ctx, u.IrodsPath, worker.options.SkipTrash)
+				})
 
 			case CreateDirectory:
 				worker.action(u, func() error { return worker.copyCollection(ctx, u) })

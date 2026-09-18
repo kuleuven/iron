@@ -321,7 +321,7 @@ func (a *App) stat() *cobra.Command {
 }
 
 func (a *App) rm() *cobra.Command {
-	var recursive, skip bool
+	var recursive, skip, perDirectory bool
 
 	cmd := &cobra.Command{
 		Use:               "rm <path>",
@@ -342,10 +342,11 @@ func (a *App) rm() *cobra.Command {
 				}
 
 				opts := transfer.Options{
-					MaxQueued:  10000,
-					MaxThreads: 1,
-					Output:     cmd.OutOrStdout(),
-					SkipTrash:  skip,
+					MaxQueued:          10000,
+					MaxThreads:         1,
+					Output:             cmd.OutOrStdout(),
+					SkipTrash:          skip,
+					RemovePerDirectory: perDirectory,
 				}
 
 				return a.RemoveDir(cmd.Context(), path, opts)
@@ -357,6 +358,7 @@ func (a *App) rm() *cobra.Command {
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Remove files in collection recursively")
 	cmd.Flags().BoolVarP(&skip, "skip-trash", "S", false, "Do not move to trash")
+	cmd.Flags().BoolVar(&perDirectory, "per-directory", false, "Remove each collection and its contents with a single recursive server-side operation instead of removing every data object individually")
 
 	return cmd
 }
