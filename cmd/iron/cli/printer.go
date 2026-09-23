@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -542,4 +543,47 @@ func parseIrodsChecksum(s string) string {
 	}
 
 	return ""
+}
+
+type Reorder struct {
+	Printer
+	Compare func(a, b api.Record) int
+	Entries []struct {
+		Name string
+		api.Record
+	}
+}
+
+func (r *Reorder) Setup(hasACL, hasMeta, hasReplicas bool) {
+	r.Printer.Setup(hasACL, hasMeta, hasReplicas)
+}
+
+func (r *Reorder) Print(name string, i api.Record) {
+	r.Entries = append(r.Entries, struct {
+		Name string
+		api.Record
+	}{
+		Name:   name,
+		Record: i,
+	})
+}
+
+func (r *Reorder) Flush() {
+	slices.SortFunc(r.Entries, func(a, b struct {
+		Name string
+		api.Record
+	},
+	) int {
+		if compare := r.Compare(a.Record, b.Record); compare != 0 {
+			return compare
+		}
+
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	for _, entry := range r.Entries {
+		r.Printer.Print(entry.Name, entry.Record)
+	}
+
+	r.Printer.Flush()
 }

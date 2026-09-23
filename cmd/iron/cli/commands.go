@@ -1160,10 +1160,11 @@ var columnsDisplayDescription = "Columns to display. Available options: creator,
 
 var replicaDescription = "Show replica resource hierarchies"
 
-func (a *App) list() *cobra.Command {
+func (a *App) list() *cobra.Command { //nolint:funlen
 	var (
 		jsonFormat, listACL, listMeta, listReplica bool
 		columns                                    []string
+		orderBySizes, orderByModifiedAt, reversed  bool
 	)
 
 	defaultColumns := []string{"creator", "size", "date", "status", "name"}
@@ -1203,6 +1204,13 @@ func (a *App) list() *cobra.Command {
 				}
 			}
 
+			if orderBySizes || orderByModifiedAt {
+				printer = &Reorder{
+					Printer: printer,
+					Compare: compareFunc(orderBySizes, orderByModifiedAt, reversed),
+				}
+			}
+
 			printer.Setup(listACL, listMeta, listReplica)
 
 			defer printer.Flush()
@@ -1216,6 +1224,9 @@ func (a *App) list() *cobra.Command {
 	cmd.Flags().BoolVarP(&listMeta, "meta", "m", false, "List metadata")
 	cmd.Flags().BoolVar(&listReplica, "replica", false, replicaDescription)
 	cmd.Flags().StringSliceVar(&columns, "columns", defaultColumns, columnsDisplayDescription)
+	cmd.Flags().BoolVarP(&orderBySizes, "order-by-sizes", "S", false, "Order the listing by sizes, largest first")
+	cmd.Flags().BoolVarP(&orderByModifiedAt, "order-by-modification-time", "t", false, "Order the listing by modification time, newest first")
+	cmd.Flags().BoolVarP(&reversed, "reverse-order", "r", false, "Reverse the order of the listing")
 
 	return cmd
 }
@@ -1237,6 +1248,30 @@ func listFunc(dir string, printer Printer) func(path string, record api.Record, 
 		}
 
 		return nil
+	}
+}
+
+func compareFunc(bySize, byModified, largestLast bool) func(a, b api.Record) int {
+	reverse := -1
+
+	if largestLast {
+		reverse = 1
+	}
+
+	return func(a, b api.Record) int {
+		if bySize {
+			if compare := int(a.Size() - b.Size()); compare != 0 {
+				return compare * reverse
+			}
+		}
+
+		if byModified {
+			if compare := a.ModTime().Compare(b.ModTime()); compare != 0 {
+				return compare * reverse
+			}
+		}
+
+		return strings.Compare(a.Name(), b.Name()) * reverse
 	}
 }
 
