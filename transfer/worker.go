@@ -58,8 +58,13 @@ type Options struct {
 	CopyMetadata bool
 	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
 	DryRun bool
+	// FilterPatterns indicates patterns to include when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
+	// The pattern syntax is the same as filepath.Match.
+	// If multiple patterns are specified, a file or directory must match at least one of them to be included.
+	FilterPatterns []string
 	// IgnorePatterns indicates patterns to ignore when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
 	// The pattern syntax is the same as filepath.Match.
+	// IgnorePatterns takes precedence over FilterPatterns. If a file or directory matches an ignore pattern, it will be excluded even if it matches an include pattern.
 	IgnorePatterns []string
 	// Output will, if set, display a progress bar and occurring errors
 	// If ErrorHandler or ProgressHandler is set, this option is ignored
@@ -1172,7 +1177,21 @@ func (worker *Worker) shouldIgnore(obj *object) bool {
 		}
 	}
 
-	return false
+	// If no filter patterns are specified, do not filter any files
+	if len(worker.options.FilterPatterns) == 0 {
+		return false
+	}
+
+	// Filter files based on filter globs
+	for _, pattern := range worker.options.FilterPatterns {
+		if matched, matchErr := filepath.Match(pattern, obj.info.Name()); matchErr != nil {
+			continue
+		} else if matched {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (worker *Worker) compareAndTransferObject(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
