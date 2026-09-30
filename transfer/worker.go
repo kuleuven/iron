@@ -59,11 +59,11 @@ type Options struct {
 	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
 	DryRun bool
 	// FilterPatterns indicates patterns to include when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
-	// The pattern syntax is the same as filepath.Match.
-	// If multiple patterns are specified, a file or directory must match at least one of them to be included.
+	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file, directories are always included.
+	// If multiple patterns are specified, a file must match at least one of them to be included.
 	FilterPatterns []string
 	// IgnorePatterns indicates patterns to ignore when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir).
-	// The pattern syntax is the same as filepath.Match.
+	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file or directory.
 	// IgnorePatterns takes precedence over FilterPatterns. If a file or directory matches an ignore pattern, it will be excluded even if it matches an include pattern.
 	IgnorePatterns []string
 	// Output will, if set, display a progress bar and occurring errors
@@ -1175,6 +1175,11 @@ func (worker *Worker) shouldIgnore(obj *object) bool {
 		} else if matched {
 			return true
 		}
+	}
+
+	// FilterPatterns never applies to directories.
+	if obj.info.IsDir() {
+		return false
 	}
 
 	// If no filter patterns are specified, do not filter any files

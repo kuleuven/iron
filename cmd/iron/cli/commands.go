@@ -827,8 +827,8 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to upload")
 	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after uploading files, and verify equality to ensure transfer integrity")
 	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Server side checksums are still computed and stored, even if this flag is used.")
-	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames only, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
-	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when uploading a directory. The pattern is applied to filenames only, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
+	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames of regular files, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
+	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when uploading a directory. The pattern is applied to filenames of files or directories, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
 	cmd.Flags().BoolVar(&opts.SyncModTime, "sync-modtime", true, "Use the modification time of the destination file to match the source file. Disable with --sync-modtime=false.")
 
 	return cmd
@@ -916,8 +916,8 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to download")
 	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after downloading files, and verify equality to ensure transfer integrity")
 	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Server side checksums are still computed and stored, even if this flag is used.")
-	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames only, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
-	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when downloading a directory. The pattern is applied to filenames only, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
+	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames of regular files, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
+	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when downloading a directory. The pattern is applied to filenames of files or directories, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
 	cmd.Flags().BoolVar(&opts.SyncModTime, "sync-modtime", true, "Use the modification time of the destination file to match the source file. Disable with --sync-modtime=false.")
 
 	return cmd
