@@ -1182,13 +1182,17 @@ func (worker *Worker) shouldIgnore(obj *object) bool {
 		return false
 	}
 
-	// If no filter patterns are specified, do not filter any files
-	if len(worker.options.FilterPatterns) == 0 {
-		return false
-	}
+	var hasFilterPatterns bool
 
 	// Filter files based on filter globs
+	// But skip empty patterns
 	for _, pattern := range worker.options.FilterPatterns {
+		if pattern == "" {
+			continue
+		}
+
+		hasFilterPatterns = true
+
 		if matched, matchErr := filepath.Match(pattern, obj.info.Name()); matchErr != nil {
 			continue
 		} else if matched {
@@ -1196,7 +1200,8 @@ func (worker *Worker) shouldIgnore(obj *object) bool {
 		}
 	}
 
-	return true
+	// If no filter patterns are specified, do not filter any files
+	return hasFilterPatterns
 }
 
 func (worker *Worker) compareAndTransferObject(ctx context.Context, left, right *object, queue chan<- Task, opts mergeOptions) error { //nolint:funlen
