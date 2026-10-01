@@ -696,7 +696,7 @@ func (a *App) touch() *cobra.Command {
 	}
 
 	cmd.Flags().TimeVarP(&t, "time", "t", time.Now().Truncate(time.Second), formats, "Time to set as modification time in RFC3339 format")
-	cmd.Flags().Int64Var(&u, "unix", time.Now().Truncate(time.Second).Unix(), "Unix timestamp")
+	cmd.Flags().Int64Var(&u, "unix-time", time.Now().Truncate(time.Second).Unix(), "Unix timestamp")
 
 	return cmd
 }
