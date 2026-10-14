@@ -233,7 +233,9 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 
 	// If the authentication scheme was not native, but we tried using a native password that was obtained before,
 	// and it expired, we'll retry with the original authentication scheme.
-	if code, ok := api.ErrorCode(err); ok && code == msg.CAT_PASSWORD_EXPIRED && c.env.AuthScheme != native && env.AuthScheme == native {
+	if code, ok := api.ErrorCode(err); ok &&
+		(code == msg.CAT_PASSWORD_EXPIRED || code == msg.CAT_INVALID_AUTHENTICATION) &&
+		c.env.AuthScheme != native && env.AuthScheme == native {
 		// Retry with the original authentication scheme
 		env.AuthScheme = c.env.AuthScheme
 		env.Password = ""
