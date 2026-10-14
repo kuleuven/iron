@@ -44,6 +44,7 @@ func main() {
 	app := cli.New(
 		ctx,
 		cli.WithVersion(version),
+		cli.WithEnvironmentFlag(),
 		cli.WithLoader(cli.FileLoader(config)),
 		cli.WithConfigurator(cli.ConfigurationTemplate(config, iron.Env{
 			AuthScheme:      "pam_interactive",

@@ -128,6 +128,7 @@ func TestWhoamiRows(t *testing.T) {
 
 	app.Client = client
 	app.Workdir = "/remote/workdir"
+	app.Environment = defaultEnvironment
 
 	createdAt := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 	rows := app.whoamiRows(&api.User{
@@ -139,6 +140,7 @@ func TestWhoamiRows(t *testing.T) {
 	}, []string{"public", "research"}, "/local/workdir")
 
 	want := [][2]string{
+		{"Environment", defaultEnvironment},
 		{"User", testAlice},
 		{"Zone", testTempZone},
 		{"ID", "42"},

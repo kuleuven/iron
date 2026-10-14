@@ -82,6 +82,7 @@ func (a *App) whoamiRows(user *api.User, groups []string, localWorkdir string) [
 	env := a.Client.Env()
 
 	rows := [][2]string{
+		{"Environment", a.Environment},
 		{"User", user.Name},
 		{"Zone", user.Zone},
 		{"ID", strconv.FormatInt(user.ID, 10)},
@@ -167,28 +168,37 @@ func (a *App) userGroups(ctx context.Context) ([]string, error) {
 	return groups, nil
 }
 
+func NArgs(allowed ...int) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		if slices.Contains(allowed, len(args)) {
+			return nil
+		}
+
+		return fmt.Errorf("accepts %v arg(s), received %d", allowed, len(args))
+	}
+}
+
 func (a *App) auth() *cobra.Command {
-	use := "auth [flags] [zone]"
+	use := "auth [flags] [environment]"
 	args := cobra.MaximumNArgs(1)
 	preRun := a.PreRunAuth
 
 	if a.configurator != nil {
 		use += "\n  " + a.name + " auth [flags] <" + strings.Join(a.configurationArguments, "> <") + ">"
-
-		args = func(cmd *cobra.Command, args []string) error {
-			if len(args) < 2 || len(args) == len(a.configurationArguments) {
-				return nil
-			}
-
-			return fmt.Errorf("accepts 0, 1 or %d arg(s), received %d", len(a.configurationArguments), len(args))
-		}
+		args = NArgs(0, 1, len(a.configurationArguments))
 
 		preRun = func(cmd *cobra.Command, args []string) error {
+			// Update the current environment if the environment argument is given.
+			if len(args) == 1 {
+				a.Environment = args[0]
+			}
+
+			// If not enough arguments are provided for the configurator, fall back to the default PreRunAuth.
 			if len(args) < 2 {
 				return a.PreRunAuth(cmd, args)
 			}
 
-			return a.PreRunAuthConfigStore(cmd, args)
+			return a.PreRunAuthConfigurator(cmd, args)
 		}
 	}
 
@@ -1671,7 +1681,7 @@ func (a *App) cd() *cobra.Command {
 			a.Workdir = target
 
 			if a.persistWorkdir != nil {
-				return a.persistWorkdir(cmd.Context(), a.Workdir)
+				return a.persistWorkdir(cmd.Context(), a.Environment, a.Workdir)
 			}
 
 			return nil

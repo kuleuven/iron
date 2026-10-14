@@ -12,25 +12,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// EnvironmentFunc is a helper function that attempts to detect an iRODS environment
+// label based on the provided command-line arguments and the current working directory.
+// If not set, the environment will always be an empty string.
+// The toComplete parameter represents the argument that is currently being completed by the shell.
+type EnvironmentFunc func(ctx context.Context, cmd *cobra.Command, args []string, toComplete string) (string, error)
+
 // Loader is a function that loads an iRODS environment e.g. from a file.
-// The requested zone will be autodetected from the command, if possible,
-// and can be used by the loader in a multi-zone environments to determine
-// the right connection parameters. If no zone can be detected, an empty string
-// is passed. In this case, the Loader might fall back to a default zone,
-// or return ErrZoneRequired.
-type Loader func(ctx context.Context, zone string) (iron.Env, iron.DialFunc, error)
+// The requested environment label is either based on the -e or --environment flag, or can
+// be autodetected from the command with the EnvironmentFunc. It can be used by the loader
+// in a multi-zone environment to determine the right connection parameters.
+type Loader func(ctx context.Context, environment string) (iron.Env, iron.DialFunc, error)
 
 // Configurator is an optional function that can store an iRODS environment e.g. to a file,
 // based on CLI parameters to generate the configuration. The function must return
 // the configured zone or an error. The returned zone name will subsequentially be
 // passed to the Loader, and using the resulting iRODS environment, a first iRODS
 // connection can be established.
-type Configurator func(ctx context.Context, args []string) (string, error)
+type Configurator func(ctx context.Context, environment string, args []string) error
 
 // WorkdirSaver is a function that can persist a workdir, if wanted,
 // for use in subsequent commands.
 // This should be combined with a corresponding call to the WithDefaultWorkdir function.
-type WorkdirSaver func(ctx context.Context, workdir string) error
+type WorkdirSaver func(ctx context.Context, environment string, workdir string) error
 
 type Option func(*App)
 
@@ -38,6 +42,23 @@ type Option func(*App)
 func WithVersion(version string) Option {
 	return func(a *App) {
 		a.releaseVersion = version
+	}
+}
+
+// WithEnvironmentFlag returns an Option that adds an -e or --environment flag to the CLI command.
+// The flag allows the user to specify the environment label to use.
+func WithEnvironmentFlag() Option {
+	return func(a *App) {
+		a.environmentFlag = true
+	}
+}
+
+// WithEnvironmentFunc sets the EnvironmentFunc for the App, which is used to
+// detect the iRODS environment label based on the command-line arguments and
+// the current working directory.
+func WithEnvironmentFunc(environmentFunc EnvironmentFunc) Option {
+	return func(a *App) {
+		a.environmentFunc = environmentFunc
 	}
 }
 
@@ -62,9 +83,16 @@ var ForceReauthentication ContextKey = "force_reauthentication"
 // DialFunc routes iRODS connections through that SOCKS5 proxy. See
 // WrapLoaderWithSOCKS5 for the accepted proxy URL formats.
 func FileLoader(file string) Loader {
-	loader := func(ctx context.Context, _ string) (iron.Env, iron.DialFunc, error) {
+	loader := func(ctx context.Context, environment string) (iron.Env, iron.DialFunc, error) {
 		var env iron.Env
 
+		// Rewrite the file path based on the environment before loading it.
+		file = RewriteConfigFileForEnvironment(file, environment)
+
+		// Find the runtime configuration file based on the current process ID and its parent processes.
+		file = GetRuntimeConfigFile(file)
+
+		// Load the environment from the runtime configuration file.
 		if err := env.LoadFromFile(file); err != nil {
 			return env, nil, err
 		}
@@ -84,6 +112,38 @@ func FileLoader(file string) Loader {
 	return WrapLoaderWithSOCKS5(loader, socksProxyFromEnv())
 }
 
+// RewriteConfigFileForEnvironment rewrites the given file path for the specified environment.
+// If the environment is the default environment, the original file path is returned.
+// Otherwise, the file path is modified to include the environment as a suffix to the folder name.
+func RewriteConfigFileForEnvironment(file, environment string) string {
+	if environment == defaultEnvironment {
+		return file
+	}
+
+	folder := filepath.Dir(file) + "_" + environment
+
+	return filepath.Join(folder, filepath.Base(file))
+}
+
+// GetRuntimeConfigFile returns the runtime file for the given base file, considering the current process ID and its parent processes.
+func GetRuntimeConfigFile(file string) string {
+	pidFile := fmt.Sprintf("%s.%d", file, os.Getppid())
+
+	if _, err := os.Stat(pidFile); err == nil { //nolint:gosec
+		return pidFile
+	}
+
+	if grandParent, err := findParentOf(os.Getppid()); err == nil {
+		pidFile = fmt.Sprintf("%s.%d", file, grandParent)
+
+		if _, err := os.Stat(pidFile); err == nil { //nolint:gosec
+			return pidFile
+		}
+	}
+
+	return file
+}
+
 // WithConfigurator returns an Option that configures an App with a ConfigureFunc
 // and positional arguments for the store. The ConfigureFunc is used to store
 // the iRODS environment configuration, and the positional arguments are used
@@ -100,7 +160,7 @@ func WithConfigurator(store Configurator, argLabels []string) Option {
 }
 
 func ConfigurationTemplate(file string, template iron.Env) Configurator {
-	return func(ctx context.Context, args []string) (string, error) {
+	return func(ctx context.Context, environment string, args []string) error {
 		env := template
 
 		env.Username = args[0]
@@ -109,13 +169,16 @@ func ConfigurationTemplate(file string, template iron.Env) Configurator {
 
 		env.ApplyDefaults()
 
+		// Rewrite the file path based on the environment before storing the configuration.
+		file = RewriteConfigFileForEnvironment(file, environment)
+
 		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
-			return "", err
+			return err
 		}
 
 		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		defer f.Close()
@@ -124,10 +187,10 @@ func ConfigurationTemplate(file string, template iron.Env) Configurator {
 		if err != nil {
 			defer os.Remove(f.Name())
 
-			return "", err
+			return err
 		}
 
-		return env.Zone, nil
+		return nil
 	}
 }
 
@@ -168,11 +231,9 @@ func WithWorkdirSaver(saver WorkdirSaver) Option {
 // The working directory will also be persisted to the file using the configured WorkdirSaver.
 func WithDefaultWorkdirFromFile(file string) Option {
 	return func(a *App) {
-		if wd, err := GetWorkdirFromFile(file); err == nil {
-			a.Workdir = wd
-		}
+		a.persistWorkdir = func(ctx context.Context, environment, workdir string) error {
+			file = RewriteConfigFileForEnvironment(file, environment)
 
-		a.persistWorkdir = func(ctx context.Context, workdir string) error {
 			return StoreWorkdirInFile(ctx, file, workdir)
 		}
 	}

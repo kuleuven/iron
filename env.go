@@ -36,6 +36,10 @@ type Env struct {
 	// The UID to use for authentication. This is only relevant when using the authentication file.
 	AuthenticationUID *int `json:"irods_authentication_uid,omitempty"`
 
+	// The current working directory for iRODS clients.
+	// This is not used by the iron library, but can be used by the client to determine the initial working directory.
+	WorkingDirectory string `json:"irods_cwd"`
+
 	// For pam authentication, request to generate a password that is valid for the given TTL.
 	// The server will determine the actual TTL based on the server thresholds.
 	// This value is rounded down to the nearest hour. If zero, the timeout will default to 2m1s.

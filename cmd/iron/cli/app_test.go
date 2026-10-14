@@ -51,7 +51,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	for range 3 {
+	for range 2 {
 		go func() {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -124,13 +124,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	cmd.SetArgs([]string{testAuth, "zone1"})
-
-	if err := cmd.ExecuteContext(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-
-	cmd.SetArgs([]string{testAuth, "zone2"})
+	cmd.SetArgs([]string{testAuth, "default"})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -53,28 +52,4 @@ func (a *App) ArgTypes(cmd *cobra.Command) []ArgType {
 	}
 
 	return args
-}
-
-var IrodsArguments = []ArgType{Path, ObjectPath, CollectionPath, TargetPath}
-
-func GetZone(arg string, t ArgType) string {
-	if t == Zone {
-		return arg
-	}
-
-	if !slices.Contains(IrodsArguments, t) {
-		return ""
-	}
-
-	if !strings.HasPrefix(arg, "/") {
-		return ""
-	}
-
-	parts := strings.SplitN(arg, "/", 3)
-
-	if len(parts) < 2 {
-		return ""
-	}
-
-	return parts[1]
 }

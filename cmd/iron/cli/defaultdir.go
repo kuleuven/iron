@@ -10,6 +10,12 @@ func (a *App) setDefaultWorkdir(ctx context.Context) error {
 		return nil
 	}
 
+	if a.Client.Env().WorkingDirectory != "" {
+		a.Workdir = a.Client.Env().WorkingDirectory
+
+		return a.saveWorkdir(ctx)
+	}
+
 	homedir := fmt.Sprintf("/%s/home/%s", a.Client.Env().Zone, a.Client.Env().Username)
 
 	// Check if the homedir exists
@@ -29,7 +35,7 @@ func (a *App) saveWorkdir(ctx context.Context) error {
 	}
 
 	if a.persistWorkdir != nil {
-		return a.persistWorkdir(ctx, a.Workdir)
+		return a.persistWorkdir(ctx, a.Environment, a.Workdir)
 	}
 
 	return nil

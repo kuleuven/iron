@@ -599,7 +599,7 @@ func TestCD(t *testing.T) {
 	app := testApp(t)
 
 	// mock the workdir store
-	app.persistWorkdir = func(_ context.Context, _ string) error {
+	app.persistWorkdir = func(_ context.Context, _, _ string) error {
 		return nil
 	}
 
