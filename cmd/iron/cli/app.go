@@ -28,8 +28,8 @@ func New(_ context.Context, options ...Option) *App {
 	}
 
 	app := &App{
-		name:    "iron",
-		loadEnv: FileLoader(home + "/.irods/irods_environment.json"),
+		name:   "iron",
+		loader: FileLoader(home + "/.irods/irods_environment.json"),
 	}
 
 	for _, option := range options {
@@ -42,13 +42,13 @@ func New(_ context.Context, options ...Option) *App {
 type App struct {
 	*iron.Client
 
-	name            string
-	loadEnv         Loader
-	configStore     ConfigStore
-	configStoreArgs []string
-	passwordStore   PasswordStore
-	workdirStore    WorkdirStore
-	commandHook     func(*cobra.Command, bool)
+	name                   string
+	loader                 Loader
+	configurator           Configurator
+	configurationArguments []string
+	disableAuthentication  bool
+	persistWorkdir         WorkdirSaver
+	commandHook            func(*cobra.Command, bool)
 
 	releaseVersion string
 	updater        *selfupdate.Updater
@@ -74,18 +74,15 @@ type App struct {
 func (a *App) Name() string { return a.name }
 
 // Loader returns the configured environment Loader, or nil if none.
-func (a *App) Loader() Loader { return a.loadEnv }
+func (a *App) Loader() Loader { return a.loader }
 
-// ConfigStore returns the configured ConfigStore, or nil if none.
-func (a *App) ConfigStore() ConfigStore { return a.configStore }
+// Configurator returns the configured Configurator, or nil if none.
+func (a *App) Configurator() Configurator { return a.configurator }
 
-// ConfigStoreArgs returns the positional argument labels expected by the
+// ConfigurationArguments returns the positional argument labels expected by the
 // ConfigStore (e.g. ["user name", "zone name", "host"]). Returns nil if no
 // ConfigStore is configured.
-func (a *App) ConfigStoreArgs() []string { return a.configStoreArgs }
-
-// PasswordStore returns the configured PasswordStore, or nil if none.
-func (a *App) PasswordStore() PasswordStore { return a.passwordStore }
+func (a *App) ConfigurationArguments() []string { return a.configurationArguments }
 
 func (a *App) Command() *cobra.Command {
 	// Root command
@@ -181,11 +178,11 @@ func (a *App) root(shellCommand bool) *cobra.Command { //nolint:funlen
 		a.query(),
 	)
 
-	if a.passwordStore != nil {
+	if !a.disableAuthentication {
 		rootCmd.AddCommand(a.auth())
 	}
 
-	if a.workdirStore != nil || shellCommand {
+	if a.persistWorkdir != nil || shellCommand {
 		rootCmd.AddCommand(a.pwd(), a.cd())
 	}
 
@@ -402,7 +399,7 @@ func (a *App) PreRunAuthConfigStore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	zone, err := a.configStore(cmd.Context(), args)
+	zone, err := a.configurator(cmd.Context(), args)
 	if err != nil {
 		return err
 	}
@@ -438,7 +435,7 @@ func (a *App) PreRunShell(cmd *cobra.Command, args []string) error {
 	a.inShell = true
 
 	err := a.PreRun(cmd, args)
-	if err == nil || a.configStore == nil {
+	if err == nil || a.configurator == nil {
 		return err
 	}
 
@@ -459,34 +456,36 @@ func (a *App) PreRunShell(cmd *cobra.Command, args []string) error {
 // partially-loaded env, when available). On success, App.Client is set
 // and App.Workdir is defaulted if it was empty.
 func (a *App) Init(ctx context.Context, zone string) error {
-	env, dialer, err := a.loadEnv(ctx, zone)
+	env, dialer, err := a.loader(ctx, zone)
 	if err != nil {
 		return InitError{a, env, err}
 	}
 
 	env.GeneratedPasswordTimeout = a.PamTTL
 
-	clientName := a.name
-
-	// Telemetry: send version, except for prereleases
-	if version := a.Version(); version.Prerelease() == "" && version.Metadata() == "" {
-		clientName = fmt.Sprintf("%s-%s", clientName, version.String())
-	}
-
-	authPrompt := a.Prompt
-
-	if authPrompt == nil && a.NonInteractive {
-		authPrompt = iron.Bot{}
-	}
-
-	a.Client, err = iron.New(ctx, env, iron.Option{
-		ClientName:           clientName,
+	options := iron.Option{
+		ClientName:           a.name,
 		Admin:                a.Admin,
 		UseNativeProtocol:    a.Native,
 		MaxConns:             16,
 		DialFunc:             dialer,
-		AuthenticationPrompt: authPrompt,
-	})
+		AuthenticationPrompt: a.Prompt,
+	}
+
+	// Telemetry: send version, except for prereleases
+	if version := a.Version(); version.Prerelease() == "" && version.Metadata() == "" {
+		options.ClientName = fmt.Sprintf("%s-%s", options.ClientName, version.String())
+	}
+
+	if a.Prompt == nil && a.NonInteractive {
+		options.AuthenticationPrompt = iron.Bot{}
+	}
+
+	if force, ok := ctx.Value(ForceReauthentication).(bool); ok && force {
+		options.ForceReauthentication = true
+	}
+
+	a.Client, err = iron.New(ctx, env, options)
 	if err != nil {
 		return InitError{a, env, err}
 	}
@@ -517,11 +516,11 @@ func (e InitError) Error() string {
 		instructions = fmt.Sprintf("\nRun `%sauth` to re-authenticate in zone %s.", appPrefix, e.Env.Zone)
 	}
 
-	if e.App.configStore != nil {
+	if e.App.configurator != nil {
 		if instructions != "" {
-			instructions += fmt.Sprintf("\nOr run `%sauth <%s>` to authenticate to another zone.", appPrefix, strings.Join(e.App.configStoreArgs, "> <"))
+			instructions += fmt.Sprintf("\nOr run `%sauth <%s>` to authenticate to another zone.", appPrefix, strings.Join(e.App.configurationArguments, "> <"))
 		} else {
-			instructions = fmt.Sprintf("\nRun `%sauth <%s>` to authenticate.", appPrefix, strings.Join(e.App.configStoreArgs, "> <"))
+			instructions = fmt.Sprintf("\nRun `%sauth <%s>` to authenticate.", appPrefix, strings.Join(e.App.configurationArguments, "> <"))
 		}
 	}
 

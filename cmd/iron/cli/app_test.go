@@ -107,12 +107,12 @@ func TestNew(t *testing.T) { //nolint:funlen
 
 	defer os.Remove(envfile)
 
-	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword", nil)
+	err = iron.WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), nil, "testPassword")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile), WithPasswordStore(FilePasswordStore(envfile)))
+	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile))
 	app.inTesting = true
 
 	cmd := app.Command()
@@ -182,18 +182,17 @@ func TestNewConfigStore(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	err = WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), "testPassword", nil)
+	err = iron.WriteAuthFile(filepath.Join(filepath.Dir(envfile), ".irodsA"), nil, "testPassword")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	app := New(t.Context(),
-		WithConfigStore(FileStore(envfile, iron.Env{
+		WithConfigurator(ConfigurationTemplate(envfile, iron.Env{
 			Port:                    tcpAddr.Port,
 			ClientServerNegotiation: "no_negotiation",
 		}), []string{"user name", "zone name", "host"}),
 		WithLoader(FileLoader(envfile)),
-		WithPasswordStore(FilePasswordStore(envfile)),
 	)
 	app.inTesting = true
 

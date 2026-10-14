@@ -172,15 +172,15 @@ func (a *App) auth() *cobra.Command {
 	args := cobra.MaximumNArgs(1)
 	preRun := a.PreRunAuth
 
-	if a.configStore != nil {
-		use += "\n  " + a.name + " auth [flags] <" + strings.Join(a.configStoreArgs, "> <") + ">"
+	if a.configurator != nil {
+		use += "\n  " + a.name + " auth [flags] <" + strings.Join(a.configurationArguments, "> <") + ">"
 
 		args = func(cmd *cobra.Command, args []string) error {
-			if len(args) < 2 || len(args) == len(a.configStoreArgs) {
+			if len(args) < 2 || len(args) == len(a.configurationArguments) {
 				return nil
 			}
 
-			return fmt.Errorf("accepts 0, 1 or %d arg(s), received %d", len(a.configStoreArgs), len(args))
+			return fmt.Errorf("accepts 0, 1 or %d arg(s), received %d", len(a.configurationArguments), len(args))
 		}
 
 		preRun = func(cmd *cobra.Command, args []string) error {
@@ -201,18 +201,14 @@ func (a *App) auth() *cobra.Command {
 		SilenceUsage:      true,
 		PersistentPreRunE: preRun,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Authenticate against the iRODS server and immediately close the connection.
+			// The iron client will persist the retrieved authentication details.
 			conn, err := a.Connect(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			password := conn.NativePassword()
-
-			if err = conn.Close(); err != nil {
-				return err
-			}
-
-			return a.passwordStore(cmd.Context(), a.Client.Env(), password)
+			return conn.Close()
 		},
 		PostRunE: func(cmd *cobra.Command, args []string) error {
 			// Pass ForceReauthentication in the context to indicate that the workdir should be reset for all future clients
@@ -1670,8 +1666,8 @@ func (a *App) cd() *cobra.Command {
 
 			a.Workdir = target
 
-			if a.workdirStore != nil {
-				return a.workdirStore(cmd.Context(), a.Workdir)
+			if a.persistWorkdir != nil {
+				return a.persistWorkdir(cmd.Context(), a.Workdir)
 			}
 
 			return nil

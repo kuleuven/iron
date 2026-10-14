@@ -44,12 +44,11 @@ func main() {
 	app := cli.New(
 		ctx,
 		cli.WithVersion(version),
-		cli.WithConfigStore(cli.FileStore(config, iron.Env{
+		cli.WithLoader(cli.FileLoader(config)),
+		cli.WithConfigurator(cli.ConfigurationTemplate(config, iron.Env{
 			AuthScheme:      "pam_interactive",
 			DefaultResource: "default",
 		}), []string{"user name", "zone name", "host"}),
-		cli.WithLoader(cli.FileLoader(config)),
-		cli.WithPasswordStore(cli.FilePasswordStore(config)),
 		cli.WithDefaultWorkdirFromFile(config),
 	)
 

@@ -3,16 +3,12 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
-	"github.com/kuleuven/iron/scramble"
 	"github.com/spf13/cobra"
 )
 
@@ -24,21 +20,17 @@ import (
 // or return ErrZoneRequired.
 type Loader func(ctx context.Context, zone string) (iron.Env, iron.DialFunc, error)
 
-// ConfigStore is a function that can store an iRODS environment e.g. to a file,
+// Configurator is an optional function that can store an iRODS environment e.g. to a file,
 // based on CLI parameters to generate the configuration. The function must return
 // the configured zone or an error. The returned zone name will subsequentially be
 // passed to the Loader, and using the resulting iRODS environment, a first iRODS
-// connection can be established. Lastly, the password will be persisted using
-// the PasswordStore function.
-type ConfigStore func(ctx context.Context, args []string) (string, error)
+// connection can be established.
+type Configurator func(ctx context.Context, args []string) (string, error)
 
-// PasswordStore is a function that can persist an irods password, if wanted,
+// WorkdirSaver is a function that can persist a workdir, if wanted,
 // for use in subsequent commands.
-type PasswordStore func(ctx context.Context, env iron.Env, password string) error
-
-// WorkdirStore is a function that can persist a workdir, if wanted,
-// for use in subsequent commands.
-type WorkdirStore func(ctx context.Context, workdir string) error
+// This should be combined with a corresponding call to the WithDefaultWorkdir function.
+type WorkdirSaver func(ctx context.Context, workdir string) error
 
 type Option func(*App)
 
@@ -53,7 +45,7 @@ func WithVersion(version string) Option {
 // from a file, or other source.
 func WithLoader(loader Loader) Option {
 	return func(a *App) {
-		a.loadEnv = loader
+		a.loader = loader
 	}
 }
 
@@ -77,7 +69,14 @@ func FileLoader(file string) Loader {
 			return env, nil, err
 		}
 
-		ApplyFileAuth(ctx, file, &env)
+		// Allow to override the authentication file location with the IRODS_AUTHENTICATION_FILE environment variable.
+		if f, ok := os.LookupEnv("IRODS_AUTHENTICATION_FILE"); ok {
+			env.PersistentState = &iron.FilePersistentState{
+				AuthenticationFile: f,
+				AuthenticationUID:  env.AuthenticationUID,
+				StateFile:          f + ".json",
+			}
+		}
 
 		return env, iron.DefaultDialFunc, nil
 	}
@@ -85,87 +84,22 @@ func FileLoader(file string) Loader {
 	return WrapLoaderWithSOCKS5(loader, socksProxyFromEnv())
 }
 
-// ApplyFileAuth applies the file-based authentication state to env, mirroring
-// what FileLoader does internally. It tries to read a cached password from the
-// .irodsA file (or the file specified by IRODS_AUTHENTICATION_FILE) next to
-// the irods_environment.json path, switching env.AuthScheme to "native" on
-// success. For pam_interactive it configures a PersistentState backed by the
-// .irodsA.json file in the same directory, so that subsequent runs can
-// re-use the cached PAM token instead of prompting again.
-//
-// This is exported so callers that reload or modify env after the initial
-// Loader call (e.g. an interactive UI that lets the user change AuthScheme)
-// can re-apply the auth file logic against the modified env.
-func ApplyFileAuth(ctx context.Context, file string, env *iron.Env) {
-	if forceReauthentication, ok := ctx.Value(ForceReauthentication).(bool); ok && forceReauthentication {
-		// Force reauthentication
-		env.Password = ""
-		env.PersistentState = nil
-	} else if env.AuthScheme != "native" || env.Password == "" {
-		// Try to read the password from the .irodsA file
-		authFile := filepath.Join(filepath.Dir(file), ".irodsA")
-
-		if f, ok := os.LookupEnv("IRODS_AUTHENTICATION_FILE"); ok {
-			authFile = f
-		}
-
-		if password, err := ReadAuthFile(authFile, env.IrodsAuthenticationUID); err == nil {
-			env.Password = password
-			env.AuthScheme = "native"
-		}
-	}
-
-	if env.AuthScheme == "pam_interactive" && env.PersistentState == nil {
-		env.PersistentState = &persistentState{
-			file: filepath.Join(filepath.Dir(file), ".irodsA.json"),
-		}
-	}
-}
-
-type persistentState struct {
-	file string
-}
-
-func (p *persistentState) Load(m map[string]any) error {
-	f, err := os.Open(p.file)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	defer f.Close()
-
-	return json.NewDecoder(f).Decode(&m)
-}
-
-func (p *persistentState) Save(m map[string]any) error {
-	f, err := os.OpenFile(p.file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(m)
-}
-
-// WithConfigStore returns an Option that configures an App with a ConfigStore
-// and positional arguments for the store. The ConfigStore is used to store
+// WithConfigurator returns an Option that configures an App with a ConfigureFunc
+// and positional arguments for the store. The ConfigureFunc is used to store
 // the iRODS environment configuration, and the positional arguments are used
 // to generate and parse the CLI command. At least 2 arguments are expected.
-func WithConfigStore(store ConfigStore, argLabels []string) Option {
+func WithConfigurator(store Configurator, argLabels []string) Option {
 	return func(a *App) {
 		if len(argLabels) < 2 {
 			panic("argLabels must have at least 2 elements")
 		}
 
-		a.configStore = store
-		a.configStoreArgs = argLabels
+		a.configurator = store
+		a.configurationArguments = argLabels
 	}
 }
 
-func FileStore(file string, template iron.Env) ConfigStore {
+func ConfigurationTemplate(file string, template iron.Env) Configurator {
 	return func(ctx context.Context, args []string) (string, error) {
 		env := template
 
@@ -197,91 +131,6 @@ func FileStore(file string, template iron.Env) ConfigStore {
 	}
 }
 
-// ReadAuthFile reads the contents of a file and decodes it according to the
-// iRODS scramble algorithm. If no uid is given, the uid of the file is used
-// to decode the contents.
-// The file is expected to have been created with the iRODS `iinit` command.
-func ReadAuthFile(authFile string, uid *int) (string, error) {
-	f, err := os.Open(authFile) //nolint:gosec
-	if err != nil {
-		return "", err
-	}
-
-	defer f.Close()
-
-	var descrambleUID int
-
-	if uid == nil {
-		fi, err := f.Stat()
-		if err != nil {
-			return "", err
-		}
-
-		descrambleUID = uidOfFile(fi)
-	} else {
-		descrambleUID = *uid
-	}
-
-	encoded, err := io.ReadAll(f)
-	if err != nil {
-		return "", err
-	}
-
-	return scramble.DecodeIrodsA(encoded, descrambleUID)
-}
-
-// WriteAuthFile writes the given password to a file using the iRODS
-// scramble algorithm. The file is expected to be the .irodsA file
-// used by the iinit command. The file is created if it doesn't exist,
-// and the permissions are set to 0600. If the file is already present,
-// the content is overwritten. The uid of the file owner is used to
-// encode the password.
-func WriteAuthFile(authFile, password string, uid *int) error {
-	f, err := os.OpenFile(authFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-
-	defer f.Close()
-
-	var scrambleUID int
-
-	if uid == nil {
-		fi, err := f.Stat()
-		if err != nil {
-			return err
-		}
-
-		scrambleUID = uidOfFile(fi)
-	} else {
-		scrambleUID = *uid
-	}
-
-	_, err = f.Write(scramble.EncodeIrodsA(password, scrambleUID, time.Now()))
-
-	return err
-}
-
-// WithPasswordStore sets the password store function for the App.
-// This function is used to store the password for the iRODS environment
-// after the user has authenticated with the environment. The password
-// store function is called with the password and the App's context.
-// The password store function is expected to store the password securely
-// and to be able to retrieve the password later.
-func WithPasswordStore(store PasswordStore) Option {
-	return func(a *App) {
-		a.passwordStore = store
-	}
-}
-
-func FilePasswordStore(file string) PasswordStore {
-	return func(_ context.Context, env iron.Env, password string) error {
-		authFile := filepath.Join(filepath.Dir(file), ".irodsA")
-
-		return WriteAuthFile(authFile, password, env.IrodsAuthenticationUID)
-	}
-}
-
 // WithName sets the name of the App. This name is used to generate the
 // name of the command line tool when running the App.
 // The name is used to generate the command line tool help text and to
@@ -305,13 +154,25 @@ func WithDefaultWorkdir(workdir string) Option {
 	}
 }
 
+// WithWorkdirSaver sets the function used to persist the working directory for the App.
+// This option is used to specify a custom function that determines how the working
+// directory is stored. The function should return an error if the saving fails.
+func WithWorkdirSaver(saver WorkdirSaver) Option {
+	return func(a *App) {
+		a.persistWorkdir = saver
+	}
+}
+
+// WithDefaultWorkdirFromFile sets the default working directory for the App based on the contents
+// of a irods configuration file, or a copy of it identified by the process ID (PID).
+// The working directory will also be persisted to the file using the configured WorkdirSaver.
 func WithDefaultWorkdirFromFile(file string) Option {
 	return func(a *App) {
 		if wd, err := GetWorkdirFromFile(file); err == nil {
 			a.Workdir = wd
 		}
 
-		a.workdirStore = func(ctx context.Context, workdir string) error {
+		a.persistWorkdir = func(ctx context.Context, workdir string) error {
 			return StoreWorkdirInFile(ctx, file, workdir)
 		}
 	}
@@ -400,5 +261,12 @@ func WithUpdater(updater *selfupdate.Updater, repo selfupdate.RepositorySlug) Op
 func WithCommandHook(hook func(*cobra.Command, bool)) Option {
 	return func(a *App) {
 		a.commandHook = hook
+	}
+}
+
+// WithoutAuthentication disables the auth command for the App.
+func WithoutAuthentication() Option {
+	return func(a *App) {
+		a.disableAuthentication = true
 	}
 }

@@ -25,4 +25,6 @@ const (
 	testUserLower      = "testuser"
 	testSecret         = "secret"
 	testUsername       = "username"
+	testPermissionDeny = "permission denied"
+	testNewPassword    = "newpassword"
 )

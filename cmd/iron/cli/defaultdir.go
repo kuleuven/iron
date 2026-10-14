@@ -28,8 +28,8 @@ func (a *App) saveWorkdir(ctx context.Context) error {
 		return nil
 	}
 
-	if a.workdirStore != nil {
-		return a.workdirStore(ctx, a.Workdir)
+	if a.persistWorkdir != nil {
+		return a.persistWorkdir(ctx, a.Workdir)
 	}
 
 	return nil

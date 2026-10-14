@@ -95,7 +95,7 @@ func (a *App) completeArgument(ctx context.Context, zone, toComplete string, arg
 	}
 
 	// Load client to complete the argument
-	env, dialer, err := a.loadEnv(ctx, zone)
+	env, dialer, err := a.loader(ctx, zone)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}

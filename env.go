@@ -2,7 +2,9 @@ package iron
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -26,15 +28,21 @@ type Env struct {
 	DefaultResource               string `json:"irods_default_resource"`
 	ProxyUsername                 string `json:"irods_proxy_user"` // Authenticate with proxy credentials
 	ProxyZone                     string `json:"irods_proxy_zone"` // Authenticate with proxy credentials
-	IrodsAuthenticationUID        *int   `json:"irods_authentication_uid,omitempty"`
+
+	// Alternative location for the irods authentication file.
+	// Only used in the env.LoadFromFile and env.LoadPersistentState methods to locate the authentication file.
+	AuthenticationFile string `json:"irods_authentication_file"`
+
+	// The UID to use for authentication. This is only relevant when using the authentication file.
+	AuthenticationUID *int `json:"irods_authentication_uid,omitempty"`
 
 	// For pam authentication, request to generate a password that is valid for the given TTL.
 	// The server will determine the actual TTL based on the server thresholds.
 	// This value is rounded down to the nearest hour. If zero, the timeout will default to 2m1s.
 	GeneratedPasswordTimeout time.Duration `json:"-"`
 
-	// Persistent state for PAM interactive authentication
-	PersistentState PersistentState `json:"-"` // If provided, this will be used for PAM authentication as persistent store
+	// Persistent state for authentication
+	PersistentState PersistentState `json:"-"` // If provided, this will be used as persistent store for authentication information
 
 	// Advanced dial settings
 	SSLServerName    string        `json:"-"` // If provided, this will be used for server verification, instead of the hostname
@@ -42,11 +50,15 @@ type Env struct {
 	HandshakeTimeout time.Duration `json:"-"` // If provided, this will be used for the handshake timeout
 }
 
-// PersistentState refers to the pstate used for PAM interactive authentication
+// PersistentState refers to
+// - the stored native password for pam_password authentication or from iinit
+// - the pstate used for PAM interactive authentication
 // The functions must be thread-safe if multiple clients/connections are used concurrently.
 type PersistentState interface {
-	Load(m map[string]any) error // Load returns the current persistent state into the given map.
-	Save(m map[string]any) error // Save persists the given state. Later calls to Load will reconstruct the same map contents.
+	LoadPassword() (string, error)      // LoadPassword retrieves the stored native password.
+	SavePassword(password string) error // SavePassword persists the stored native password.
+	Load(m map[string]any) error        // Load returns the current persistent state into the given map.
+	Save(m map[string]any) error        // Save persists the given state. Later calls to Load will reconstruct the same map contents.
 }
 
 const (
@@ -88,6 +100,7 @@ var DefaultEnv = Env{
 
 // LoadFromFile reads an environment configuration from a JSON file at the given path,
 // overwriting the fields of the receiver.
+// It will also load the persistent state from the file-based storage if available.
 func (env *Env) LoadFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -96,7 +109,31 @@ func (env *Env) LoadFromFile(path string) error {
 
 	defer f.Close()
 
-	return json.NewDecoder(f).Decode(env)
+	if err := json.NewDecoder(f).Decode(env); err != nil {
+		return err
+	}
+
+	env.LoadPersistentState(filepath.Dir(path))
+
+	return nil
+}
+
+// LoadPersistentState loads the persistent state from the file-based storage if available.
+// It reads the cached password from the file and applies it to the environment.
+func (env *Env) LoadPersistentState(configDir string) {
+	authenticationFile := filepath.Join(configDir, ".irodsA")
+
+	// Allow overriding the default authentication file location if env.AuthenticationFile is set.
+	if env.AuthenticationFile != "" {
+		authenticationFile = env.AuthenticationFile
+	}
+
+	// Initialize the persistent state.
+	env.PersistentState = &FilePersistentState{
+		AuthenticationFile: authenticationFile,
+		AuthenticationUID:  env.AuthenticationUID,
+		StateFile:          authenticationFile + ".json",
+	}
 }
 
 // ApplyDefaults sets default values for the environment fields if they are not already set.
@@ -122,7 +159,19 @@ func (env *Env) ApplyDefaults() {
 	setDefaultValue(&env.HandshakeTimeout, DefaultEnv.HandshakeTimeout)
 
 	if env.PersistentState == nil {
-		env.PersistentState = &discardPersistentState{}
+		env.PersistentState = &DiscardPersistentState{}
+	}
+}
+
+// ApplyPersistentAuth applies the persistent authentication state to env.
+// It tries to read a cached password, switching
+// env.AuthScheme to "native" on success.
+func (env *Env) ApplyPersistentAuth() {
+	if env.AuthScheme != native || env.Password == "" {
+		if password, err := env.PersistentState.LoadPassword(); err == nil {
+			env.Password = password
+			env.AuthScheme = native
+		}
 	}
 }
 
@@ -136,12 +185,80 @@ func setDefaultValue[S comparable](ptr *S, defaultValue S) {
 	}
 }
 
-type discardPersistentState struct{}
+// FilePersistentState represents a persistent state stored in a file.
+// It includes the authentication file, the authentication UID, and the state file.
+type FilePersistentState struct {
+	AuthenticationFile string
+	AuthenticationUID  *int
+	StateFile          string
+}
 
-func (s *discardPersistentState) Load(m map[string]any) error {
+func (p *FilePersistentState) LoadPassword() (string, error) {
+	return ReadAuthFile(p.AuthenticationFile, p.AuthenticationUID)
+}
+
+func (p *FilePersistentState) SavePassword(password string) error {
+	return WriteAuthFile(p.AuthenticationFile, p.AuthenticationUID, password)
+}
+
+func (p *FilePersistentState) Load(m map[string]any) error {
+	f, err := os.Open(p.StateFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	return json.NewDecoder(f).Decode(&m)
+}
+
+func (p *FilePersistentState) Save(m map[string]any) error {
+	f, err := os.OpenFile(p.StateFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	return json.NewEncoder(f).Encode(m)
+}
+
+var ErrNoPersistentPassword = errors.New("no persistent password available")
+
+// DiscardPersistentState represents a persistent state that discards all data.
+// It is used when no persistent storage is desired.
+type DiscardPersistentState struct{}
+
+func (s *DiscardPersistentState) LoadPassword() (string, error) {
+	return "", ErrNoPersistentPassword
+}
+
+func (s *DiscardPersistentState) SavePassword(password string) error {
 	return nil
 }
 
-func (s *discardPersistentState) Save(m map[string]any) error {
+func (s *DiscardPersistentState) Load(m map[string]any) error {
 	return nil
+}
+
+func (s *DiscardPersistentState) Save(m map[string]any) error {
+	return nil
+}
+
+// forceReauthenticationPersistentState is a wrapper around another PersistentState,
+// that discards any loaded or saved data.
+// It is used to force reauthentication by discarding any previously stored credentials,
+// while still saving the new credentials.
+type forceReauthenticationPersistentState struct {
+	PersistentState
+}
+
+func (c *forceReauthenticationPersistentState) Load(m map[string]any) error {
+	return nil
+}
+
+func (c *forceReauthenticationPersistentState) LoadPassword() (string, error) {
+	return "", ErrNoPersistentPassword
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
+	"github.com/sirupsen/logrus"
 )
 
 type Option struct {
@@ -49,6 +50,10 @@ type Option struct {
 	// if the authentication scheme is pam_interactive.
 	AuthenticationPrompt Prompt
 
+	// ForceReauthentication is a flag that indicates whether the client should discard any previously stored credentials
+	// and force reauthentication with the server.
+	ForceReauthentication bool
+
 	// DialFunc is an optional function that overrides the default dial function.
 	DialFunc DialFunc
 
@@ -80,6 +85,13 @@ type Client struct {
 // The options are used to customize the behavior of the client.
 func New(ctx context.Context, env Env, option Option) (*Client, error) {
 	env.ApplyDefaults()
+
+	// Handle force reauthentication by discarding any previously stored credentials.
+	// This ensures that the client will prompt for new credentials when connecting to the server.
+	if option.ForceReauthentication {
+		env.Password = ""
+		env.PersistentState = &forceReauthenticationPersistentState{env.PersistentState}
+	}
 
 	if option.MaxConns <= 0 {
 		option.MaxConns = 1
@@ -124,25 +136,36 @@ func (c *Client) Env() Env {
 	defer c.lock.Unlock()
 
 	// If an EnvCallback is provided, use it to retrieve the environment settings
-	if c.needsEnvCallback() {
-		env, expiry, err := c.option.EnvCallback()
-		if err != nil {
-			return Env{}
-		}
-
-		c.env = &env
-		c.envCallbackExpiry = expiry
-		c.Username = env.Username
-		c.Zone = env.Zone
-		// c.DefaultResource = env.DefaultResource
-		c.nativePasswordExpiry = time.Time{}
-
-		if expiry.IsZero() {
-			c.option.EnvCallback = nil // No need to call the callback again
-		}
+	if err := c.refreshEnv(); err != nil {
+		// We currently ignore the error and return an empty environment.
+		return Env{}
 	}
 
 	return *c.env
+}
+
+func (c *Client) refreshEnv() error {
+	if !c.needsEnvCallback() {
+		return nil
+	}
+
+	env, expiry, err := c.option.EnvCallback()
+	if err != nil {
+		return err
+	}
+
+	c.env = &env
+	c.envCallbackExpiry = expiry
+	c.Username = env.Username
+	c.Zone = env.Zone
+	// c.DefaultResource = env.DefaultResource
+	c.nativePasswordExpiry = time.Time{}
+
+	if expiry.IsZero() {
+		c.option.EnvCallback = nil // No need to call the callback again
+	}
+
+	return nil
 }
 
 func (c *Client) needsEnvCallback() bool {
@@ -187,22 +210,8 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 	}
 
 	// If an EnvCallback is provided, use it to retrieve the environment settings
-	if c.needsEnvCallback() {
-		env, expiry, err := c.option.EnvCallback()
-		if err != nil {
-			return nil, err
-		}
-
-		c.env = &env
-		c.envCallbackExpiry = expiry
-		c.Username = env.Username
-		c.Zone = env.Zone
-		// c.DefaultResource = env.DefaultResource
-		c.nativePasswordExpiry = time.Time{}
-
-		if expiry.IsZero() {
-			c.option.EnvCallback = nil // No need to call the callback again
-		}
+	if err := c.refreshEnv(); err != nil {
+		return nil, err
 	}
 
 	env := *c.env
@@ -213,7 +222,27 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		env.Password = c.nativePassword
 	}
 
+	// Load persisted password if available.
+	if env.AuthScheme != native || env.Password == "" {
+		if password, err := env.PersistentState.LoadPassword(); err == nil {
+			env.Password = password
+			env.AuthScheme = native
+		}
+	}
+
 	conn, err := dial(ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
+
+	// If the authentication scheme was not native, but we tried using a native password that was obtained before,
+	// and it expired, we'll retry with the original authentication scheme.
+	if code, ok := api.ErrorCode(err); ok && code == msg.CAT_PASSWORD_EXPIRED && c.env.AuthScheme != native && env.AuthScheme == native {
+		// Retry with the original authentication scheme
+		env.AuthScheme = c.env.AuthScheme
+		env.Password = ""
+
+		conn, err = dial(ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
+	}
+
+	// Capture all other errors here
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +250,11 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 	// Save pam_password for next connection
 	if env.AuthScheme != native {
 		c.nativePassword = conn.NativePassword()
+
+		// Attempt store in the persistent state, but do not fail the connection if it fails.
+		if err := c.env.PersistentState.SavePassword(c.nativePassword); err != nil {
+			logrus.Warnf("failed to save persistent password: %v", err)
+		}
 
 		// Calculate actual TTL
 		actualTTL := min(defaultMinimumTTL, time.Duration(determineTTL(conn.env.GeneratedPasswordTimeout))*time.Hour)

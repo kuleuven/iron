@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -38,8 +39,8 @@ func TestEnvMarshal(t *testing.T) {
 
 	envs := []Env{
 		{Zone: testZoneName},
-		{Zone: testZoneName, IrodsAuthenticationUID: &zero},
-		{Zone: testZoneName, IrodsAuthenticationUID: &one},
+		{Zone: testZoneName, AuthenticationUID: &zero},
+		{Zone: testZoneName, AuthenticationUID: &one},
 	}
 
 	for i, env := range envs {
@@ -67,7 +68,34 @@ func assertUID(t *testing.T, i int, payload []byte, unmarshaled Env, expected bo
 		t.Errorf("[%d] expected payload containing %s to be %v, got %s", i, field, expected, payload)
 	}
 
-	if got := unmarshaled.IrodsAuthenticationUID != nil; got != expected {
-		t.Errorf("[%d] expected unmarshaled.IrodsAuthenticationUID non-nil to be %v", i, expected)
+	if got := unmarshaled.AuthenticationUID != nil; got != expected {
+		t.Errorf("[%d] expected unmarshaled.AuthenticationUID non-nil to be %v", i, expected)
+	}
+}
+
+func TestPersistentState(t *testing.T) {
+	testFile := filepath.Join(t.TempDir(), ".irodsA.json")
+
+	testMap := map[string]any{
+		testStr: "value",
+	}
+
+	state := &FilePersistentState{
+		AuthenticationFile: testFile,
+		StateFile:          testFile + ".json",
+	}
+
+	if err := state.Save(testMap); err != nil {
+		t.Errorf("failed to save state: %v", err)
+	}
+
+	testMap = map[string]any{}
+
+	if err := state.Load(testMap); err != nil {
+		t.Errorf("failed to load state: %v", err)
+	}
+
+	if testMap[testStr] != "value" {
+		t.Errorf("expected testMap['test'] to be 'value', got '%s'", testMap[testStr])
 	}
 }
