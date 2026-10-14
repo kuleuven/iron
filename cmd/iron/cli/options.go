@@ -87,13 +87,13 @@ func FileLoader(file string) Loader {
 		var env iron.Env
 
 		// Rewrite the file path based on the environment before loading it.
-		file = RewriteConfigFileForEnvironment(file, environment)
+		environmentFile := RewriteConfigFileForEnvironment(file, environment)
 
 		// Find the runtime configuration file based on the current process ID and its parent processes.
-		file = GetRuntimeConfigFile(file)
+		environmentFile = GetRuntimeConfigFile(environmentFile)
 
 		// Load the environment from the runtime configuration file.
-		if err := env.LoadFromFile(file); err != nil {
+		if err := env.LoadFromFile(environmentFile); err != nil {
 			return env, nil, err
 		}
 
@@ -170,13 +170,13 @@ func ConfigurationTemplate(file string, template iron.Env) Configurator {
 		env.ApplyDefaults()
 
 		// Rewrite the file path based on the environment before storing the configuration.
-		file = RewriteConfigFileForEnvironment(file, environment)
+		environmentFile := RewriteConfigFileForEnvironment(file, environment)
 
-		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(environmentFile), 0o700); err != nil {
 			return err
 		}
 
-		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		f, err := os.OpenFile(environmentFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func ConfigurationTemplate(file string, template iron.Env) Configurator {
 
 		err = json.NewEncoder(f).Encode(env) //nolint:gosec
 		if err != nil {
-			defer os.Remove(f.Name())
+			defer os.Remove(environmentFile)
 
 			return err
 		}
@@ -232,9 +232,7 @@ func WithWorkdirSaver(saver WorkdirSaver) Option {
 func WithWorkdirToConfigFile(file string) Option {
 	return func(a *App) {
 		a.persistWorkdir = func(ctx context.Context, environment, workdir string) error {
-			file = RewriteConfigFileForEnvironment(file, environment)
-
-			return StoreWorkdirInFile(ctx, file, workdir)
+			return StoreWorkdirInFile(ctx, RewriteConfigFileForEnvironment(file, environment), workdir)
 		}
 	}
 }
