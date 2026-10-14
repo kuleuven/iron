@@ -226,10 +226,10 @@ func WithWorkdirSaver(saver WorkdirSaver) Option {
 	}
 }
 
-// WithDefaultWorkdirFromFile sets the default working directory for the App based on the contents
-// of a irods configuration file, or a copy of it identified by the process ID (PID).
-// The working directory will also be persisted to the file using the configured WorkdirSaver.
-func WithDefaultWorkdirFromFile(file string) Option {
+// WithWorkdirToConfigFile sets the function used to persist the working directory for the App
+// based on the contents of an irods configuration file, or a copy of it identified by the process ID (PID).
+// The working directory will be stored in the file using the configured WorkdirSaver.
+func WithWorkdirToConfigFile(file string) Option {
 	return func(a *App) {
 		a.persistWorkdir = func(ctx context.Context, environment, workdir string) error {
 			file = RewriteConfigFileForEnvironment(file, environment)

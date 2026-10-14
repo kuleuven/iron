@@ -112,7 +112,7 @@ func TestNew(t *testing.T) { //nolint:funlen
 		t.Fatal(err)
 	}
 
-	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithDefaultWorkdirFromFile(envfile))
+	app := New(t.Context(), WithLoader(FileLoader(envfile)), WithWorkdirToConfigFile(envfile))
 	app.inTesting = true
 
 	cmd := app.Command()

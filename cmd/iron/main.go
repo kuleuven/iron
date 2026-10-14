@@ -50,7 +50,7 @@ func main() {
 			AuthScheme:      "pam_interactive",
 			DefaultResource: "default",
 		}), []string{"user name", "zone name", "host"}),
-		cli.WithDefaultWorkdirFromFile(config),
+		cli.WithWorkdirToConfigFile(config),
 	)
 
 	if updateSlug != "" {
