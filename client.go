@@ -8,7 +8,6 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
-	"github.com/sirupsen/logrus"
 )
 
 type Option struct {
@@ -252,9 +251,7 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		c.nativePassword = conn.NativePassword()
 
 		// Attempt store in the persistent state, but do not fail the connection if it fails.
-		if err := c.env.PersistentState.SavePassword(c.nativePassword); err != nil {
-			logrus.Warnf("failed to save persistent password: %v", err)
-		}
+		c.env.PersistentState.SavePassword(c.nativePassword) //nolint:errcheck
 
 		// Calculate actual TTL
 		actualTTL := min(defaultMinimumTTL, time.Duration(determineTTL(conn.env.GeneratedPasswordTimeout))*time.Hour)
