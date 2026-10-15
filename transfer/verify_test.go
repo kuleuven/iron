@@ -94,6 +94,39 @@ func (c *checksumTestConn) Close() error {
 	return c.closeErr
 }
 
+func testVerifyChecksumAndClose(t *testing.T, tt struct {
+	name                 string
+	disabled             bool
+	fileErr, connErr     error
+	callbackErr, wantErr error
+	response             any
+}, checksum []byte,
+) {
+	conn := &checksumTestConn{closeErr: tt.connErr}
+	if tt.response != nil {
+		conn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{Path: testFile1}, tt.response)
+	}
+
+	called := false
+	err := verifyChecksumAndClose(t.Context(), !tt.disabled, func(context.Context) ([]byte, error) {
+		called = true
+
+		return checksum, tt.callbackErr
+	}, checksumTestFile{conn: conn, closeErr: tt.fileErr})
+
+	if !errors.Is(err, tt.wantErr) {
+		t.Fatalf("got error %v, want %v", err, tt.wantErr)
+	}
+
+	if !conn.closed || len(conn.Dialog) != 0 {
+		t.Fatal("connection was not closed or checksum request was not consumed")
+	}
+
+	if called != (!tt.disabled && tt.fileErr == nil) {
+		t.Errorf("unexpected checksum callback invocation: %v", called)
+	}
+}
+
 func TestVerifyChecksumAndClose(t *testing.T) {
 	checksum, err := api.ParseIrodsChecksum(testSha)
 	if err != nil {
@@ -119,29 +152,7 @@ func TestVerifyChecksumAndClose(t *testing.T) {
 		{name: "callback error", response: msg.String{String: testSha}, callbackErr: callbackErr, wantErr: callbackErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			conn := &checksumTestConn{closeErr: tt.connErr}
-			if tt.response != nil {
-				conn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{Path: testFile1}, tt.response)
-			}
-
-			called := false
-			err := verifyChecksumAndClose(t.Context(), !tt.disabled, func(context.Context) ([]byte, error) {
-				called = true
-
-				return checksum, tt.callbackErr
-			}, checksumTestFile{conn: conn, closeErr: tt.fileErr})
-
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("got error %v, want %v", err, tt.wantErr)
-			}
-
-			if !conn.closed || len(conn.Dialog) != 0 {
-				t.Fatal("connection was not closed or checksum request was not consumed")
-			}
-
-			if called != (!tt.disabled && tt.fileErr == nil) {
-				t.Errorf("unexpected checksum callback invocation: %v", called)
-			}
+			testVerifyChecksumAndClose(t, tt, checksum)
 		})
 	}
 }
