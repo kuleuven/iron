@@ -606,10 +606,13 @@ type copyOptions struct {
 // runCopy performs the cp command, copying a data object or a collection.
 func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 	src := a.Path(args[0])
-	dest := a.Path(args[1])
 
-	if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
-		dest = a.Path(args[1] + Name(src))
+	resolveDest := func(workdir string) string {
+		if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
+			return a.PathIn(args[1]+Name(src), workdir)
+		}
+
+		return a.PathIn(args[1], workdir)
 	}
 
 	obj, err := a.GetRecord(cmd.Context(), src)
@@ -619,7 +622,13 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 
 	switch {
 	case o.targetEnvironment != "":
-		return a.doRemoteTransfer(cmd, o, func(worker *transfer.Worker) {
+		return a.doRemoteTransfer(cmd, o, func(worker *transfer.Worker, workdir string) {
+			dest := resolveDest(workdir)
+
+			if !strings.HasSuffix(args[1], "/") {
+				return ErrAmbiguousTarget
+			}
+
 			if obj.IsDir() {
 				worker.RemoteCopyDir(cmd.Context(), src, dest)
 			} else {
@@ -628,6 +637,8 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 		})
 
 	case obj.IsDir():
+		dest := resolveDest(a.Workdir)
+
 		if !strings.HasSuffix(args[1], "/") {
 			return ErrAmbiguousTarget
 		}
@@ -643,6 +654,7 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 		})
 
 	default:
+		dest := resolveDest(a.Workdir)
 		if err := a.CopyDataObject(cmd.Context(), src, dest); err != nil {
 			return err
 		}
@@ -655,7 +667,7 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 	}
 }
 
-func (a *App) doRemoteTransfer(cmd *cobra.Command, o copyOptions, fn func(worker *transfer.Worker)) error {
+func (a *App) doRemoteTransfer(cmd *cobra.Command, o copyOptions, fn func(worker *transfer.Worker, workdir string)) error {
 	env, dialer, err := a.loader(cmd.Context(), o.targetEnvironment)
 	if err != nil {
 		return err
@@ -683,7 +695,7 @@ func (a *App) doRemoteTransfer(cmd *cobra.Command, o copyOptions, fn func(worker
 	worker.RemoteIndexPool = targetClient.API
 	worker.RemoteTransferPool = targetClient.API
 
-	fn(worker)
+	fn(worker, env.WorkingDirectory)
 
 	return errors.Join(worker.Wait(), targetClient.Close())
 }
