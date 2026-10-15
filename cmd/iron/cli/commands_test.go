@@ -501,22 +501,44 @@ func TestTransferCommandDefaults(t *testing.T) {
 	}
 }
 
-func TestCopyFlags(t *testing.T) {
-	cmd := testApp(t).cp()
+func TestTransferPatternFlags(t *testing.T) {
+	t.Setenv("IRON_INCLUDE", "*.json,*.xml")
+	t.Setenv("IRON_IGNORE", "*.tmp,cache")
 
-	for _, pattern := range []string{"*.txt", "*.csv"} {
-		if err := cmd.Flags().Set("include", pattern); err != nil {
-			t.Fatal(err)
-		}
+	app := testApp(t)
+
+	for _, cmd := range []*cobra.Command{app.cp(), app.upload(), app.download()} {
+		t.Run(cmd.Name(), func(t *testing.T) {
+			for name, want := range map[string][]string{
+				"include": {"*.json", "*.xml"},
+				"ignore":  {"*.tmp", "cache"},
+			} {
+				assertPatternFlag(t, cmd, name, want)
+
+				if err := cmd.Flags().Set(name, "*.txt,*.csv"); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := cmd.Flags().Set(name, "*.log"); err != nil {
+					t.Fatal(err)
+				}
+
+				assertPatternFlag(t, cmd, name, []string{"*.txt", "*.csv", "*.log"})
+			}
+		})
 	}
+}
 
-	include, err := cmd.Flags().GetStringArray("include")
+func assertPatternFlag(t *testing.T, cmd *cobra.Command, name string, want []string) {
+	t.Helper()
+
+	got, err := cmd.Flags().GetStringSlice(name)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(include, []string{"*.txt", "*.csv"}) {
-		t.Errorf("unexpected include patterns: %v", include)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("--%s patterns = %v, want %v", name, got, want)
 	}
 }
 

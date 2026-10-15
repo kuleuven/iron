@@ -581,8 +581,6 @@ func (a *App) cp() *cobra.Command {
 	}
 
 	addTransferFlags(cmd, &options)
-	cmd.Flags().StringArrayVar(&options.FilterPatterns, "include", nil, "Include files matching this pattern (may be specified multiple times; applies only when copying a collection)")
-	cmd.Flags().StringArrayVar(&options.IgnorePatterns, "ignore", nil, "Ignore files or directories matching this pattern (may be specified multiple times; applies only when copying a collection)")
 	cmd.Flags().BoolVarP(&options.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash if a file is deleted")
 	cmd.Flags().BoolVarP(&options.CopyMetadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
 	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Environment label of the target iRODS server")
@@ -859,8 +857,6 @@ func (a *App) upload() *cobra.Command {
 	addTransferFlags(cmd, &opts)
 	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
 	cmd.Flags().BoolVar(&opts.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
-	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames of regular files, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
-	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when uploading a directory. The pattern is applied to filenames of files or directories, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
 
 	return cmd
 }
@@ -943,8 +939,6 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 	}
 
 	addTransferFlags(cmd, &opts)
-	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames of regular files, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
-	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when downloading a directory. The pattern is applied to filenames of files or directories, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
 
 	return cmd
 }
@@ -959,6 +953,8 @@ func addTransferFlags(cmd *cobra.Command, opts *transfer.Options) {
 	flags.BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Verify checksums after transferring files")
 	flags.BoolVar(&opts.DryRun, dryrunOption, false, "Only print actions without transferring or deleting files. Server-side checksums may still be computed and stored.")
 	flags.BoolVar(&opts.SyncModTime, "sync-modtime", opts.SyncModTime, "Set destination modification times to match source files. Disable with --sync-modtime=false.")
+	flags.StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma-separated patterns matching regular file names, not full paths (directories and collections only). Defaults to IRON_INCLUDE; includes all files if unset.")
+	flags.StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma-separated patterns matching file or directory names, not full paths (directories and collections only). Overrides --include; defaults to IRON_IGNORE.")
 }
 
 func localPathEndsWithSeparator(path string) bool {
