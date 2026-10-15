@@ -58,3 +58,32 @@ func (r *returnOnClose) Close() error {
 
 	return nil
 }
+
+// RemoteCopyMetadata adds source metadata missing from the target, preserving target-only metadata.
+func RemoteCopyMetadata(ctx context.Context, a, b *api.API, source string, sourceType api.ObjectType, target string, targetType api.ObjectType) error {
+	sourceMetadata, err := a.ListMetadata(ctx, source, sourceType)
+	if err != nil {
+		return err
+	}
+
+	targetMetadata, err := b.ListMetadata(ctx, target, targetType)
+	if err != nil {
+		return err
+	}
+
+	existing := make(map[api.Metadata]struct{}, len(targetMetadata))
+	for _, metadata := range targetMetadata {
+		existing[metadata] = struct{}{}
+	}
+
+	var add []api.Metadata
+
+	for _, metadata := range sourceMetadata {
+		if _, ok := existing[metadata]; !ok {
+			add = append(add, metadata)
+			existing[metadata] = struct{}{}
+		}
+	}
+
+	return b.ModifyMetadata(ctx, target, targetType, add, nil)
+}
