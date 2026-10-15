@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -174,12 +175,28 @@ func TestRenameDataObject(t *testing.T) {
 }
 
 func TestCopyDataObject(t *testing.T) {
-	testAPI := newAPI()
+	for _, force := range []bool{false, true} {
+		t.Run(fmt.Sprintf("force=%t", force), func(t *testing.T) {
+			testAPI := newAPI()
+			request := msg.DataObjectCopyRequest{
+				Paths: []msg.DataObjectRequest{
+					{Path: testStr, OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_SRC, Threads: 3},
+					{Path: "test2", OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_DEST, Threads: 3},
+				},
+			}
 
-	testAPI.AddResponse(msg.EmptyResponse{})
+			if force {
+				request.Paths[1].KeyVals.Add(msg.FORCE_FLAG_KW, "")
+			}
 
-	if err := testAPI.CopyDataObject(t.Context(), testStr, "test2"); err != nil {
-		t.Fatal(err)
+			request.Paths[1].KeyVals.Add(msg.DEST_RESC_NAME_KW, testDemoResc)
+
+			testAPI.Add(msg.DATA_OBJ_COPY_AN, request, msg.EmptyResponse{})
+
+			if err := testAPI.WithNumThreads(3).CopyDataObject(t.Context(), testStr, "test2", force); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

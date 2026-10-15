@@ -551,18 +551,19 @@ In this case, the target collection must end in a slash to avoid ambiguity.
 If the source collection ends in a slash, files underneath will be placed directly
 in the target collection. Otherwise, a subcollection with the same name will be created.
 
-Use --target-environment to copy to a different iRODS environment.`
+Use --target-environment to copy to a different iRODS environment.
+
+--newer, --delete, --checksum, --include and --ignore apply only to collection copies.`
 
 func (a *App) cp() *cobra.Command {
 	var (
-		skip, newer, dryRun, metadata bool
-		maxThreads                    int
-		targetEnvironment             string
+		options           transfer.Options
+		targetEnvironment string
 	)
 
 	examples := []string{
-		"  " + a.name + " cp /path/to/collection1/file.txt /path/to/collection2/file.txt  (target file should not exist)",
-		"  " + a.name + " cp /path/to/collection1/file.txt /path/to/collection2/          (target file should not exist in target collection)",
+		"  " + a.name + " cp /path/to/collection1/file.txt /path/to/collection2/file.txt  (overwrite the target file if it exists)",
+		"  " + a.name + " cp --exclusive /path/to/collection1/file.txt /path/to/collection2/ (fail if the target file exists)",
 		"  " + a.name + " cp /path/to/collection1 /path/to/collection2/                   (copy source collection to target collection as a subcollection, target collection may exist)",
 		"  " + a.name + " cp /path/to/collection1/ /path/to/collection2/                  (copy contents of source collection to target collection, target collection may exist)",
 	}
@@ -575,36 +576,29 @@ func (a *App) cp() *cobra.Command {
 		Example:           strings.Join(examples, "\n"),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.runCopy(cmd, args, copyOptions{
-				skip:              skip,
-				newer:             newer,
-				dryRun:            dryRun,
-				metadata:          metadata,
-				maxThreads:        maxThreads,
-				targetEnvironment: targetEnvironment,
-			})
+			return a.runCopy(cmd, args, options, targetEnvironment)
 		},
 	}
 
-	cmd.Flags().BoolVar(&newer, "newer", false, "Only copy files that are newer than the existing files in the destination")
-	cmd.Flags().BoolVarP(&skip, "delete-skip-trash", "S", false, "Do not move to trash (applies only when copying a collection)")
-	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use (applies only when copying a collection)")
-	cmd.Flags().BoolVarP(&metadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
-	cmd.Flags().BoolVar(&dryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Checksums are still computed and stored.")
+	cmd.Flags().BoolVar(&options.Exclusive, "exclusive", false, "Do not overwrite existing files (fail for a single file; skip existing files when copying a collection)")
+	cmd.Flags().BoolVar(&options.OnlyIfNewer, "newer", false, "Only copy newer files (applies only when copying a collection)")
+	cmd.Flags().BoolVar(&options.Delete, "delete", false, "Delete files in the destination that are not present in the source (applies only when copying a collection)")
+	cmd.Flags().BoolVar(&options.CompareChecksums, "checksum", false, "Compare checksums to skip identical files (applies only when copying a collection)")
+	cmd.Flags().BoolVar(&options.IntegrityChecksums, "verify-checksum", false, "Verify checksums after copying files or collections")
+	cmd.Flags().BoolVar(&options.SyncModTime, "sync-modtime", false, "Synchronize modification times when copying files or collections")
+	cmd.Flags().StringArrayVar(&options.FilterPatterns, "include", nil, "Include files matching this pattern (may be specified multiple times; applies only when copying a collection)")
+	cmd.Flags().StringArrayVar(&options.IgnorePatterns, "ignore", nil, "Ignore files or directories matching this pattern (may be specified multiple times; applies only when copying a collection)")
+	cmd.Flags().BoolVarP(&options.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash if a file is deleted")
+	cmd.Flags().IntVar(&options.MaxThreads, "threads", 5, "Number of transfer threads to use")
+	cmd.Flags().BoolVarP(&options.CopyMetadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
+	cmd.Flags().BoolVar(&options.DryRun, dryrunOption, false, "Only print actions without copying or deleting files. Checksums may still be computed and stored.")
 	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Environment label of the target iRODS server")
 
 	return cmd
 }
 
-// copyOptions holds the flags for the cp command.
-type copyOptions struct {
-	skip, newer, dryRun, metadata bool
-	maxThreads                    int
-	targetEnvironment             string
-}
-
 // runCopy performs the cp command, copying a data object or a collection.
-func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
+func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Options, targetEnvironment string) error {
 	src := a.Path(args[0])
 
 	resolveDest := func(workdir string) string {
@@ -620,9 +614,12 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 		return err
 	}
 
+	options.MaxQueued = 10000
+	options.Output = cmd.OutOrStdout()
+
 	switch {
-	case o.targetEnvironment != "":
-		return a.doRemoteTransfer(cmd, o, func(worker *transfer.Worker, workdir string) {
+	case targetEnvironment != "":
+		return a.doRemoteTransfer(cmd, targetEnvironment, options, func(worker *transfer.Worker, workdir string) {
 			dest := resolveDest(workdir)
 
 			if obj.IsDir() {
@@ -639,32 +636,16 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 			return ErrAmbiguousTarget
 		}
 
-		return a.CopyDir(cmd.Context(), src, dest, transfer.Options{
-			MaxQueued:    10000,
-			MaxThreads:   o.maxThreads,
-			Output:       cmd.OutOrStdout(),
-			SkipTrash:    o.skip,
-			OnlyIfNewer:  o.newer,
-			DryRun:       o.dryRun,
-			CopyMetadata: o.metadata,
-		})
+		return a.CopyDir(cmd.Context(), src, dest, options)
 
 	default:
 		dest := resolveDest(a.Workdir)
-		if err := a.CopyDataObject(cmd.Context(), src, dest); err != nil {
-			return err
-		}
-
-		if o.metadata {
-			return a.CopyMetadata(cmd.Context(), src, api.DataObjectType, dest, api.DataObjectType)
-		}
-
-		return nil
+		return a.Copy(cmd.Context(), src, dest, options)
 	}
 }
 
-func (a *App) doRemoteTransfer(cmd *cobra.Command, o copyOptions, fn func(worker *transfer.Worker, workdir string)) error {
-	env, dialer, err := a.loader(cmd.Context(), o.targetEnvironment)
+func (a *App) doRemoteTransfer(cmd *cobra.Command, targetEnvironment string, options transfer.Options, fn func(worker *transfer.Worker, workdir string)) error {
+	env, dialer, err := a.loader(cmd.Context(), targetEnvironment)
 	if err != nil {
 		return err
 	}
@@ -679,15 +660,7 @@ func (a *App) doRemoteTransfer(cmd *cobra.Command, o copyOptions, fn func(worker
 		return err
 	}
 
-	worker := transfer.New(a.API, a.API, transfer.Options{
-		MaxQueued:    10000,
-		MaxThreads:   o.maxThreads,
-		Output:       cmd.OutOrStdout(),
-		SkipTrash:    o.skip,
-		OnlyIfNewer:  o.newer,
-		DryRun:       o.dryRun,
-		CopyMetadata: o.metadata,
-	})
+	worker := transfer.New(a.API, a.API, options)
 	worker.RemoteIndexPool = targetClient.API
 	worker.RemoteTransferPool = targetClient.API
 
@@ -831,7 +804,10 @@ It can be repeated to keep the target up to date.
 
 When uploading a directory, the target collection must end in a slash to avoid ambiguity.
 If the source directory ends in a slash, files underneath will be placed directly
-in the target collection. Otherwise, a subcollection with the same name will be created.`
+in the target collection. Otherwise, a subcollection with the same name will be created.
+
+--newer, --delete, --checksum, --include, --ignore and --no-update-in-place apply only 
+to collection copies.`
 
 func (a *App) upload() *cobra.Command { //nolint:funlen
 	opts := transfer.Options{
@@ -917,7 +893,9 @@ It can be repeated to keep the target up to date.
 
 When downloading a collection, the target folder must end in a slash to avoid ambiguity.
 If the source collection ends in a slash, files underneath will be placed directly
-in the target folder. Otherwise, a subfolder with the same name will be created.`
+in the target folder. Otherwise, a subfolder with the same name will be created.
+
+--newer, --delete, --checksum, --include and --ignore apply only to collection copies.`
 
 func (a *App) download() *cobra.Command { //nolint:funlen
 	opts := transfer.Options{

@@ -63,6 +63,14 @@ func (c *Client) RemoveDir(ctx context.Context, remote string, options transfer.
 	})
 }
 
+// Copy copies a single data object on the same iRODS server.
+// Existing targets are overwritten unless options.Exclusive is set.
+func (c *Client) Copy(ctx context.Context, remote1, remote2 string, options transfer.Options) error {
+	return c.runWorker(options, func(worker *transfer.Worker) {
+		worker.Copy(ctx, remote1, remote2)
+	})
+}
+
 // CopyDir copies a remote directory to another remote directory from the iRODS server using client recursion.
 // The remote files refers to an iRODS path.
 func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options transfer.Options) error {

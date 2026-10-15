@@ -46,10 +46,10 @@ type Options struct {
 	// to compare two existing file when syncing directories (UploadDir, DownloadDir, CopyDir, RemoteCopyDir).
 	CompareChecksums bool
 	// IntegrityChecksums indicates whether checksums should be computed before
-	// and after the transfer to verify the integrity of the transfer (Upload, Download, UploadDir, DownloadDir, CopyDir, RemoteCopy, RemoteCopyDir).
+	// and after the transfer to verify the integrity of the transfer (Upload, Download, UploadDir, DownloadDir, Copy, CopyDir, RemoteCopy, RemoteCopyDir).
 	IntegrityChecksums bool
 	// CopyMetadata indicates whether AVU metadata should be copied along with
-	// data objects and collections when copying a directory (CopyDir, RemoteCopyDir).
+	// data objects and collections when copying (Copy, CopyDir, RemoteCopy, RemoteCopyDir).
 	CopyMetadata bool
 	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
 	DryRun bool
@@ -1127,6 +1127,27 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 	}
 }
 
+// Copy schedules a server-side copy of a single data object on the same iRODS server.
+// Existing targets are overwritten unless Exclusive is set. IntegrityChecksums
+// verifies the source and target checksums after copying. SyncModTime preserves
+// the source modification time.
+func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string) {
+	obj, err := worker.TransferPool.GetDataObject(ctx, remote1)
+	if err != nil {
+		worker.Error(remote1, remote2, err)
+
+		return
+	}
+
+	worker.copyObject(ctx, Task{
+		Action:  TransferFile,
+		Source:  remote1,
+		Target:  remote2,
+		Size:    obj.Size(),
+		ModTime: obj.ModTime(),
+	})
+}
+
 // CopyDir copies one directory to another on the same iRODS server.
 // It handles the recursion client side, but individual files are copied server-side only.
 // The call blocks until the source directory has been completely scanned.
@@ -1220,15 +1241,8 @@ func (worker *Worker) copyObject(ctx context.Context, u Task) {
 
 		defer a.Close()
 
-		if err := a.CopyDataObject(ctx, remote1, remote2); err != nil {
+		if err := worker.copyDataObject(ctx, a.API, u); err != nil {
 			return worker.options.ErrorHandler(remote1, remote2, err)
-		}
-
-		// Copy the AVU metadata after copying the data object if requested
-		if worker.options.CopyMetadata {
-			if err := a.CopyMetadata(ctx, remote1, api.DataObjectType, remote2, api.DataObjectType); err != nil {
-				return worker.options.ErrorHandler(remote1, remote2, err)
-			}
 		}
 
 		worker.Progress(Progress{
@@ -1241,16 +1255,34 @@ func (worker *Worker) copyObject(ctx context.Context, u Task) {
 			FinishedAt:  time.Now(),
 		})
 
-		// Verify the checksum after copying if integrity checksums are enabled
-		if worker.options.IntegrityChecksums {
-			_, _, err := VerifyRemoteToRemote(a.API, a.API, worker.options.ProgressHandler)(ctx, remote1, remote2, nil, nil)
-			if err != nil {
-				return worker.options.ErrorHandler(remote1, remote2, err)
-			}
-		}
-
 		return nil
 	})
+}
+
+func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task) error {
+	if err := a.CopyDataObject(ctx, u.Source, u.Target, !worker.options.Exclusive); err != nil {
+		return err
+	}
+
+	if worker.options.SyncModTime {
+		if err := a.ModifyModificationTime(ctx, u.Target, u.ModTime); err != nil {
+			return err
+		}
+	}
+
+	if worker.options.CopyMetadata {
+		if err := a.CopyMetadata(ctx, u.Source, api.DataObjectType, u.Target, api.DataObjectType); err != nil {
+			return err
+		}
+	}
+
+	if worker.options.IntegrityChecksums {
+		_, _, err := VerifyRemoteToRemote(a, a, worker.options.ProgressHandler)(ctx, u.Source, u.Target, nil, nil)
+
+		return err
+	}
+
+	return nil
 }
 
 // copyCollection creates the target collection and, if requested, copies the

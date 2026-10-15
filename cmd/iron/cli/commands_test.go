@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -371,13 +373,28 @@ func TestRm(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
+	for _, flags := range [][]string{
+		nil,
+		{"--exclusive"},
+		{"--verify-checksum"},
+		{"--dry-run"},
+		{"--sync-modtime"},
+	} {
+		t.Run(strings.Join(flags, " "), func(t *testing.T) {
+			testCopy(t, flags)
+		})
+	}
+}
+
+func testCopy(t *testing.T, flags []string) {
+	t.Helper()
+
 	app := testApp(t)
 
-	app.AddResponse(msg.QueryResponse{
+	record := msg.QueryResponse{
 		RowCount:       1,
 		AttributeCount: 14,
 		TotalRowCount:  1,
-		ContinueIndex:  0,
 		SQLResult: []msg.SQLResult{
 			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1"}},
 			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1"}},
@@ -394,14 +411,69 @@ func TestCopy(t *testing.T) {
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000"}},
 		},
-	})
-	app.AddResponse(msg.EmptyResponse{})
+	}
+	app.AddResponse(record)
+	app.AddResponse(record)
+
+	if !slices.Contains(flags, "--dry-run") {
+		app.AddResponse(msg.EmptyResponse{})
+	}
+
+	if slices.Contains(flags, "--sync-modtime") {
+		app.Add(msg.TOUCH_APN, msg.TouchDataObjectReplicaRequest{
+			Path: "/testzone/coll2/file",
+			Options: msg.TouchOptions{
+				SecondsSinceEpoch: 10000,
+				NoCreate:          true,
+			},
+		}, msg.EmptyResponse{})
+	}
+
+	if slices.Contains(flags, "--verify-checksum") {
+		for range 2 {
+			app.AddResponse(msg.String{String: "sha2:aaaa"})
+		}
+	}
+
+	args := append([]string{"cp", "--threads=1"}, flags...)
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"cp", "/testzone/coll/file", "/testzone/coll2/"})
+	cmd.SetArgs(append(args, "/testzone/coll/file", "/testzone/coll2/"))
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+
+	if len(app.Dialog) != 0 {
+		t.Errorf("expected all dialog to be consumed, %d remaining", len(app.Dialog))
+	}
+}
+
+func TestCopyFlags(t *testing.T) {
+	cmd := testApp(t).cp()
+
+	for _, name := range []string{
+		"exclusive", "newer", "delete", "checksum", "verify-checksum",
+		"include", "ignore", "sync-modtime",
+	} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("expected --%s flag to be registered", name)
+		}
+	}
+
+	for _, pattern := range []string{"*.txt", "*.csv"} {
+		if err := cmd.Flags().Set("include", pattern); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	include, err := cmd.Flags().GetStringArray("include")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(include, []string{"*.txt", "*.csv"}) {
+		t.Errorf("unexpected include patterns: %v", include)
 	}
 }
 

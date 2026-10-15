@@ -198,8 +198,8 @@ func (api *API) RenameDataObject(ctx context.Context, oldPath, newPath string) e
 
 // CopyDataObject copies a data object.
 // A target resource can be specified with WithDefaultResource() first if needed.
-// It will fail if the target already exists.
-func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) error {
+// If force is false, it will fail if the target already exists.
+func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string, force bool) error {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
 			{
@@ -217,6 +217,10 @@ func (api *API) CopyDataObject(ctx context.Context, oldPath, newPath string) err
 
 	api.setFlags(&request.Paths[0].KeyVals)
 	api.setFlags(&request.Paths[1].KeyVals)
+
+	if force {
+		request.Paths[1].KeyVals.Add(msg.FORCE_FLAG_KW, "")
+	}
 
 	// Add the default resource if needed
 	if api.DefaultResource != "" {
