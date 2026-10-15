@@ -262,21 +262,9 @@ func (r fileReader) Checksum(ctx context.Context) ([]byte, error) {
 // FromReader schedules the upload of a reader to the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) { //nolint:funlen
+func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	if worker.options.DryRun {
-		pw := &progressWriter{
-			progress: Progress{
-				Action:      TransferFile,
-				Label:       r.Name(),
-				Size:        r.Size(),
-				Transferred: r.Size(),
-				StartedAt:   time.Now(),
-				FinishedAt:  time.Now(),
-			},
-			handler: worker.options.ProgressHandler,
-		}
-
-		pw.handler(pw.progress)
+		worker.transferProgress(r.Name(), r.Size())
 
 		return
 	}
@@ -294,18 +282,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		return
 	}
 
-	// Schedule the upload
-	pw := &progressWriter{
-		progress: Progress{
-			Action:    TransferFile,
-			Label:     r.Name(),
-			Size:      r.Size(),
-			StartedAt: time.Now(),
-		},
-		handler: worker.options.ProgressHandler,
-	}
-
-	pw.handler(pw.progress)
+	pw := worker.transferProgress(r.Name(), r.Size())
 
 	rr := &ReaderAtRangeReader{ReaderAt: r}
 
@@ -316,18 +293,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		},
 	}
 
-	var wg errgroup.Group
-
-	rangeSize := calculateRangeSize(r.Size(), worker.options.MaxThreads)
-
-	for offset := int64(0); offset < r.Size(); offset += rangeSize {
-		dst := ww.Range(offset, rangeSize)
-		src := rr.Range(offset, rangeSize)
-
-		wg.Go(func() error {
-			return copyBuffer(dst, src, pw)
-		})
-	}
+	wg := worker.copyRanges(ww, rr, pw, r.Size())
 
 	worker.wg.Go(func() error {
 		defer pw.Close()
@@ -350,24 +316,27 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 
 		defer a.Close()
 
-		// Verify the checksum of the uploaded file if integrity checksums are enabled.
-		if cr, ok := r.(ChecksumReader); ok && worker.options.IntegrityChecksums {
-			_, _, checksumErr := compareChecksums(ctx, cr.Checksum, func(ctx context.Context) ([]byte, error) {
-				return a.Checksum(ctx, remote, false)
-			})
-
-			err = errors.Join(err, checksumErr)
-		}
-
-		err = errors.Join(err, r.Close())
-		if err == nil {
-			return nil
-		}
-
-		err = errors.Join(err, a.DeleteDataObject(ctx, remote, true))
-
-		return worker.options.ErrorHandler(r.Name(), remote, err)
+		return worker.finishUpload(ctx, a.API, r, remote)
 	})
+}
+
+func (worker *Worker) finishUpload(ctx context.Context, a *api.API, r Reader, remote string) error {
+	var err error
+
+	if cr, ok := r.(ChecksumReader); ok && worker.options.IntegrityChecksums {
+		_, _, err = compareChecksums(ctx, cr.Checksum, func(ctx context.Context) ([]byte, error) {
+			return a.Checksum(ctx, remote, false)
+		})
+	}
+
+	err = errors.Join(err, r.Close())
+	if err == nil {
+		return nil
+	}
+
+	err = errors.Join(err, a.DeleteDataObject(ctx, remote, true))
+
+	return worker.options.ErrorHandler(r.Name(), remote, err)
 }
 
 func tryOpenDataObject(ctx context.Context, a *api.API, remote string, mode int) (api.File, error) {
@@ -546,10 +515,10 @@ func (w fileWriter) Checksum(ctx context.Context) ([]byte, error) {
 	return Sha256Checksum(ctx, w.name)
 }
 
-// Download schedules the download of a remote file from the iRODS server using parallel transfers.
+// ToWriter schedules the download of a remote file from the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { //nolint:funlen
+func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
 	if err != nil {
 		err = multierr.Append(err, w.Close())
@@ -573,35 +542,12 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 	if worker.options.DryRun {
 		defer r.Close()
 
-		pw := &progressWriter{
-			progress: Progress{
-				Action:      TransferFile,
-				Label:       r.Name(),
-				Size:        size,
-				Transferred: size,
-				StartedAt:   time.Now(),
-				FinishedAt:  time.Now(),
-			},
-			handler: worker.options.ProgressHandler,
-		}
-
-		pw.handler(pw.progress)
+		worker.transferProgress(r.Name(), size)
 
 		return
 	}
 
-	// Schedule the download
-	pw := &progressWriter{
-		progress: Progress{
-			Action:    TransferFile,
-			Label:     w.Name(),
-			Size:      size,
-			StartedAt: time.Now(),
-		},
-		handler: worker.options.ProgressHandler,
-	}
-
-	pw.handler(pw.progress)
+	pw := worker.transferProgress(w.Name(), size)
 
 	ww := &WriterAtRangeWriter{WriterAt: w}
 
@@ -612,18 +558,7 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 		},
 	}
 
-	var wg errgroup.Group
-
-	rangeSize := calculateRangeSize(size, worker.options.MaxThreads)
-
-	for offset := int64(0); offset < size; offset += rangeSize {
-		dst := ww.Range(offset, rangeSize)
-		src := rr.Range(offset, rangeSize)
-
-		wg.Go(func() error {
-			return copyBuffer(dst, src, pw)
-		})
-	}
+	wg := worker.copyRanges(ww, rr, pw, size)
 
 	worker.wg.Go(func() error {
 		defer pw.Close()
@@ -641,33 +576,72 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 
 		defer a.Close()
 
-		// Compare checksums if possible
-		if cw, ok := w.(ChecksumWriter); ok && worker.options.IntegrityChecksums {
-			_, _, err := compareChecksums(ctx, cw.Checksum, func(ctx context.Context) ([]byte, error) {
-				return a.Checksum(ctx, remote, false)
-			})
-			if err != nil {
-				return worker.options.ErrorHandler(w.Name(), remote, errors.Join(err, w.Remove()))
-			}
-		}
-
-		// Sync the modification time of the remote file if the option is enabled.
-		if !worker.options.SyncModTime {
-			return nil
-		}
-
-		obj, err := a.GetDataObject(ctx, remote)
-		if err != nil {
-			return worker.options.ErrorHandler(w.Name(), remote, err)
-		}
-
-		err = w.Touch(obj.ModTime())
-		if err != nil {
-			return worker.options.ErrorHandler(w.Name(), remote, err)
-		}
-
-		return nil
+		return worker.finishDownload(ctx, a.API, w, remote)
 	})
+}
+
+func (worker *Worker) finishDownload(ctx context.Context, a *api.API, w Writer, remote string) error {
+	if cw, ok := w.(ChecksumWriter); ok && worker.options.IntegrityChecksums {
+		_, _, err := compareChecksums(ctx, cw.Checksum, func(ctx context.Context) ([]byte, error) {
+			return a.Checksum(ctx, remote, false)
+		})
+		if err != nil {
+			return worker.options.ErrorHandler(w.Name(), remote, errors.Join(err, w.Remove()))
+		}
+	}
+
+	if !worker.options.SyncModTime {
+		return nil
+	}
+
+	obj, err := a.GetDataObject(ctx, remote)
+	if err != nil {
+		return worker.options.ErrorHandler(w.Name(), remote, err)
+	}
+
+	if err := w.Touch(obj.ModTime()); err != nil {
+		return worker.options.ErrorHandler(w.Name(), remote, err)
+	}
+
+	return nil
+}
+
+func (worker *Worker) transferProgress(label string, size int64) *progressWriter {
+	pw := &progressWriter{
+		progress: Progress{
+			Action:    TransferFile,
+			Label:     label,
+			Size:      size,
+			StartedAt: time.Now(),
+		},
+		handler: worker.options.ProgressHandler,
+	}
+
+	if worker.options.DryRun {
+		pw.progress.Transferred = size
+		pw.progress.FinishedAt = time.Now()
+	}
+
+	pw.handler(pw.progress)
+
+	return pw
+}
+
+func (worker *Worker) copyRanges(dst RangeWriter, src RangeReader, pw *progressWriter, size int64) *errgroup.Group {
+	var wg errgroup.Group
+
+	rangeSize := calculateRangeSize(size, worker.options.MaxThreads)
+
+	for offset := int64(0); offset < size; offset += rangeSize {
+		w := dst.Range(offset, rangeSize)
+		r := src.Range(offset, rangeSize)
+
+		wg.Go(func() error {
+			return copyBuffer(w, r, pw)
+		})
+	}
+
+	return &wg
 }
 
 func findSize(r io.Seeker) (int64, error) {
@@ -737,7 +711,7 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 // RemoteCopy schedules a remote copy between two iRODS servers using parallel transfers.
 // The remote files refer to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) { //nolint:funlen,gocognit
+func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 	// Find out size and other metadata of the source file (remote1) before proceeding with the remote copy.
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote1, api.O_RDONLY)
 	if err != nil {
@@ -758,23 +732,15 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 	if worker.options.DryRun {
 		defer r.Close()
 
-		pw := &progressWriter{
-			progress: Progress{
-				Action:      TransferFile,
-				Label:       remote1,
-				Size:        size,
-				Transferred: size,
-				StartedAt:   time.Now(),
-				FinishedAt:  time.Now(),
-			},
-			handler: worker.options.ProgressHandler,
-		}
-
-		pw.handler(pw.progress)
+		worker.transferProgress(remote1, size)
 
 		return
 	}
 
+	worker.remoteCopyFrom(ctx, r, remote1, remote2, size)
+}
+
+func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, remote2 string, size int64) {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
 	if worker.options.Exclusive {
@@ -788,18 +754,7 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 		return
 	}
 
-	// Schedule the upload
-	pw := &progressWriter{
-		progress: Progress{
-			Action:    TransferFile,
-			Label:     remote1,
-			Size:      size,
-			StartedAt: time.Now(),
-		},
-		handler: worker.options.ProgressHandler,
-	}
-
-	pw.handler(pw.progress)
+	pw := worker.transferProgress(remote1, size)
 
 	rr := &ReopenRangeReader{
 		ReadSeekCloser: r,
@@ -815,18 +770,7 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 		},
 	}
 
-	var wg errgroup.Group
-
-	rangeSize := calculateRangeSize(size, worker.options.MaxThreads)
-
-	for offset := int64(0); offset < size; offset += rangeSize {
-		dst := ww.Range(offset, rangeSize)
-		src := rr.Range(offset, rangeSize)
-
-		wg.Go(func() error {
-			return copyBuffer(dst, src, pw)
-		})
-	}
+	wg := worker.copyRanges(ww, rr, pw, size)
 
 	worker.wg.Go(func() error {
 		defer pw.Close()
@@ -844,49 +788,49 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 
 		defer a.Close()
 
-		// Sync the modification time if the option is enabled
-		if worker.options.SyncModTime {
-			var obj *api.DataObject
-
-			if obj, err = a.GetDataObject(ctx, remote1); err == nil {
-				err = w.Touch(obj.ModTime())
-			}
-		}
-
-		// Retrieve the connection from the writer
-		conn, closeErr = w.CloseReturnConnection()
-		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr, conn.Close())
-		}
-
-		// Recreate an API instance using the retrieved connection
-		b := ConnectionAsAPI(worker.RemoteTransferPool, conn)
-
-		defer b.Close()
-
-		// Verify checksums if the option is enabled
-		if worker.options.IntegrityChecksums {
-			_, _, err = compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
-				return a.Checksum(ctx, remote1, false)
-			}, func(ctx context.Context) ([]byte, error) {
-				return b.Checksum(ctx, remote2, false)
-			})
-		}
-
-		// Copy metadata if the option is enabled
-		if worker.options.CopyMetadata {
-			err = errors.Join(err, RemoteCopyMetadata(ctx, a.API, b.API, remote1, api.DataObjectType, remote2, api.DataObjectType))
-		}
-
-		// Remove on error
-		if err == nil {
-			return nil
-		}
-
-		err = errors.Join(err, worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
-
-		return worker.options.ErrorHandler(remote1, remote2, err)
+		return worker.finishRemoteCopy(ctx, a.API, w, remote1, remote2)
 	})
+}
+
+func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.File, remote1, remote2 string) error {
+	var err error
+
+	if worker.options.SyncModTime {
+		var obj *api.DataObject
+
+		if obj, err = a.GetDataObject(ctx, remote1); err == nil {
+			err = w.Touch(obj.ModTime())
+		}
+	}
+
+	conn, closeErr := w.CloseReturnConnection()
+	if err != nil || closeErr != nil {
+		return errors.Join(err, closeErr, conn.Close())
+	}
+
+	b := ConnectionAsAPI(worker.RemoteTransferPool, conn)
+
+	defer b.Close()
+
+	if worker.options.IntegrityChecksums {
+		_, _, err = compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
+			return a.Checksum(ctx, remote1, false)
+		}, func(ctx context.Context) ([]byte, error) {
+			return b.Checksum(ctx, remote2, false)
+		})
+	}
+
+	if worker.options.CopyMetadata {
+		err = errors.Join(err, RemoteCopyMetadata(ctx, a, b.API, remote1, api.DataObjectType, remote2, api.DataObjectType))
+	}
+
+	if err == nil {
+		return nil
+	}
+
+	err = errors.Join(err, worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
+
+	return worker.options.ErrorHandler(remote1, remote2, err)
 }
 
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
