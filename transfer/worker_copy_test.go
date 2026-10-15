@@ -135,15 +135,15 @@ func addCopyDialog(conn *api.MockConn, options Options, copyErr, touchErr error,
 		conn.AddResponse(msg.EmptyResponse{})
 	}
 
-	if options.IntegrityChecksums {
-		if mismatch {
-			// Checksum requests run concurrently, so either path may be requested first.
-			conn.AddResponse(msg.String{String: testSha})
-			conn.AddResponse(transferTestChecksum(testStr, true))
-		} else {
-			for range 2 {
-				conn.AddResponse(msg.String{String: testSha})
-			}
-		}
+	if !options.IntegrityChecksums {
+		return
 	}
+
+	if mismatch { // Checksum requests run concurrently, so either path may be requested first.
+		conn.AddResponses([]any{msg.String{String: testSha}, transferTestChecksum(testStr, true)})
+
+		return
+	}
+
+	conn.AddResponses([]any{msg.String{String: testSha}, msg.String{String: testSha}})
 }
