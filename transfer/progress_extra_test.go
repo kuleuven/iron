@@ -10,7 +10,7 @@ func TestProgressLabel(t *testing.T) {
 	tests := []struct {
 		local, remote, expected string
 	}{
-		{testLocalTxt, testRemoteTxt, testLocalTxt},
+		{testLocalTxt, testRemoteTxt, testRemoteTxt},
 		{"", testRemoteTxt, testRemoteTxt},
 		{"", "", ""},
 		{testLocalTxt, "", testLocalTxt},

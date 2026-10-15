@@ -1,5 +1,7 @@
 package transfer
 
+// Verification functions for local and remote files using checksums.
+
 import (
 	"bytes"
 	"context"
@@ -17,114 +19,55 @@ import (
 
 var ErrChecksumMismatch = errors.New("checksum mismatch")
 
-// Verify checks the checksum of a local file against the checksum of a remote file
-func VerifyLocalToRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
+// CompareFunc checks the checksums of the local and remote file and returns nil if they match,
+// ErrChecksumMismatch if they don't match, or an error if the verification failed.
+// The checksum of the source file is returned along with the checksum of the target file.
+type CompareFunc func(ctx context.Context, source, target string, sourceInfo, targetInfo os.FileInfo) ([]byte, []byte, error)
+
+// VerifyLocalToRemote checks the checksum of a local file against the checksum of a remote file.
+func VerifyLocalToRemote(a *api.API, progressHandler func(Progress)) CompareFunc {
 	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
-		g, ctx := errgroup.WithContext(ctx)
-
-		var localHash, remoteHash []byte
-
-		g.Go(func() error {
-			var err error
-
-			localHash, err = Sha256Checksum(ctx, local)
-
-			return err
-		})
-
-		g.Go(func() error {
-			// Try to get checksum from remoteInfo
-			if checksum, ok := parseChecksum(remoteInfo); ok {
-				remoteHash = checksum
-
-				return nil
-			}
-
-			if progressHandler != nil {
-				progressHandler(Progress{
-					Action: ComputeChecksum,
-					Label:  local,
-				})
-			}
-
-			var err error
-
-			remoteHash, err = a.Checksum(ctx, remote, false)
-
-			return err
-		})
-
-		if err := g.Wait(); err != nil {
-			return nil, nil, err
+		sourceChecksum := func(ctx context.Context) ([]byte, error) {
+			return Sha256Checksum(ctx, local)
 		}
 
-		if !bytes.Equal(localHash, remoteHash) {
-			return localHash, remoteHash, fmt.Errorf("%w: local: %s remote: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(localHash), base64.StdEncoding.EncodeToString(remoteHash))
+		targetChecksum := func(ctx context.Context) ([]byte, error) {
+			return parseOrComputeChecksum(ctx, a, progressHandler, remote, remoteInfo)
 		}
 
-		return localHash, remoteHash, nil
+		return compareChecksums(ctx, sourceChecksum, targetChecksum)
 	}
 }
 
-func VerifyRemoteToLocal(a *api.API, progressHandler func(Progress)) func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
-	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
-		l, r, err := VerifyLocalToRemote(a, progressHandler)(ctx, local, remote, localInfo, remoteInfo)
+func VerifyRemoteToLocal(a *api.API, progressHandler func(Progress)) CompareFunc {
+	return func(ctx context.Context, remote, local string, remoteInfo, localInfo os.FileInfo) ([]byte, []byte, error) {
+		sourceChecksum := func(ctx context.Context) ([]byte, error) {
+			return parseOrComputeChecksum(ctx, a, progressHandler, local, localInfo)
+		}
 
-		return r, l, err
+		targetChecksum := func(ctx context.Context) ([]byte, error) {
+			return Sha256Checksum(ctx, remote)
+		}
+
+		return compareChecksums(ctx, sourceChecksum, targetChecksum)
 	}
 }
 
 // VerifyRemote checks the checksum of two remote files
-func VerifyRemoteToRemote(a *api.API, progressHandler func(Progress)) func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
-	parseOrComputeChecksum := func(ctx context.Context, path string, info os.FileInfo, result *[]byte) error {
-		// Try to get checksum from remoteInfo
-		if checksum, ok := parseChecksum(info); ok {
-			*result = checksum
-
-			return nil
-		}
-
-		if progressHandler != nil {
-			progressHandler(Progress{
-				Action: ComputeChecksum,
-				Label:  path,
-			})
-		}
-
-		var err error
-
-		*result, err = a.Checksum(ctx, path, false)
-
-		return err
-	}
-
+func VerifyRemoteToRemote(a, b *api.API, progressHandler func(Progress)) CompareFunc {
 	return func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
-		g, ctx := errgroup.WithContext(ctx)
-
-		var remote1Hash, remote2Hash []byte
-
-		g.Go(func() error {
-			return parseOrComputeChecksum(ctx, remote1, remote1Info, &remote1Hash)
+		return compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
+			return parseOrComputeChecksum(ctx, a, progressHandler, remote1, remote1Info)
+		}, func(ctx context.Context) ([]byte, error) {
+			return parseOrComputeChecksum(ctx, b, progressHandler, remote2, remote2Info)
 		})
-
-		g.Go(func() error {
-			return parseOrComputeChecksum(ctx, remote2, remote2Info, &remote2Hash)
-		})
-
-		if err := g.Wait(); err != nil {
-			return nil, nil, err
-		}
-
-		if !bytes.Equal(remote1Hash, remote2Hash) {
-			return remote1Hash, remote2Hash, fmt.Errorf("%w: remote1: %s remote2: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(remote1Hash), base64.StdEncoding.EncodeToString(remote2Hash))
-		}
-
-		return remote1Hash, remote2Hash, nil
 	}
 }
 
 const shaPrefix = "sha2:"
 
+// parseChecksum attempts to extract the sha256 checksum from the given os.FileInfo.
+// It returns the decoded checksum and true if successful, or nil and false otherwise.
 func parseChecksum(info os.FileInfo) ([]byte, bool) {
 	if info == nil {
 		return nil, false
@@ -151,6 +94,56 @@ func parseChecksum(info os.FileInfo) ([]byte, bool) {
 	}
 
 	return nil, false
+}
+
+func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler func(Progress), path string, info os.FileInfo) ([]byte, error) {
+	// Try to get checksum from remoteInfo
+	if checksum, ok := parseChecksum(info); ok {
+		return checksum, nil
+	}
+
+	if progressHandler != nil {
+		progressHandler(Progress{
+			Action: ComputeChecksum,
+			Label:  path,
+		})
+	}
+
+	return a.Checksum(ctx, path, false)
+}
+
+// compareChecksums concurrently computes the local and remote checksums using the provided functions and compares them.
+// It returns the local and remote checksums if they match, or an error if they differ or if any computation fails.
+func compareChecksums(ctx context.Context, sourceChecksum, targetChecksum func(context.Context) ([]byte, error)) ([]byte, []byte, error) {
+	g, ctx := errgroup.WithContext(ctx)
+
+	var sourceHash, targetHash []byte
+
+	g.Go(func() error {
+		var err error
+
+		sourceHash, err = sourceChecksum(ctx)
+
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+
+		targetHash, err = targetChecksum(ctx)
+
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, nil, err
+	}
+
+	if !bytes.Equal(sourceHash, targetHash) {
+		return sourceHash, targetHash, fmt.Errorf("%w: source: %s target: %s", ErrChecksumMismatch, base64.StdEncoding.EncodeToString(sourceHash), base64.StdEncoding.EncodeToString(targetHash))
+	}
+
+	return sourceHash, targetHash, nil
 }
 
 // Sha256Checksum computes the sha256 checksum of a local file in a goroutine, so that it can be canceled with the context.

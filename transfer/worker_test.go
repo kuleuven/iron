@@ -533,7 +533,7 @@ func TestClientVerifyRemote(t *testing.T) {
 		Replicas: []api.Replica{},
 	}
 
-	if _, _, err := VerifyRemoteToRemote(testAPI, nil)(t.Context(), testFile1, testFile2, obj, obj); err != nil {
+	if _, _, err := VerifyRemoteToRemote(testAPI, testAPI, nil)(t.Context(), testFile1, testFile2, obj, obj); err != nil {
 		t.Error(err)
 	}
 }
@@ -710,7 +710,7 @@ func TestWorkerCopyCollectionMetadata(t *testing.T) {
 		CopyMetadata: true,
 	})
 
-	if err := worker.copyCollection(t.Context(), Task{Path: testCopySrc, IrodsPath: testCopyDest}); err != nil {
+	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -738,7 +738,7 @@ func TestWorkerCopyCollectionWithoutMetadata(t *testing.T) {
 		MaxThreads: 1,
 	})
 
-	if err := worker.copyCollection(t.Context(), Task{Path: testCopySrc, IrodsPath: testCopyDest}); err != nil {
+	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -769,7 +769,7 @@ func TestWorkerCopyActionMetadata(t *testing.T) {
 		CopyMetadata: true,
 	})
 
-	worker.copyAction(t.Context(), Task{Path: testCopySrc, IrodsPath: testCopyDest, Size: 4})
+	worker.copyObject(t.Context(), Task{Source: testCopySrc, Target: testCopyDest, Size: 4})
 
 	if err := worker.Wait(); err != nil {
 		t.Fatal(err)

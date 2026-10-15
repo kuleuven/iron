@@ -136,7 +136,7 @@ func TestTaskReaderAccessors(t *testing.T) {
 	mtime := time.Unix(1_700_000_000, 0)
 	tr := &taskReader{
 		task: Task{
-			Path:    path,
+			Source:  path,
 			Size:    3,
 			ModTime: mtime,
 		},
@@ -204,7 +204,7 @@ func TestWorkerErrorAndLog(t *testing.T) {
 	}
 
 	// log shouldn't panic.
-	worker.log(Task{Path: "/a", IrodsPath: "/b"})
+	worker.log(Task{Source: "/a", Target: "/b"})
 }
 
 func TestWorkerProgressNoopHandler(t *testing.T) {
