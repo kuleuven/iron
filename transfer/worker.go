@@ -308,7 +308,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		// Retrieve the connection from the writer
 		conn, closeErr := w.CloseReturnConnection()
 		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr, conn.Close(), r.Close())
+			return errors.Join(err, closeErr, conn.Close(), r.Close(), worker.IndexPool.DeleteDataObject(ctx, remote, true))
 		}
 
 		// Recreate an API instance using the retrieved connection
@@ -780,7 +780,7 @@ func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, r
 		// Retrieve the connection from the reader
 		conn, closeErr := r.CloseReturnConnection()
 		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr, conn.Close(), w.Close())
+			return errors.Join(err, closeErr, conn.Close(), w.Close(), worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
 		}
 
 		// Recreate an API instance using the retrieved connection
@@ -828,7 +828,7 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 		return nil
 	}
 
-	err = errors.Join(err, worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
+	err = errors.Join(err, b.DeleteDataObject(ctx, remote2, true))
 
 	return worker.options.ErrorHandler(remote1, remote2, err)
 }
