@@ -580,18 +580,11 @@ func (a *App) cp() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&options.Exclusive, "exclusive", false, "Do not overwrite existing files (fail for a single file; skip existing files when copying a collection)")
-	cmd.Flags().BoolVar(&options.OnlyIfNewer, "newer", false, "Only copy newer files (applies only when copying a collection)")
-	cmd.Flags().BoolVar(&options.Delete, "delete", false, "Delete files in the destination that are not present in the source (applies only when copying a collection)")
-	cmd.Flags().BoolVar(&options.CompareChecksums, "checksum", false, "Compare checksums to skip identical files (applies only when copying a collection)")
-	cmd.Flags().BoolVar(&options.IntegrityChecksums, "verify-checksum", false, "Verify checksums after copying files or collections")
-	cmd.Flags().BoolVar(&options.SyncModTime, "sync-modtime", false, "Synchronize modification times when copying files or collections")
+	addTransferFlags(cmd, &options)
 	cmd.Flags().StringArrayVar(&options.FilterPatterns, "include", nil, "Include files matching this pattern (may be specified multiple times; applies only when copying a collection)")
 	cmd.Flags().StringArrayVar(&options.IgnorePatterns, "ignore", nil, "Ignore files or directories matching this pattern (may be specified multiple times; applies only when copying a collection)")
 	cmd.Flags().BoolVarP(&options.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash if a file is deleted")
-	cmd.Flags().IntVar(&options.MaxThreads, "threads", 5, "Number of transfer threads to use")
 	cmd.Flags().BoolVarP(&options.CopyMetadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
-	cmd.Flags().BoolVar(&options.DryRun, dryrunOption, false, "Only print actions without copying or deleting files. Checksums may still be computed and stored.")
 	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Environment label of the target iRODS server")
 
 	return cmd
@@ -809,7 +802,7 @@ in the target collection. Otherwise, a subcollection with the same name will be 
 --newer, --delete, --checksum, --include, --ignore and --no-update-in-place apply only 
 to collection copies.`
 
-func (a *App) upload() *cobra.Command { //nolint:funlen
+func (a *App) upload() *cobra.Command {
 	opts := transfer.Options{
 		SyncModTime: true,
 		MaxQueued:   10000,
@@ -863,18 +856,11 @@ func (a *App) upload() *cobra.Command { //nolint:funlen
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
-	cmd.Flags().BoolVar(&opts.OnlyIfNewer, "newer", false, "Only upload files that are newer than the existing files in the destination")
-	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
+	addTransferFlags(cmd, &opts)
 	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
 	cmd.Flags().BoolVar(&opts.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
-	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of upload threads to use")
-	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to upload")
-	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after uploading files, and verify equality to ensure transfer integrity")
-	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Server side checksums are still computed and stored, even if this flag is used.")
 	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames of regular files, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
 	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when uploading a directory. The pattern is applied to filenames of files or directories, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
-	cmd.Flags().BoolVar(&opts.SyncModTime, "sync-modtime", true, "Use the modification time of the destination file to match the source file. Disable with --sync-modtime=false.")
 
 	return cmd
 }
@@ -956,18 +942,23 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files")
-	cmd.Flags().BoolVar(&opts.OnlyIfNewer, "newer", false, "Only download files that are newer than the existing files in the destination")
-	cmd.Flags().BoolVar(&opts.Delete, "delete", false, "Delete files in the destination that no longer exist in the source")
-	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of download threads to use")
-	cmd.Flags().BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums instead of size and modtime to select files to download")
-	cmd.Flags().BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Compute checksums before and after downloading files, and verify equality to ensure transfer integrity")
-	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Server side checksums are still computed and stored, even if this flag is used.")
+	addTransferFlags(cmd, &opts)
 	cmd.Flags().StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma separated list of patterns to include when uploading a directory. If not specified, all files are included. The pattern is applied to filenames of regular files, not the complete path. Defaults to the value of the IRON_INCLUDE environment variable, if set.")
 	cmd.Flags().StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma separated list of patterns to ignore when downloading a directory. The pattern is applied to filenames of files or directories, not the complete path. Defaults to the value of the IRON_IGNORE environment variable, if set.")
-	cmd.Flags().BoolVar(&opts.SyncModTime, "sync-modtime", true, "Use the modification time of the destination file to match the source file. Disable with --sync-modtime=false.")
 
 	return cmd
+}
+
+func addTransferFlags(cmd *cobra.Command, opts *transfer.Options) {
+	flags := cmd.Flags()
+	flags.BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files (fail for a single file; skip existing files when transferring a directory or collection)")
+	flags.BoolVar(&opts.OnlyIfNewer, "newer", false, "Only transfer newer files (applies only to directories and collections)")
+	flags.BoolVar(&opts.Delete, "delete", false, "Delete destination files that no longer exist in the source (applies only to directories and collections)")
+	flags.IntVar(&opts.MaxThreads, "threads", 5, "Number of transfer threads to use")
+	flags.BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums to skip identical files (applies only to directories and collections)")
+	flags.BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Verify checksums after transferring files")
+	flags.BoolVar(&opts.DryRun, dryrunOption, false, "Only print actions without transferring or deleting files. Server-side checksums may still be computed and stored.")
+	flags.BoolVar(&opts.SyncModTime, "sync-modtime", opts.SyncModTime, "Set destination modification times to match source files. Disable with --sync-modtime=false.")
 }
 
 func localPathEndsWithSeparator(path string) bool {

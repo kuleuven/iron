@@ -11,6 +11,7 @@ import (
 
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/transfer"
+	"github.com/spf13/cobra"
 )
 
 func TestVersion(t *testing.T) {
@@ -449,17 +450,59 @@ func testCopy(t *testing.T, flags []string) {
 	}
 }
 
-func TestCopyFlags(t *testing.T) {
-	cmd := testApp(t).cp()
+func TestTransferFlags(t *testing.T) {
+	for _, syncModTime := range []bool{false, true} {
+		options := transfer.Options{SyncModTime: syncModTime}
+		cmd := &cobra.Command{}
+		addTransferFlags(cmd, &options)
 
-	for _, name := range []string{
-		"exclusive", "newer", "delete", "checksum", "verify-checksum",
-		"include", "ignore", "sync-modtime",
-	} {
-		if cmd.Flags().Lookup(name) == nil {
-			t.Errorf("expected --%s flag to be registered", name)
+		if options.SyncModTime != syncModTime || options.MaxThreads != 5 {
+			t.Fatalf("unexpected defaults: %+v", options)
+		}
+
+		if err := cmd.ParseFlags([]string{
+			"--exclusive", "--newer", "--delete", "--checksum",
+			"--verify-checksum", "--dry-run", "--sync-modtime=false", "--threads=2",
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		if !options.Exclusive || !options.OnlyIfNewer || !options.Delete ||
+			!options.CompareChecksums || !options.IntegrityChecksums || !options.DryRun ||
+			options.SyncModTime || options.MaxThreads != 2 {
+			t.Errorf("flags did not update transfer options: %+v", options)
 		}
 	}
+}
+
+func TestTransferCommandDefaults(t *testing.T) {
+	app := testApp(t)
+
+	for _, cmd := range []*cobra.Command{app.cp(), app.upload(), app.download()} {
+		t.Run(cmd.Name(), func(t *testing.T) {
+			for _, name := range []string{
+				"exclusive", "newer", "delete", "checksum", "verify-checksum",
+				"include", "ignore", "sync-modtime", "threads", dryrunOption,
+			} {
+				if cmd.Flags().Lookup(name) == nil {
+					t.Errorf("missing flag --%s", name)
+				}
+			}
+
+			syncModTime, err := cmd.Flags().GetBool("sync-modtime")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if syncModTime != (cmd.Name() != "cp") {
+				t.Errorf("unexpected sync-modtime default: %v", syncModTime)
+			}
+		})
+	}
+}
+
+func TestCopyFlags(t *testing.T) {
+	cmd := testApp(t).cp()
 
 	for _, pattern := range []string{"*.txt", "*.csv"} {
 		if err := cmd.Flags().Set("include", pattern); err != nil {
