@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/cmd/iron/tabwriter"
 	"github.com/kuleuven/iron/msg"
@@ -548,12 +549,15 @@ When copying a collection, this command will compare the source and target,
 and only copy the missing parts. It can be repeated to keep the target up to date.
 In this case, the target collection must end in a slash to avoid ambiguity.
 If the source collection ends in a slash, files underneath will be placed directly
-in the target collection. Otherwise, a subcollection with the same name will be created.`
+in the target collection. Otherwise, a subcollection with the same name will be created.
+
+Use --target-environment to copy to a different iRODS environment.`
 
 func (a *App) cp() *cobra.Command {
 	var (
 		skip, newer, dryRun, metadata bool
 		maxThreads                    int
+		targetEnvironment             string
 	)
 
 	examples := []string{
@@ -572,11 +576,12 @@ func (a *App) cp() *cobra.Command {
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.runCopy(cmd, args, copyOptions{
-				skip:       skip,
-				newer:      newer,
-				dryRun:     dryRun,
-				metadata:   metadata,
-				maxThreads: maxThreads,
+				skip:              skip,
+				newer:             newer,
+				dryRun:            dryRun,
+				metadata:          metadata,
+				maxThreads:        maxThreads,
+				targetEnvironment: targetEnvironment,
 			})
 		},
 	}
@@ -586,6 +591,7 @@ func (a *App) cp() *cobra.Command {
 	cmd.Flags().IntVar(&maxThreads, "threads", 5, "Number of upload threads to use (applies only when copying a collection)")
 	cmd.Flags().BoolVarP(&metadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
 	cmd.Flags().BoolVar(&dryRun, dryrunOption, false, "Only print the actions that would be taken, without performing any changes. Checksums are still computed and stored.")
+	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Environment label of the target iRODS server")
 
 	return cmd
 }
@@ -594,6 +600,7 @@ func (a *App) cp() *cobra.Command {
 type copyOptions struct {
 	skip, newer, dryRun, metadata bool
 	maxThreads                    int
+	targetEnvironment             string
 }
 
 // runCopy performs the cp command, copying a data object or a collection.
@@ -610,7 +617,17 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 		return err
 	}
 
-	if obj.IsDir() {
+	switch {
+	case o.targetEnvironment != "":
+		return a.doRemoteTransfer(cmd, o, func(worker *transfer.Worker) {
+			if obj.IsDir() {
+				worker.RemoteCopyDir(cmd.Context(), src, dest)
+			} else {
+				worker.RemoteCopy(cmd.Context(), src, dest)
+			}
+		})
+
+	case obj.IsDir():
 		if !strings.HasSuffix(args[1], "/") {
 			return ErrAmbiguousTarget
 		}
@@ -624,17 +641,51 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 			DryRun:       o.dryRun,
 			CopyMetadata: o.metadata,
 		})
-	}
 
-	if err := a.CopyDataObject(cmd.Context(), src, dest); err != nil {
+	default:
+		if err := a.CopyDataObject(cmd.Context(), src, dest); err != nil {
+			return err
+		}
+
+		if o.metadata {
+			return a.CopyMetadata(cmd.Context(), src, api.DataObjectType, dest, api.DataObjectType)
+		}
+
+		return nil
+	}
+}
+
+func (a *App) doRemoteTransfer(cmd *cobra.Command, o copyOptions, fn func(worker *transfer.Worker)) error {
+	env, dialer, err := a.loader(cmd.Context(), o.targetEnvironment)
+	if err != nil {
 		return err
 	}
 
-	if o.metadata {
-		return a.CopyMetadata(cmd.Context(), src, api.DataObjectType, dest, api.DataObjectType)
+	env.GeneratedPasswordTimeout = a.PamTTL
+
+	option := a.Client.Option()
+	option.DialFunc = dialer
+
+	targetClient, err := iron.New(cmd.Context(), env, option)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	worker := transfer.New(a.API, a.API, transfer.Options{
+		MaxQueued:    10000,
+		MaxThreads:   o.maxThreads,
+		Output:       cmd.OutOrStdout(),
+		SkipTrash:    o.skip,
+		OnlyIfNewer:  o.newer,
+		DryRun:       o.dryRun,
+		CopyMetadata: o.metadata,
+	})
+	worker.RemoteIndexPool = targetClient.API
+	worker.RemoteTransferPool = targetClient.API
+
+	fn(worker)
+
+	return errors.Join(worker.Wait(), targetClient.Close())
 }
 
 func (a *App) create() *cobra.Command {

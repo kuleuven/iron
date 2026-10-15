@@ -332,27 +332,41 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	worker.wg.Go(func() error {
 		defer pw.Close()
 
-		err := wg.Wait()
+		err := errors.Join(wg.Wait(), ww.Close())
 
-		err = multierr.Append(err, ww.Close())
-		if err == nil && worker.options.SyncModTime {
-			err = w.Touch(r.ModTime())
+		// Sync the modification time of the remote file if the option is enabled.
+		if worker.options.SyncModTime {
+			err = errors.Join(err, w.Touch(r.ModTime()))
 		}
 
-		if cr, ok := r.(ChecksumReader); ok {
-			err = multierr.Append(err, verifyChecksumAndClose(ctx, worker.options.IntegrityChecksums, cr.Checksum, w))
-		} else {
-			err = multierr.Append(err, w.Close())
+		// Retrieve the connection from the writer
+		conn, closeErr := w.CloseReturnConnection()
+		if err != nil || closeErr != nil {
+			return errors.Join(err, closeErr, conn.Close(), r.Close())
 		}
 
-		err = multierr.Append(err, r.Close())
-		if err != nil {
-			err = multierr.Append(err, worker.IndexPool.DeleteDataObject(ctx, remote, true))
+		// Recreate an API instance using the retrieved connection
+		a := ConnectionAsAPI(worker.TransferPool, conn)
 
-			return worker.options.ErrorHandler(r.Name(), remote, err)
+		defer a.Close()
+
+		// Verify the checksum of the uploaded file if integrity checksums are enabled.
+		if cr, ok := r.(ChecksumReader); ok && worker.options.IntegrityChecksums {
+			_, _, checksumErr := compareChecksums(ctx, cr.Checksum, func(ctx context.Context) ([]byte, error) {
+				return a.Checksum(ctx, remote, false)
+			})
+
+			err = errors.Join(err, checksumErr)
 		}
 
-		return nil
+		err = errors.Join(err, r.Close())
+		if err == nil {
+			return nil
+		}
+
+		err = errors.Join(err, a.DeleteDataObject(ctx, remote, true))
+
+		return worker.options.ErrorHandler(r.Name(), remote, err)
 	})
 }
 
@@ -614,27 +628,35 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) { /
 	worker.wg.Go(func() error {
 		defer pw.Close()
 
-		err := wg.Wait()
-		err = multierr.Append(err, rr.Close())
-		err = multierr.Append(err, w.Close())
+		err := errors.Join(wg.Wait(), rr.Close(), w.Close())
 
-		if cw, ok := w.(ChecksumWriter); ok {
-			err = multierr.Append(err, verifyChecksumAndClose(ctx, worker.options.IntegrityChecksums, cw.Checksum, r))
-		} else {
-			err = multierr.Append(err, r.Close())
+		// Retrieve the connection from the writer
+		conn, closeErr := r.CloseReturnConnection()
+		if err != nil || closeErr != nil {
+			return errors.Join(err, closeErr, conn.Close())
 		}
 
-		if err != nil {
-			err = multierr.Append(err, w.Remove())
+		// Recreate an API instance using the retrieved connection
+		a := ConnectionAsAPI(worker.TransferPool, conn)
 
-			return worker.options.ErrorHandler(w.Name(), remote, err)
+		defer a.Close()
+
+		// Compare checksums if possible
+		if cw, ok := w.(ChecksumWriter); ok && worker.options.IntegrityChecksums {
+			_, _, err := compareChecksums(ctx, cw.Checksum, func(ctx context.Context) ([]byte, error) {
+				return a.Checksum(ctx, remote, false)
+			})
+			if err != nil {
+				return worker.options.ErrorHandler(w.Name(), remote, errors.Join(err, w.Remove()))
+			}
 		}
 
+		// Sync the modification time of the remote file if the option is enabled.
 		if !worker.options.SyncModTime {
 			return nil
 		}
 
-		obj, err := worker.IndexPool.GetDataObject(ctx, remote)
+		obj, err := a.GetDataObject(ctx, remote)
 		if err != nil {
 			return worker.options.ErrorHandler(w.Name(), remote, err)
 		}
@@ -715,7 +737,7 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 // RemoteCopy schedules a remote copy between two iRODS servers using parallel transfers.
 // The remote files refer to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) { //nolint:funlen
+func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) { //nolint:funlen,gocognit
 	// Find out size and other metadata of the source file (remote1) before proceeding with the remote copy.
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote1, api.O_RDONLY)
 	if err != nil {
@@ -809,42 +831,62 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 	worker.wg.Go(func() error {
 		defer pw.Close()
 
-		err := wg.Wait()
+		err := errors.Join(wg.Wait(), rr.Close(), ww.Close())
 
-		err = multierr.Append(err, rr.Close())
-		err = multierr.Append(err, ww.Close())
+		// Retrieve the connection from the reader
+		conn, closeErr := r.CloseReturnConnection()
+		if err != nil || closeErr != nil {
+			return errors.Join(err, closeErr, conn.Close(), w.Close())
+		}
 
-		if err == nil && worker.options.SyncModTime {
+		// Recreate an API instance using the retrieved connection
+		a := ConnectionAsAPI(worker.TransferPool, conn)
+
+		defer a.Close()
+
+		// Sync the modification time if the option is enabled
+		if worker.options.SyncModTime {
 			var obj *api.DataObject
 
-			if obj, err = worker.IndexPool.GetDataObject(ctx, remote1); err == nil {
+			if obj, err = a.GetDataObject(ctx, remote1); err == nil {
 				err = w.Touch(obj.ModTime())
 			}
 		}
 
-		err = multierr.Append(err, verifyChecksumsAndClose(ctx, worker.options.IntegrityChecksums, r, w))
-		if err != nil {
-			err = multierr.Append(err, worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
-
-			return worker.options.ErrorHandler(remote1, remote2, err)
+		// Retrieve the connection from the writer
+		conn, closeErr = w.CloseReturnConnection()
+		if err != nil || closeErr != nil {
+			return errors.Join(err, closeErr, conn.Close())
 		}
 
-		return nil
+		// Recreate an API instance using the retrieved connection
+		b := ConnectionAsAPI(worker.RemoteTransferPool, conn)
+
+		defer b.Close()
+
+		// Verify checksums if the option is enabled
+		if worker.options.IntegrityChecksums {
+			_, _, err = compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
+				return a.Checksum(ctx, remote1, false)
+			}, func(ctx context.Context) ([]byte, error) {
+				return b.Checksum(ctx, remote2, false)
+			})
+		}
+
+		// Copy metadata if the option is enabled
+		if worker.options.CopyMetadata {
+			err = errors.Join(err, RemoteCopyMetadata(ctx, a.API, b.API, remote1, api.DataObjectType, remote2, api.DataObjectType))
+		}
+
+		// Remove on error
+		if err == nil {
+			return nil
+		}
+
+		err = errors.Join(err, worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
+
+		return worker.options.ErrorHandler(remote1, remote2, err)
 	})
-}
-
-func verifyChecksumsAndClose(ctx context.Context, integrityChecksums bool, f1, f2 api.File) error {
-	if !integrityChecksums {
-		return multierr.Append(f1.Close(), f2.Close())
-	}
-
-	_, _, err := compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
-		return computeChecksumAndClose(ctx, f1)
-	}, func(ctx context.Context) ([]byte, error) {
-		return computeChecksumAndClose(ctx, f2)
-	})
-
-	return err
 }
 
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
@@ -1230,16 +1272,17 @@ func (worker *Worker) copyObject(ctx context.Context, u Task) {
 	})
 
 	worker.wg.Go(func() error {
-		connAPI := *worker.TransferPool
-		connAPI.Connect = func(ctx context.Context) (api.Conn, error) { return conn, nil }
+		a := ConnectionAsAPI(worker.TransferPool, conn)
 
-		if err := connAPI.CopyDataObject(ctx, remote1, remote2); err != nil {
+		defer a.Close()
+
+		if err := a.CopyDataObject(ctx, remote1, remote2); err != nil {
 			return worker.options.ErrorHandler(remote1, remote2, err)
 		}
 
 		// Copy the AVU metadata after copying the data object if requested
 		if worker.options.CopyMetadata {
-			if err := connAPI.CopyMetadata(ctx, remote1, api.DataObjectType, remote2, api.DataObjectType); err != nil {
+			if err := a.CopyMetadata(ctx, remote1, api.DataObjectType, remote2, api.DataObjectType); err != nil {
 				return worker.options.ErrorHandler(remote1, remote2, err)
 			}
 		}
@@ -1256,7 +1299,7 @@ func (worker *Worker) copyObject(ctx context.Context, u Task) {
 
 		// Verify the checksum after copying if integrity checksums are enabled
 		if worker.options.IntegrityChecksums {
-			_, _, err := VerifyRemoteToRemote(worker.TransferPool, worker.TransferPool, worker.options.ProgressHandler)(ctx, remote1, remote2, nil, nil)
+			_, _, err := VerifyRemoteToRemote(a.API, a.API, worker.options.ProgressHandler)(ctx, remote1, remote2, nil, nil)
 			if err != nil {
 				return worker.options.ErrorHandler(remote1, remote2, err)
 			}
