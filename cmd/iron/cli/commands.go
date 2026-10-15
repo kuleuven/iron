@@ -625,10 +625,6 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, o copyOptions) error {
 		return a.doRemoteTransfer(cmd, o, func(worker *transfer.Worker, workdir string) {
 			dest := resolveDest(workdir)
 
-			if !strings.HasSuffix(args[1], "/") {
-				return ErrAmbiguousTarget
-			}
-
 			if obj.IsDir() {
 				worker.RemoteCopyDir(cmd.Context(), src, dest)
 			} else {
