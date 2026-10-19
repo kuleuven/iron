@@ -252,15 +252,12 @@ func (s *DiscardPersistentState) Save(m map[string]any) error {
 }
 
 // forceReauthenticationPersistentState is a wrapper around another PersistentState,
-// that discards any loaded or saved data.
+// that discards any loaded password.
+// Note that the saved map is not affected by this wrapper.
 // It is used to force reauthentication by discarding any previously stored credentials,
 // while still saving the new credentials.
 type forceReauthenticationPersistentState struct {
 	PersistentState
-}
-
-func (c *forceReauthenticationPersistentState) Load(m map[string]any) error {
-	return nil
 }
 
 func (c *forceReauthenticationPersistentState) LoadPassword() (string, error) {
