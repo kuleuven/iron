@@ -14,31 +14,31 @@ type Env struct {
 	Host                          string `json:"irods_host"`
 	Port                          int    `json:"irods_port"`
 	Zone                          string `json:"irods_zone_name"`
-	AuthScheme                    string `json:"irods_authentication_scheme"`
-	EncryptionAlgorithm           string `json:"irods_encryption_algorithm"`
-	EncryptionSaltSize            int    `json:"irods_encryption_salt_size"`
-	EncryptionKeySize             int    `json:"irods_encryption_key_size"`
-	EncryptionNumHashRounds       int    `json:"irods_encryption_num_hash_rounds"`
+	AuthScheme                    string `json:"irods_authentication_scheme,omitempty"`
+	EncryptionAlgorithm           string `json:"irods_encryption_algorithm,omitempty"`
+	EncryptionSaltSize            int    `json:"irods_encryption_salt_size,omitempty"`
+	EncryptionKeySize             int    `json:"irods_encryption_key_size,omitempty"`
+	EncryptionNumHashRounds       int    `json:"irods_encryption_num_hash_rounds,omitempty"`
 	Username                      string `json:"irods_user_name"`
 	Password                      string `json:"irods_password,omitempty"`
-	SSLCACertificateFile          string `json:"irods_ssl_ca_certificate_file"`
-	SSLVerifyServer               string `json:"irods_ssl_verify_server"`
-	ClientServerNegotiation       string `json:"irods_client_server_negotiation"`
-	ClientServerNegotiationPolicy string `json:"irods_client_server_policy"`
-	DefaultResource               string `json:"irods_default_resource"`
-	ProxyUsername                 string `json:"irods_proxy_user"` // Authenticate with proxy credentials
-	ProxyZone                     string `json:"irods_proxy_zone"` // Authenticate with proxy credentials
+	SSLCACertificateFile          string `json:"irods_ssl_ca_certificate_file,omitempty"`
+	SSLVerifyServer               string `json:"irods_ssl_verify_server,omitempty"`
+	ClientServerNegotiation       string `json:"irods_client_server_negotiation,omitempty"`
+	ClientServerNegotiationPolicy string `json:"irods_client_server_policy,omitempty"`
+	DefaultResource               string `json:"irods_default_resource,omitempty"`
+	ProxyUsername                 string `json:"irods_proxy_user,omitempty"` // Authenticate with proxy credentials
+	ProxyZone                     string `json:"irods_proxy_zone,omitempty"` // Authenticate with proxy credentials
 
 	// Alternative location for the irods authentication file.
 	// Only used in the env.LoadFromFile and env.LoadPersistentState methods to locate the authentication file.
-	AuthenticationFile string `json:"irods_authentication_file"`
+	AuthenticationFile string `json:"irods_authentication_file,omitempty"`
 
 	// The UID to use for authentication. This is only relevant when using the authentication file.
 	AuthenticationUID *int `json:"irods_authentication_uid,omitempty"`
 
 	// The current working directory for iRODS clients.
 	// This is not used by the iron library, but can be used by the client to determine the initial working directory.
-	WorkingDirectory string `json:"irods_cwd"`
+	WorkingDirectory string `json:"irods_cwd,omitempty"`
 
 	// For pam authentication, request to generate a password that is valid for the given TTL.
 	// The server will determine the actual TTL based on the server thresholds.
