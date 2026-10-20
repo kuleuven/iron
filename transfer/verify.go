@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kuleuven/iron/api"
 	"golang.org/x/sync/errgroup"
@@ -103,10 +104,26 @@ func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler fun
 	}
 
 	if progressHandler != nil {
+		startTime := time.Now()
+
 		progressHandler(Progress{
-			Action: ComputeChecksum,
-			Label:  path,
+			Action:    ComputeChecksum,
+			Label:     path,
+			StartedAt: startTime,
+			Size:      info.Size(),
 		})
+
+		defer func() {
+			progressHandler(Progress{
+				Action:      ComputeChecksum,
+				Label:       path,
+				StartedAt:   startTime,
+				FinishedAt:  time.Now(),
+				Size:        info.Size(),
+				Transferred: info.Size(),
+				Increment:   info.Size(),
+			})
+		}()
 	}
 
 	return a.Checksum(ctx, path, false)

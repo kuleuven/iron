@@ -1070,15 +1070,15 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 
 			switch u.Action { //nolint:exhaustive
 			case ComputeChecksum:
-				worker.action(u, func() error {
-					_, err := worker.TransferPool.Checksum(ctx, u.Target, true)
+				worker.deferredAction(ctx, u, func(a *api.API) error {
+					_, err := a.Checksum(ctx, u.Target, true)
 
 					return err
 				})
 
 			case TransferFile: // Actually we do VerifyChecksums here, but we want to report the progress as a transfer
-				worker.action(u, func() error {
-					return worker.TransferPool.VerifyChecksum(ctx, u.Target)
+				worker.deferredAction(ctx, u, func(a *api.API) error {
+					return a.VerifyChecksum(ctx, u.Target)
 				})
 			}
 		}
@@ -1114,6 +1114,7 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 		queue <- Task{
 			Action: TransferFile, // TransferFile = verify checksum
 			Target: irodsPath,
+			Size:   record.Size(),
 		}
 
 		return
@@ -1124,6 +1125,7 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 	queue <- Task{
 		Action: ComputeChecksum,
 		Target: irodsPath,
+		Size:   record.Size(),
 	}
 }
 
@@ -1211,51 +1213,8 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 }
 
 func (worker *Worker) copyObject(ctx context.Context, u Task) {
-	if worker.options.DryRun {
-		worker.log(u)
-
-		return
-	}
-
-	remote1 := u.Source
-	remote2 := u.Target
-
-	conn, err := worker.TransferPool.Connect(ctx)
-	if err != nil {
-		worker.Error(remote1, remote2, err)
-
-		return
-	}
-
-	startTime := time.Now()
-
-	worker.Progress(Progress{
-		Action:    TransferFile,
-		Label:     ProgressLabel(remote1, remote2),
-		Size:      u.Size,
-		StartedAt: startTime,
-	})
-
-	worker.wg.Go(func() error {
-		a := ConnectionAsAPI(worker.TransferPool, conn)
-
-		defer a.Close()
-
-		if err := worker.copyDataObject(ctx, a.API, u); err != nil {
-			return worker.options.ErrorHandler(remote1, remote2, err)
-		}
-
-		worker.Progress(Progress{
-			Action:      TransferFile,
-			Label:       ProgressLabel(remote1, remote2),
-			Size:        u.Size,
-			Increment:   u.Size,
-			Transferred: u.Size,
-			StartedAt:   startTime,
-			FinishedAt:  time.Now(),
-		})
-
-		return nil
+	worker.deferredAction(ctx, u, func(a *api.API) error {
+		return worker.copyDataObject(ctx, a, u)
 	})
 }
 
@@ -1409,6 +1368,7 @@ func (worker *Worker) action(u Task, callback func() error) {
 		Action:    u.Action,
 		Label:     ProgressLabel(u.Source, u.Target),
 		StartedAt: startTime,
+		Size:      u.Size,
 	})
 
 	if err := callback(); err != nil {
@@ -1418,10 +1378,60 @@ func (worker *Worker) action(u Task, callback func() error) {
 	}
 
 	worker.Progress(Progress{
-		Action:     u.Action,
-		Label:      ProgressLabel(u.Source, u.Target),
-		StartedAt:  startTime,
-		FinishedAt: time.Now(),
+		Action:      u.Action,
+		Label:       ProgressLabel(u.Source, u.Target),
+		StartedAt:   startTime,
+		FinishedAt:  time.Now(),
+		Size:        u.Size,
+		Transferred: u.Size,
+		Increment:   u.Size,
+	})
+}
+
+// deferredAction runs a simple action that requires a connection and schedules an error.
+func (worker *Worker) deferredAction(ctx context.Context, u Task, callback func(*api.API) error) {
+	if worker.options.DryRun {
+		worker.log(u)
+
+		return
+	}
+
+	conn, err := worker.TransferPool.Connect(ctx)
+	if err != nil {
+		worker.Error(u.Source, u.Target, err)
+
+		return
+	}
+
+	startTime := time.Now()
+
+	worker.Progress(Progress{
+		Action:    u.Action,
+		Label:     ProgressLabel(u.Source, u.Target),
+		Size:      u.Size,
+		StartedAt: startTime,
+	})
+
+	worker.wg.Go(func() error {
+		a := ConnectionAsAPI(worker.TransferPool, conn)
+
+		defer a.Close()
+
+		if err := callback(a.API); err != nil {
+			return worker.options.ErrorHandler(u.Source, u.Target, err)
+		}
+
+		worker.Progress(Progress{
+			Action:      u.Action,
+			Label:       ProgressLabel(u.Source, u.Target),
+			Size:        u.Size,
+			Increment:   u.Size,
+			Transferred: u.Size,
+			StartedAt:   startTime,
+			FinishedAt:  time.Now(),
+		})
+
+		return nil
 	})
 }
 

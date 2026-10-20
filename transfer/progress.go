@@ -69,6 +69,10 @@ func (pb *PB) Handler(progress Progress) {
 
 	switch {
 	case progress.Action == ComputeChecksum:
+		if !progress.FinishedAt.IsZero() {
+			return
+		}
+
 		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
 
 		return
