@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -190,8 +191,19 @@ func ConfigurationTemplate(file string, template iron.Env) Configurator {
 			return err
 		}
 
-		return nil
+		// Remove all possible runtime files for this environment, as they may contain outdated information.
+		return removeRuntimeFiles(file)
 	}
+}
+
+func removeRuntimeFiles(file string) error {
+	matches, err := filepath.Glob(fmt.Sprintf("%s.[0-9]*", file))
+
+	for _, match := range matches {
+		err = errors.Join(err, os.Remove(match))
+	}
+
+	return err
 }
 
 // WithName sets the name of the App. This name is used to generate the
