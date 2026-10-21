@@ -56,6 +56,8 @@ type PB struct {
 	started          time.Time
 	bytesTransferred int64
 	bytesTotal       int64
+	actionsDone      int
+	actionsTotal     int
 	scanCompleted    bool
 	outputBuffer     *bytes.Buffer
 	errors           int
@@ -67,44 +69,92 @@ func (pb *PB) Handler(progress Progress) {
 	pb.Lock()
 	defer pb.Unlock()
 
-	switch {
-	case progress.Action == ComputeChecksum:
-		if !progress.FinishedAt.IsZero() {
-			return
-		}
-
-		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
+	if progress.Size == 0 {
+		pb.handleUnknownSize(progress)
 
 		return
+	}
 
-	case progress.StartedAt.IsZero(),
-		progress.FinishedAt.IsZero() && progress.Transferred == 0:
-		// Registration
-		if prev, ok := pb.actual[progress.Label]; ok {
-			pb.bytesTotal += progress.Size - prev.Size
-		} else {
-			pb.bytesTotal += progress.Size
+	pb.handleKnownSize(progress)
+}
+
+func (pb *PB) handleUnknownSize(progress Progress) {
+	switch {
+	case progress.FinishedAt.IsZero():
+		// A transfer with unknown size has been started or is busy, e.g. FromStream.
+		if _, ok := pb.actual[progress.Label]; !ok {
+			pb.actionsTotal++
 		}
 
-		pb.actual[progress.Label] = progress
-	case progress.FinishedAt.IsZero() && progress.Size == 0:
-		// FromStream, we don't know the size up front
 		pb.actual[progress.Label] = progress
 
 		pb.bytesTransferred += progress.Increment
 		pb.bytesTotal += progress.Increment
-	case progress.FinishedAt.IsZero():
-		// Transfer ongoing
-		pb.actual[progress.Label] = progress
 
-		pb.bytesTransferred += progress.Increment
 	default:
-		// Transfer complete
+		// A transfer with unknown size is complete.
+		if _, ok := pb.actual[progress.Label]; !ok {
+			pb.actionsTotal++
+		}
+
 		delete(pb.actual, progress.Label)
 
 		pb.bytesTransferred += progress.Increment
+		pb.bytesTotal += progress.Increment
+		pb.actionsDone++
 
-		if progress.Transferred < progress.Size || progress.Label == "" {
+		if progress.Label == "" || progress.Failed {
+			// Assume error, don't print
+			return
+		}
+
+		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
+	}
+}
+
+func (pb *PB) handleKnownSize(progress Progress) {
+	switch {
+	case progress.StartedAt.IsZero():
+		// Registration of a transfer
+		if registration, ok := pb.actual[progress.Label]; ok {
+			pb.bytesTotal += progress.Size - registration.Size
+		} else {
+			pb.bytesTotal += progress.Size
+			pb.actionsTotal++
+		}
+
+		pb.actual[progress.Label] = progress
+
+	case progress.FinishedAt.IsZero():
+		// A transfer with known size is ongoing.
+		if registration, ok := pb.actual[progress.Label]; ok {
+			pb.bytesTotal += progress.Size - registration.Size
+		} else {
+			pb.bytesTotal += progress.Size
+			pb.actionsTotal++
+		}
+
+		pb.actual[progress.Label] = progress
+
+		pb.bytesTransferred += progress.Increment
+
+	default:
+		// A transfer is complete.
+		// Check if the transfer hasn't been registered previously,
+		// or is terminated early.
+		if registration, ok := pb.actual[progress.Label]; ok {
+			pb.bytesTotal -= registration.Size - progress.Transferred
+		} else {
+			pb.bytesTotal += progress.Transferred
+			pb.actionsTotal++
+		}
+
+		delete(pb.actual, progress.Label)
+
+		pb.bytesTransferred += progress.Increment
+		pb.actionsDone++
+
+		if progress.Label == "" || progress.Failed {
 			// Assume error, don't print
 			return
 		}
@@ -162,14 +212,7 @@ func (pb *PB) print(t time.Time) {
 
 func (pb *PB) bar(t time.Time) string {
 	elapsed := t.Sub(pb.started)
-
-	percent := float64(pb.bytesTransferred) / float64(pb.bytesTotal) * 100
-	speed := float64(pb.bytesTransferred) / elapsed.Seconds()
-	eta := time.Duration(float64(pb.bytesTotal-pb.bytesTransferred)/speed) * time.Second
-
-	if speed == 0 {
-		eta = 0
-	}
+	percent, speed, eta := pb.computeProgress(elapsed)
 
 	if !pb.scanCompleted {
 		return fmt.Sprintf("--.--%% |%s| %s/%s | %s/s",
@@ -188,6 +231,18 @@ func (pb *PB) bar(t time.Time) string {
 		humanize.Bytes(uint64(speed)),
 		eta,
 	)
+}
+
+func (pb *PB) computeProgress(elapsed time.Duration) (float64, float64, time.Duration) {
+	percent := float64(pb.bytesTransferred) / float64(pb.bytesTotal) * 100
+	speed := float64(pb.bytesTransferred) / elapsed.Seconds()
+	eta := time.Duration(float64(pb.bytesTotal-pb.bytesTransferred)/speed) * time.Second
+
+	if speed == 0 {
+		eta = 0
+	}
+
+	return percent, speed, eta
 }
 
 func wheel(elapsed time.Duration) string {

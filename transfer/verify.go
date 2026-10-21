@@ -103,30 +103,29 @@ func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler fun
 		return checksum, nil
 	}
 
-	if progressHandler != nil {
-		startTime := time.Now()
-
-		progressHandler(Progress{
-			Action:    ComputeChecksum,
-			Label:     path,
-			StartedAt: startTime,
-			Size:      info.Size(),
-		})
-
-		defer func() {
-			progressHandler(Progress{
-				Action:      ComputeChecksum,
-				Label:       path,
-				StartedAt:   startTime,
-				FinishedAt:  time.Now(),
-				Size:        info.Size(),
-				Transferred: info.Size(),
-				Increment:   info.Size(),
-			})
-		}()
+	if progressHandler == nil {
+		return a.Checksum(ctx, path, false)
 	}
 
-	return a.Checksum(ctx, path, false)
+	startTime := time.Now()
+
+	progressHandler(Progress{
+		Action:    ComputeChecksum,
+		Label:     path,
+		StartedAt: startTime,
+	})
+
+	checksum, err := a.Checksum(ctx, path, false)
+
+	progressHandler(Progress{
+		Action:     ComputeChecksum,
+		Label:      path,
+		StartedAt:  startTime,
+		FinishedAt: time.Now(),
+		Failed:     err != nil,
+	})
+
+	return checksum, err
 }
 
 // compareChecksums concurrently computes the local and remote checksums using the provided functions and compares them.

@@ -145,6 +145,7 @@ type Progress struct {
 	Increment   int64
 	StartedAt   time.Time
 	FinishedAt  time.Time
+	Failed      bool
 }
 
 type progressWriter struct {
@@ -173,6 +174,7 @@ func (pw *progressWriter) Close() error {
 
 	pw.progress.FinishedAt = time.Now()
 	pw.progress.Increment = 0
+	pw.progress.Failed = pw.progress.Transferred != pw.progress.Size
 
 	pw.handler(pw.progress)
 
@@ -308,7 +310,9 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		// Retrieve the connection from the writer
 		conn, closeErr := w.CloseReturnConnection()
 		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr, conn.Close(), r.Close(), worker.IndexPool.DeleteDataObject(ctx, remote, true))
+			return worker.options.ErrorHandler(r.Name(), remote,
+				errors.Join(err, closeErr, conn.Close(), r.Close(), worker.IndexPool.DeleteDataObject(ctx, remote, true)),
+			)
 		}
 
 		// Recreate an API instance using the retrieved connection
@@ -568,7 +572,7 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
 		// Retrieve the connection from the writer
 		conn, closeErr := r.CloseReturnConnection()
 		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr, conn.Close())
+			return worker.options.ErrorHandler(w.Name(), remote, errors.Join(err, closeErr, conn.Close()))
 		}
 
 		// Recreate an API instance using the retrieved connection
@@ -780,7 +784,9 @@ func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, r
 		// Retrieve the connection from the reader
 		conn, closeErr := r.CloseReturnConnection()
 		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr, conn.Close(), w.Close(), worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true))
+			return worker.options.ErrorHandler(remote1, remote2,
+				errors.Join(err, closeErr, conn.Close(), w.Close(), worker.RemoteIndexPool.DeleteDataObject(ctx, remote2, true)),
+			)
 		}
 
 		// Recreate an API instance using the retrieved connection
@@ -805,7 +811,7 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 
 	conn, closeErr := w.CloseReturnConnection()
 	if err != nil || closeErr != nil {
-		return errors.Join(err, closeErr, conn.Close())
+		return worker.options.ErrorHandler(remote1, remote2, errors.Join(err, closeErr, conn.Close()))
 	}
 
 	b := ConnectionAsAPI(worker.RemoteTransferPool, conn)
@@ -998,6 +1004,7 @@ func (worker *Worker) downloadAction(ctx context.Context, u Task) {
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 	queue := make(chan Task, worker.options.MaxQueued)
+	queueIn := registerProgress(queue, worker.options.ProgressHandler)
 
 	// Execute the deletions
 	worker.wg.Go(func() error {
@@ -1043,13 +1050,13 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 		}, api.LexographicalOrder, api.NoSkip)
 	})
 
-	defer close(queue)
+	defer close(queueIn)
 
 	// Process the objects
 	obj, ok := <-ch
 
 	for ok {
-		obj, ok = removeAll(ch, obj, queue, SynchronizeOptions{
+		obj, ok = removeAll(ch, obj, queueIn, SynchronizeOptions{
 			RemovePerDirectory: worker.options.RemovePerDirectory,
 		})
 	}
@@ -1060,6 +1067,7 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 	queue := make(chan Task, worker.options.MaxQueued)
+	queueIn := registerProgress(queue, worker.options.ProgressHandler)
 
 	// Execute the tasks
 	worker.wg.Go(func() error {
@@ -1087,14 +1095,14 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 	})
 
 	// Walk the directory
-	defer close(queue)
+	defer close(queueIn)
 
 	err := worker.IndexPool.Walk(ctx, remote, func(irodsPath string, record api.Record, err error) error {
 		if err != nil {
 			return worker.options.ErrorHandler("", irodsPath, err)
 		}
 
-		worker.computeChecksum(irodsPath, record, queue)
+		worker.computeChecksum(irodsPath, record, queueIn)
 
 		return nil
 	}, api.NoSkip)
@@ -1114,7 +1122,7 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 		queue <- Task{
 			Action: TransferFile, // TransferFile = verify checksum
 			Target: irodsPath,
-			Size:   record.Size(),
+			Size:   record.Size(), // Include the size for progress tracking
 		}
 
 		return
@@ -1125,7 +1133,7 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 	queue <- Task{
 		Action: ComputeChecksum,
 		Target: irodsPath,
-		Size:   record.Size(),
+		Size:   record.Size(), // Include the size for progress tracking
 	}
 }
 
@@ -1372,6 +1380,15 @@ func (worker *Worker) action(u Task, callback func() error) {
 	})
 
 	if err := callback(); err != nil {
+		worker.Progress(Progress{
+			Action:     u.Action,
+			Label:      ProgressLabel(u.Source, u.Target),
+			StartedAt:  startTime,
+			FinishedAt: time.Now(),
+			Size:       u.Size,
+			Failed:     true,
+		})
+
 		worker.Error(u.Source, u.Target, err)
 
 		return
@@ -1418,6 +1435,15 @@ func (worker *Worker) deferredAction(ctx context.Context, u Task, callback func(
 		defer a.Close()
 
 		if err := callback(a.API); err != nil {
+			worker.Progress(Progress{
+				Action:     u.Action,
+				Label:      ProgressLabel(u.Source, u.Target),
+				Size:       u.Size,
+				StartedAt:  startTime,
+				FinishedAt: time.Now(),
+				Failed:     true,
+			})
+
 			return worker.options.ErrorHandler(u.Source, u.Target, err)
 		}
 
