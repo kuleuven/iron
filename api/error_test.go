@@ -1,13 +1,13 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/kuleuven/iron/msg"
-	"go.uber.org/multierr"
 )
 
 func TestError(t *testing.T) {
@@ -26,8 +26,8 @@ func TestError(t *testing.T) {
 
 	assert(testErr)
 	assert(fmt.Errorf("%w: test", testErr))
-	assert(multierr.Append(fmt.Errorf("%w: wrap", testErr), os.ErrInvalid))
-	assert(multierr.Append(os.ErrInvalid, fmt.Errorf("%w: reverse wrap", testErr)))
+	assert(errors.Join(fmt.Errorf("%w: wrap", testErr), os.ErrInvalid))
+	assert(errors.Join(os.ErrInvalid, fmt.Errorf("%w: reverse wrap", testErr)))
 
 	if !Is(testErr, -2001) {
 		t.Error("Is(err, -2001) is false")

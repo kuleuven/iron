@@ -10,7 +10,6 @@ import (
 
 	"github.com/kuleuven/iron/msg"
 	"github.com/sirupsen/logrus"
-	"go.uber.org/multierr"
 )
 
 type object struct {
@@ -109,7 +108,7 @@ func (h *handle) Size() (int64, error) {
 func (h *handle) Close() error {
 	conn, err := h.CloseReturnConnection()
 
-	return multierr.Append(err, conn.Close())
+	return errors.Join(err, conn.Close())
 }
 
 func (h *handle) CloseReturnConnection() (Conn, error) {
@@ -144,7 +143,7 @@ func (h *handle) CloseReturnConnection() (Conn, error) {
 
 		replicaInfo, err = h.getReplicaAccessInfo()
 		if err != nil {
-			err = multierr.Append(err, h.doCloseHandle())
+			err = errors.Join(err, h.doCloseHandle())
 
 			return h.conn, err
 		}
@@ -366,12 +365,12 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	}
 
 	if mode&O_TRUNC != 0 {
-		return nil, multierr.Append(ErrCannotTruncate, conn.Close())
+		return nil, errors.Join(ErrCannotTruncate, conn.Close())
 	}
 
 	replicaInfo, err := h.getReplicaAccessInfo()
 	if err != nil {
-		err = multierr.Append(err, conn.Close())
+		err = errors.Join(err, conn.Close())
 
 		return nil, err
 	}
@@ -398,7 +397,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	}
 
 	if err != nil {
-		err = multierr.Append(err, conn.Close())
+		err = errors.Join(err, conn.Close())
 
 		return nil, err
 	}

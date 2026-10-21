@@ -12,7 +12,6 @@ import (
 
 	"github.com/kuleuven/iron/msg"
 	"github.com/sirupsen/logrus"
-	"go.uber.org/multierr"
 )
 
 // CreateCollection creates a collection.
@@ -282,7 +281,7 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 
 	err = api.connElevateRequest(ctx, conn, msg.DATA_OBJ_CREATE_AN, request, &h.fileDescriptor, path)
 	if err != nil {
-		err = multierr.Append(err, conn.Close())
+		err = errors.Join(err, conn.Close())
 
 		return nil, err
 	}
@@ -348,7 +347,7 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	}
 
 	if err != nil {
-		err = multierr.Append(err, conn.Close())
+		err = errors.Join(err, conn.Close())
 
 		return nil, err
 	}

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/kuleuven/iron/api"
-	"go.uber.org/multierr"
 )
 
 // Pool returns a subset of connections that can be used
@@ -213,7 +212,7 @@ func (p *Pool) ConnectAvailable(ctx context.Context, n int) ([]Conn, error) {
 		if err == ErrNoConnectionsAvailable {
 			break
 		} else if err != nil {
-			err = multierr.Append(err, closeAll(pool))
+			err = errors.Join(err, closeAll(pool))
 
 			return nil, err
 		}
@@ -228,7 +227,7 @@ func closeAll(pool []Conn) error {
 	var err error
 
 	for _, conn := range pool {
-		err = multierr.Append(err, conn.Close())
+		err = errors.Join(err, conn.Close())
 	}
 
 	return err
@@ -395,7 +394,7 @@ func (p *Pool) Close() error {
 	p.lock.Unlock()
 
 	for _, child := range children {
-		p.closeErr = multierr.Append(p.closeErr, child.Close())
+		p.closeErr = errors.Join(p.closeErr, child.Close())
 	}
 
 	p.lock.Lock()
@@ -422,7 +421,7 @@ func (p *Pool) Close() error {
 
 	// If there is no parent pool, close all connections
 	for _, conn := range p.all {
-		p.closeErr = multierr.Append(p.closeErr, conn.Close())
+		p.closeErr = errors.Join(p.closeErr, conn.Close())
 	}
 
 	return p.closeErr

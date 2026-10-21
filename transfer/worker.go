@@ -11,7 +11,6 @@ import (
 
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
-	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -190,7 +189,7 @@ func (worker *Worker) Wait() error {
 	err := worker.wg.Wait()
 
 	if worker.closer != nil {
-		err = multierr.Append(err, worker.closer())
+		err = errors.Join(err, worker.closer())
 	}
 
 	return err
@@ -209,7 +208,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) {
 
 	stat, err := r.Stat()
 	if err != nil {
-		worker.Error(local, remote, multierr.Append(err, r.Close()))
+		worker.Error(local, remote, errors.Join(err, r.Close()))
 
 		return
 	}
@@ -279,7 +278,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 
 	w, err := tryOpenDataObject(ctx, worker.TransferPool, remote, mode)
 	if err != nil {
-		worker.Error(r.Name(), remote, multierr.Append(err, r.Close()))
+		worker.Error(r.Name(), remote, errors.Join(err, r.Close()))
 
 		return
 	}
@@ -382,7 +381,7 @@ func verifyChecksumAndClose(ctx context.Context, integrityChecksums bool, source
 func computeChecksumAndClose(ctx context.Context, f api.File) ([]byte, error) {
 	conn, err := f.CloseReturnConnection()
 	if err != nil {
-		return nil, multierr.Append(err, conn.Close())
+		return nil, errors.Join(err, conn.Close())
 	}
 
 	request := msg.DataObjectRequest{
@@ -393,7 +392,7 @@ func computeChecksumAndClose(ctx context.Context, f api.File) ([]byte, error) {
 
 	err = conn.Request(ctx, msg.DATA_OBJ_CHKSUM_AN, request, &irodsChecksum)
 
-	err = multierr.Append(err, conn.Close())
+	err = errors.Join(err, conn.Close())
 	if err != nil {
 		return nil, err
 	}
@@ -441,9 +440,9 @@ func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, 
 		},
 	}
 
-	err = multierr.Append(copyBuffer(ww, r, pw), ww.Close())
+	err = errors.Join(copyBuffer(ww, r, pw), ww.Close())
 	if err != nil {
-		err = multierr.Append(err, worker.IndexPool.DeleteDataObject(ctx, remote, true))
+		err = errors.Join(err, worker.IndexPool.DeleteDataObject(ctx, remote, true))
 
 		worker.Error(name, remote, err)
 	}
@@ -525,8 +524,8 @@ func (w fileWriter) Checksum(ctx context.Context) ([]byte, error) {
 func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
 	if err != nil {
-		err = multierr.Append(err, w.Close())
-		err = multierr.Append(err, w.Remove())
+		err = errors.Join(err, w.Close())
+		err = errors.Join(err, w.Remove())
 
 		worker.Error(w.Name(), remote, err)
 
@@ -535,8 +534,8 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
 
 	size, err := findSize(r)
 	if err != nil {
-		err = multierr.Append(err, w.Close())
-		err = multierr.Append(err, w.Remove())
+		err = errors.Join(err, w.Close())
+		err = errors.Join(err, w.Remove())
 
 		worker.Error(w.Name(), remote, err)
 
@@ -703,7 +702,7 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 	}
 
 	worker.wg.Go(func() error {
-		err = multierr.Append(copyBuffer(w, rr, pw), rr.Close())
+		err = errors.Join(copyBuffer(w, rr, pw), rr.Close())
 		if err != nil {
 			return worker.options.ErrorHandler(name, remote, err)
 		}
@@ -753,7 +752,7 @@ func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, r
 
 	w, err := tryOpenDataObject(ctx, worker.RemoteTransferPool, remote2, mode)
 	if err != nil {
-		worker.Error(remote1, remote2, multierr.Append(err, r.Close()))
+		worker.Error(remote1, remote2, errors.Join(err, r.Close()))
 
 		return
 	}

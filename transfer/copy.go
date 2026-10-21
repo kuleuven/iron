@@ -5,8 +5,6 @@ import (
 	"io"
 	"sync"
 	"time"
-
-	"go.uber.org/multierr"
 )
 
 var BufferSize int64 = 8 * 1024 * 1024
@@ -177,7 +175,7 @@ func (w *CircularWriter) Close() error { //nolint:dupl
 	var err error
 
 	for e := range allErrors {
-		err = multierr.Append(err, e)
+		err = errors.Join(err, e)
 	}
 
 	return err
@@ -339,7 +337,7 @@ func (r *CircularReader) Close() error { //nolint:dupl
 	var err error
 
 	for e := range allErrors {
-		err = multierr.Append(err, e)
+		err = errors.Join(err, e)
 	}
 
 	return err

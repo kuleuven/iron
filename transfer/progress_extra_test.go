@@ -170,9 +170,19 @@ func TestPBHandlerComputeChecksum(t *testing.T) {
 		w:            &bytes.Buffer{},
 	}
 
+	startTime := time.Now()
+
 	pb.Handler(Progress{
-		Action: ComputeChecksum,
-		Label:  testTxt,
+		Action:    ComputeChecksum,
+		Label:     testTxt,
+		StartedAt: startTime,
+	})
+
+	pb.Handler(Progress{
+		Action:     ComputeChecksum,
+		Label:      testTxt,
+		StartedAt:  startTime,
+		FinishedAt: time.Now(),
 	})
 
 	if buf.Len() == 0 {

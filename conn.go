@@ -26,7 +26,6 @@ import (
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/scramble"
 	"github.com/sirupsen/logrus"
-	"go.uber.org/multierr"
 )
 
 type Conn interface {
@@ -966,25 +965,25 @@ func (c *conn) Close() error {
 		}
 
 		if err := handler(); err != nil {
-			c.closeErr = multierr.Append(c.closeErr, err)
+			c.closeErr = errors.Join(c.closeErr, err)
 		}
 	}
 
 	c.doRequest.Lock()
 	defer c.doRequest.Unlock()
 
-	c.closeErr = multierr.Append(c.closeErr, msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0))
+	c.closeErr = errors.Join(c.closeErr, msg.Write(c.transport, msg.EmptyResponse{}, nil, c.protocol, "RODS_DISCONNECT", 0))
 
 	if tlsConn, ok := c.transport.(*tls.Conn); ok {
-		c.closeErr = multierr.Append(c.closeErr, tlsConn.CloseWrite())
-		c.closeErr = multierr.Append(c.closeErr, tlsConn.SetReadDeadline(time.Now().Add(100*time.Millisecond)))
+		c.closeErr = errors.Join(c.closeErr, tlsConn.CloseWrite())
+		c.closeErr = errors.Join(c.closeErr, tlsConn.SetReadDeadline(time.Now().Add(100*time.Millisecond)))
 
 		if _, err := io.Copy(io.Discard, tlsConn); err != nil {
-			c.closeErr = multierr.Append(c.closeErr, err)
+			c.closeErr = errors.Join(c.closeErr, err)
 		}
 	}
 
-	c.closeErr = multierr.Append(c.closeErr, c.Transport().Close())
+	c.closeErr = errors.Join(c.closeErr, c.Transport().Close())
 	c.closed = true
 
 	return c.closeErr
