@@ -207,10 +207,16 @@ func (a *App) root(shellCommand bool) *cobra.Command { //nolint:funlen
 }
 
 func (a *App) addRootFlags(rootCmd *cobra.Command) {
+	overrideEnvCommands := "'cd'"
+
+	if a.configurator != nil {
+		overrideEnvCommands += " or 'auth [flags] <" + strings.Join(a.configurationArguments, "> <") + ">'"
+	}
+
 	rootCmd.PersistentFlags().CountVarP(&a.Debug, "debug", "v", "Enable debug output")
 	rootCmd.PersistentFlags().BoolVar(&a.Admin, "admin", false, "Enable admin access")
 	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
-	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, "Working directory")
+	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, fmt.Sprintf("Override the working directory derived from the environment for this command. Using this flag does not prevent the application from changing the environment's working directory when combined with %s.", overrideEnvCommands))
 	rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "In case pam authentication is used, request a session that is valid for the given duration. This value is rounded down to the nearest hour.")
 
 	if a.environmentFlag {

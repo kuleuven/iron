@@ -183,6 +183,7 @@ func (a *App) auth() *cobra.Command {
 	use := "auth [flags] [environment]"
 	args := cobra.MaximumNArgs(1)
 	preRun := a.PreRunAuth
+	longDescription := "Authenticate against the irods server that is currently configured in the environment."
 
 	if a.configurator != nil {
 		use += "\n  " + a.name + " auth [flags] <" + strings.Join(a.configurationArguments, "> <") + ">"
@@ -201,13 +202,15 @@ func (a *App) auth() *cobra.Command {
 
 			return a.PreRunAuthConfigurator(cmd, args)
 		}
+
+		longDescription += "\n\nThe command 'auth [flags] <" + strings.Join(a.configurationArguments, "> <") + ">' will set up or reconfigure the irods environment. When combined with the '--workdir' flag, it allows specifying the working directory for the environment being configured."
 	}
 
 	cmd := &cobra.Command{
 		Use:               use,
 		Aliases:           []string{"authenticate", "iinit"},
 		Short:             "Authenticate against the irods server.",
-		Long:              "Authenticate against the irods server using the .irods/irods_environment.json file.",
+		Long:              longDescription,
 		Args:              args,
 		SilenceUsage:      true,
 		PersistentPreRunE: preRun,
