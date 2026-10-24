@@ -86,6 +86,7 @@ type conn struct {
 	env       *Env
 	option    string
 	protocol  msg.Protocol
+	tlsTime   func() time.Time
 
 	// Set during handshake
 	connectedAt     time.Time
@@ -107,6 +108,43 @@ type conn struct {
 // DialFunc is used to connect to an IRODS server.
 type DialFunc func(ctx context.Context, env Env, clientName string) (net.Conn, error)
 
+// Dialer connects to an IRODS server with custom dial and TLS time settings.
+type Dialer struct {
+	DialFunc DialFunc
+	Time     func() time.Time
+	Protocol msg.Protocol
+	Prompt   Prompt
+}
+
+// Dial connects to an IRODS server and validates TLS certificates at the time
+// returned by Time. The caller is responsible for closing the connection.
+func (d Dialer) Dial(ctx context.Context, env Env, clientName string) (Conn, error) {
+	dialFunc := d.DialFunc
+	if dialFunc == nil {
+		dialFunc = DefaultDialFunc
+	}
+
+	transport, err := dialFunc(ctx, env, clientName)
+	if err != nil {
+		return nil, err
+	}
+
+	prompt := d.Prompt
+	if prompt == nil {
+		prompt = StdPrompt
+	}
+
+	return newConn(ctx, transport, env, clientName, prompt, d.Protocol, d.currentTime)
+}
+
+func (d Dialer) currentTime() time.Time {
+	if d.Time != nil {
+		return d.Time()
+	}
+
+	return tlsTime()
+}
+
 func DefaultDialFunc(ctx context.Context, env Env, clientName string) (net.Conn, error) {
 	dialer := net.Dialer{
 		Timeout: env.DialTimeout,
@@ -118,27 +156,14 @@ func DefaultDialFunc(ctx context.Context, env Env, clientName string) (net.Conn,
 // Dial connects to an IRODS server and creates a new connection.
 // The caller is responsible for closing the connection when it is no longer needed.
 func Dial(ctx context.Context, env Env, clientName string) (Conn, error) {
-	return dial(ctx, env, clientName, DefaultDialFunc, StdPrompt, msg.XML)
+	return (Dialer{Protocol: msg.XML}).Dial(ctx, env, clientName)
 }
 
 // PromptDial connects to an IRODS server and creates a new connection.
 // Prompt is used for possible interactive authentication.
 // The caller is responsible for closing the connection when it is no longer needed.
 func PromptDial(ctx context.Context, env Env, prompt Prompt, clientName string) (Conn, error) {
-	return dial(ctx, env, clientName, DefaultDialFunc, prompt, msg.XML)
-}
-
-func dial(ctx context.Context, env Env, clientName string, dialFunc DialFunc, prompt Prompt, protocol msg.Protocol) (*conn, error) {
-	if dialFunc == nil {
-		dialFunc = DefaultDialFunc
-	}
-
-	conn, err := dialFunc(ctx, env, clientName)
-	if err != nil {
-		return nil, err
-	}
-
-	return newConn(ctx, conn, env, clientName, prompt, protocol)
+	return (Dialer{Protocol: msg.XML, Prompt: prompt}).Dial(ctx, env, clientName)
 }
 
 var HandshakeTimeout = time.Minute
@@ -147,24 +172,25 @@ var HandshakeTimeout = time.Minute
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // Returns an error if the handshake fails.
 func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string) (Conn, error) {
-	return newConn(ctx, transport, env, clientName, StdPrompt, msg.XML)
+	return newConn(ctx, transport, env, clientName, StdPrompt, msg.XML, tlsTime)
 }
 
 // NewPromptConn initializes a new Conn instance with the provided network connection and environment settings.
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // For interactive authentication, the provided prompt will be used. Returns an error if the handshake fails.
 func NewPromptConn(ctx context.Context, transport net.Conn, env Env, prompt Prompt, clientName string) (Conn, error) {
-	return newConn(ctx, transport, env, clientName, prompt, msg.XML)
+	return newConn(ctx, transport, env, clientName, prompt, msg.XML, tlsTime)
 }
 
 const requestServerNegotiationToken = "request_server_negotiation"
 
-func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, prompt Prompt, protocol msg.Protocol) (*conn, error) {
+func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, prompt Prompt, protocol msg.Protocol, timeFunc func() time.Time) (*conn, error) {
 	c := &conn{
 		transport:   transport,
 		env:         &env,
 		option:      clientName,
 		protocol:    protocol,
+		tlsTime:     timeFunc,
 		connectedAt: time.Now(),
 	}
 
@@ -393,7 +419,7 @@ func verifyPeerCertificateNoHostname(tlsConfig *tls.Config, certificates [][]byt
 func (c *conn) handshakeTLS() error {
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
-		Time:       tlsTime,
+		Time:       c.tlsTime,
 	}
 
 	switch c.env.SSLVerifyServer {

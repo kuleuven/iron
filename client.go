@@ -229,7 +229,11 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		}
 	}
 
-	conn, err := dial(ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
+	dialer := Dialer{
+		DialFunc: c.option.DialFunc, Time: tlsTime,
+		Protocol: c.protocol, Prompt: c.option.AuthenticationPrompt,
+	}
+	conn, err := dialer.Dial(ctx, env, c.option.ClientName)
 
 	// If the authentication scheme was not native, but we tried using a native password that was obtained before,
 	// and it expired, we'll retry with the original authentication scheme.
@@ -240,7 +244,7 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		env.AuthScheme = c.env.AuthScheme
 		env.Password = ""
 
-		conn, err = dial(ctx, env, c.option.ClientName, c.option.DialFunc, c.option.AuthenticationPrompt, c.protocol)
+		conn, err = dialer.Dial(ctx, env, c.option.ClientName)
 	}
 
 	// Capture all other errors here
@@ -256,9 +260,9 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 		c.env.PersistentState.SavePassword(c.nativePassword) //nolint:errcheck
 
 		// Calculate actual TTL
-		actualTTL := min(defaultMinimumTTL, time.Duration(determineTTL(conn.env.GeneratedPasswordTimeout))*time.Hour)
+		actualTTL := min(defaultMinimumTTL, time.Duration(determineTTL(conn.Env().GeneratedPasswordTimeout))*time.Hour)
 
-		c.nativePasswordExpiry = conn.connectedAt.Add(actualTTL)
+		c.nativePasswordExpiry = conn.ConnectedAt().Add(actualTTL)
 	}
 
 	return conn, nil

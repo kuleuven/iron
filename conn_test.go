@@ -1,6 +1,7 @@
 package iron
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
@@ -330,7 +331,17 @@ func TestConnPamPasswordTLS(t *testing.T) {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, testStr)
+	dialer := Dialer{
+		DialFunc: func(context.Context, Env, string) (net.Conn, error) {
+			return transport, nil
+		},
+		Protocol: msg.XML,
+		Time: func() time.Time {
+			return tlsTime().Add(7 * 24 * time.Hour)
+		},
+	}
+
+	conn, err := dialer.Dial(ctx, env, testStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,6 +397,20 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 	err = conn.Close()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDialerTLSOffset(t *testing.T) {
+	now := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)
+	originalTLSTime := tlsTime
+	tlsTime = func() time.Time { return now }
+	t.Cleanup(func() { tlsTime = originalTLSTime })
+
+	dialer := Dialer{Time: func() time.Time { return now.Add(7 * 24 * time.Hour) }}
+	want := now.Add(7 * 24 * time.Hour)
+
+	if got := dialer.currentTime(); !got.Equal(want) {
+		t.Errorf("TLS time = %s, want %s", got, want)
 	}
 }
 
