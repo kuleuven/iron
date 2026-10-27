@@ -160,16 +160,28 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 	MinimumRangeSize = 200
 	CopyBufferDelay = 500 * time.Millisecond
 
+	pb := ProgressBar(io.Discard)
+
 	worker := New(testIndexAPI, testTransferAPI, Options{
-		MaxThreads: 2,
-		Output:     os.Stdout,
-		Delete:     true,
+		MaxThreads:      2,
+		ProgressHandler: pb.Handler,
+		ErrorHandler:    pb.ErrorHandler,
+		Delete:          true,
 	})
 
 	worker.UploadDir(t.Context(), dir, "/test")
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
+	}
+
+	if err := pb.Close(); err != nil {
+		t.Error(err)
+	}
+
+	// Registrations and transfers must share the same label, otherwise the total is counted twice
+	if len(pb.actual) != 0 || pb.bytesTotal != 400 || pb.bytesTransferred != 400 {
+		t.Errorf("unexpected progress state: %d pending, %d/%d bytes", len(pb.actual), pb.bytesTransferred, pb.bytesTotal)
 	}
 }
 
