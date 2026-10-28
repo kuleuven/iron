@@ -265,7 +265,7 @@ func (r fileReader) Checksum(ctx context.Context) ([]byte, error) {
 // The call blocks until the transfer of all chunks has started.
 func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 	if worker.options.DryRun {
-		worker.transferProgress(r.Name(), r.Size())
+		worker.transferProgress(ProgressLabel(r.Name(), remote), r.Size())
 
 		return
 	}
@@ -283,7 +283,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		return
 	}
 
-	pw := worker.transferProgress(r.Name(), r.Size())
+	pw := worker.transferProgress(ProgressLabel(r.Name(), remote), r.Size())
 
 	rr := &ReaderAtRangeReader{ReaderAt: r}
 
@@ -545,12 +545,12 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
 	if worker.options.DryRun {
 		defer r.Close()
 
-		worker.transferProgress(r.Name(), size)
+		worker.transferProgress(ProgressLabel(remote, w.Name()), size)
 
 		return
 	}
 
-	pw := worker.transferProgress(w.Name(), size)
+	pw := worker.transferProgress(ProgressLabel(remote, w.Name()), size)
 
 	ww := &WriterAtRangeWriter{WriterAt: w}
 
@@ -735,7 +735,7 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 	if worker.options.DryRun {
 		defer r.Close()
 
-		worker.transferProgress(remote1, size)
+		worker.transferProgress(ProgressLabel(remote1, remote2), size)
 
 		return
 	}
@@ -757,7 +757,7 @@ func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, r
 		return
 	}
 
-	pw := worker.transferProgress(remote1, size)
+	pw := worker.transferProgress(ProgressLabel(remote1, remote2), size)
 
 	rr := &ReopenRangeReader{
 		ReadSeekCloser: r,
