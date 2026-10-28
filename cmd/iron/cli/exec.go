@@ -25,13 +25,6 @@ func (a *App) exec() *cobra.Command {
 		Short: "Run an iron command file containing multiple transfer statements",
 		Long:  "Read commands in order and stage transfers on one worker. Use a line containing wait before dependent commands. Set transfer flags on individual commands in the file; threads, dry-run, and target-environment apply to the entire run.",
 		Args:  cobra.ExactArgs(1),
-		ValidArgsFunction: func(cmd *cobra.Command, args []string, word string) ([]string, cobra.ShellCompDirective) {
-			if a.inShell {
-				return a.CompleteArgs(cmd, args, word)
-			}
-
-			return nil, cobra.ShellCompDirectiveDefault
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file, err := os.Open(args[0])
 			if err != nil {

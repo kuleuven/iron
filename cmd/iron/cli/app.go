@@ -160,7 +160,6 @@ func (a *App) root(shellCommand bool) *cobra.Command { //nolint:funlen
 		a.touch(),
 		a.upload(),
 		a.download(),
-		a.exec(),
 		a.cat(),
 		a.head(),
 		a.save(),
@@ -197,6 +196,7 @@ func (a *App) root(shellCommand bool) *cobra.Command { //nolint:funlen
 	}
 
 	if !shellCommand {
+		rootCmd.AddCommand(a.exec())
 		a.addRootFlags(rootCmd)
 	}
 
