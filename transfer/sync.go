@@ -23,7 +23,7 @@ const (
 	RemoveDirectory               // RemoveDirectory removes the Target directory
 	// RemoveDirectoryAll removes a collection and all its remaining contents (data objects
 	// and subcollections) with a single recursive server-side operation. It is used instead
-	// of RemoveDirectory when Options.RemovePerDirectory is set.
+	// of RemoveDirectory when Flags.RemovePerDirectory is set.
 	RemoveDirectoryAll  // RemoveDirectoryAll removes the Target directory and all its contents
 	ComputeChecksum     // ComputeChecksum computes the checksum of the Target file
 	SetModificationTime // SetModificationTime sets the modification time of the Target file
@@ -74,7 +74,7 @@ type object struct {
 // indicates whether to delete files first before retransferring, or whether files might
 // be updated in place.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string, queue chan<- Task) error { //nolint:dupl,funlen
+func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string, queue chan<- Task, flags Flags) error { //nolint:dupl,funlen
 	lch := make(chan *object)
 	rch := make(chan *object)
 
@@ -126,15 +126,15 @@ func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string
 	// Process the records
 	wg.Go(func() error {
 		opts := SynchronizeOptions{
-			Exclusive:                        worker.options.Exclusive,
-			OnlyIfNewer:                      worker.options.OnlyIfNewer,
-			CompareChecksums:                 worker.options.CompareChecksums,
-			Delete:                           worker.options.Delete,
-			DisableUpdateInPlace:             worker.options.DisableUpdateInPlace,
-			RemovePerDirectory:               worker.options.RemovePerDirectory,
-			SyncModTimeForIdenticalChecksums: worker.options.SyncModTime,
-			FilterPatterns:                   worker.options.FilterPatterns,
-			IgnorePatterns:                   worker.options.IgnorePatterns,
+			Exclusive:                        flags.Exclusive,
+			OnlyIfNewer:                      flags.OnlyIfNewer,
+			CompareChecksums:                 flags.CompareChecksums,
+			Delete:                           flags.Delete,
+			DisableUpdateInPlace:             flags.DisableUpdateInPlace,
+			RemovePerDirectory:               flags.RemovePerDirectory,
+			SyncModTimeForIdenticalChecksums: flags.SyncModTime,
+			FilterPatterns:                   flags.FilterPatterns,
+			IgnorePatterns:                   flags.IgnorePatterns,
 			ChecksumVerify:                   VerifyLocalToRemote(worker.IndexPool, worker.options.ProgressHandler),
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
@@ -151,7 +151,7 @@ func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string
 // indicates whether to delete files first before retransferring, or whether files might
 // be updated in place.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local string, queue chan<- Task) error { //nolint:dupl,funlen
+func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local string, queue chan<- Task, flags Flags) error { //nolint:dupl,funlen
 	lch := make(chan *object)
 	rch := make(chan *object)
 
@@ -203,15 +203,15 @@ func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local stri
 	// Process the records
 	wg.Go(func() error {
 		opts := SynchronizeOptions{
-			Exclusive:                        worker.options.Exclusive,
-			OnlyIfNewer:                      worker.options.OnlyIfNewer,
-			CompareChecksums:                 worker.options.CompareChecksums,
-			Delete:                           worker.options.Delete,
-			DisableUpdateInPlace:             worker.options.DisableUpdateInPlace,
-			RemovePerDirectory:               worker.options.RemovePerDirectory,
-			SyncModTimeForIdenticalChecksums: worker.options.SyncModTime,
-			FilterPatterns:                   worker.options.FilterPatterns,
-			IgnorePatterns:                   worker.options.IgnorePatterns,
+			Exclusive:                        flags.Exclusive,
+			OnlyIfNewer:                      flags.OnlyIfNewer,
+			CompareChecksums:                 flags.CompareChecksums,
+			Delete:                           flags.Delete,
+			DisableUpdateInPlace:             flags.DisableUpdateInPlace,
+			RemovePerDirectory:               flags.RemovePerDirectory,
+			SyncModTimeForIdenticalChecksums: flags.SyncModTime,
+			FilterPatterns:                   flags.FilterPatterns,
+			IgnorePatterns:                   flags.IgnorePatterns,
 			ChecksumVerify:                   VerifyRemoteToLocal(worker.IndexPool, worker.options.ProgressHandler),
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
@@ -227,7 +227,7 @@ func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local stri
 // The deleteFirst parameter indicates whether to delete files first before retransferring,
 // or whether files might be updated in place.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 string, queue chan<- Task) error {
+func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 string, queue chan<- Task, flags Flags) error {
 	r1ch := make(chan *object)
 	r2ch := make(chan *object)
 
@@ -270,15 +270,15 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 	// Process the records
 	wg.Go(func() error {
 		opts := SynchronizeOptions{
-			Exclusive:                        worker.options.Exclusive,
-			OnlyIfNewer:                      worker.options.OnlyIfNewer,
-			CompareChecksums:                 worker.options.CompareChecksums,
-			Delete:                           worker.options.Delete,
+			Exclusive:                        flags.Exclusive,
+			OnlyIfNewer:                      flags.OnlyIfNewer,
+			CompareChecksums:                 flags.CompareChecksums,
+			Delete:                           flags.Delete,
 			DisableUpdateInPlace:             true,
-			RemovePerDirectory:               worker.options.RemovePerDirectory,
-			SyncModTimeForIdenticalChecksums: worker.options.SyncModTime,
-			FilterPatterns:                   worker.options.FilterPatterns,
-			IgnorePatterns:                   worker.options.IgnorePatterns,
+			RemovePerDirectory:               flags.RemovePerDirectory,
+			SyncModTimeForIdenticalChecksums: flags.SyncModTime,
+			FilterPatterns:                   flags.FilterPatterns,
+			IgnorePatterns:                   flags.IgnorePatterns,
 			ChecksumVerify:                   VerifyRemoteToRemote(worker.IndexPool, worker.IndexPool, worker.options.ProgressHandler),
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
@@ -294,7 +294,7 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 // The deleteFirst parameter indicates whether to delete files first before retransferring,
 // or whether files might be updated in place.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2 string, queue chan<- Task) error {
+func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2 string, queue chan<- Task, flags Flags) error {
 	r1ch := make(chan *object)
 	r2ch := make(chan *object)
 
@@ -337,15 +337,15 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 	// Process the records
 	wg.Go(func() error {
 		opts := SynchronizeOptions{
-			Exclusive:                        worker.options.Exclusive,
-			OnlyIfNewer:                      worker.options.OnlyIfNewer,
-			CompareChecksums:                 worker.options.CompareChecksums,
-			Delete:                           worker.options.Delete,
-			DisableUpdateInPlace:             worker.options.DisableUpdateInPlace,
-			RemovePerDirectory:               worker.options.RemovePerDirectory,
-			SyncModTimeForIdenticalChecksums: worker.options.SyncModTime,
-			FilterPatterns:                   worker.options.FilterPatterns,
-			IgnorePatterns:                   worker.options.IgnorePatterns,
+			Exclusive:                        flags.Exclusive,
+			OnlyIfNewer:                      flags.OnlyIfNewer,
+			CompareChecksums:                 flags.CompareChecksums,
+			Delete:                           flags.Delete,
+			DisableUpdateInPlace:             flags.DisableUpdateInPlace,
+			RemovePerDirectory:               flags.RemovePerDirectory,
+			SyncModTimeForIdenticalChecksums: flags.SyncModTime,
+			FilterPatterns:                   flags.FilterPatterns,
+			IgnorePatterns:                   flags.IgnorePatterns,
 			ChecksumVerify:                   VerifyRemoteToRemote(worker.IndexPool, worker.RemoteIndexPool, worker.options.ProgressHandler),
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
@@ -584,7 +584,7 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 }
 
 // removeAll recursively queues removal tasks for obj and, if obj is a directory, its
-// descendants. If Options.RemovePerDirectory is set, a directory is removed together with
+// descendants. If Flags.RemovePerDirectory is set, a directory is removed together with
 // its descendants using a single recursive server-side operation (see RemoveDir), so
 // individual data objects directly inside a directory do not need their own RemoveFile
 // task. Since that recursive operation may not scale to an unbounded number of objects,

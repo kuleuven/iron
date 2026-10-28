@@ -40,4 +40,9 @@ const (
 	testTempZone       = "tempZone"
 	testAlice          = "alice"
 	testRodsUser       = "rodsuser"
+	testThreads        = "threads"
+	testThreadsFlag    = "--" + testThreads
+	testDelete         = "delete"
+	testIgnore         = "ignore"
+	testInclude        = "include"
 )

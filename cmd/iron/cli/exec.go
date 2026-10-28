@@ -16,14 +16,14 @@ import (
 )
 
 func (a *App) exec() *cobra.Command {
-	options := transfer.Options{SyncModTime: true}
+	var options transfer.Options
 
 	var targetEnvironment string
 
 	cmd := &cobra.Command{
 		Use:   "exec <local file>",
 		Short: "Run an iron command file containing multiple transfer statements",
-		Long:  "Read commands in order and stage transfers on one worker. Use a line containing wait before dependent commands. Transfer flags apply to the entire run, not individual lines.",
+		Long:  "Read commands in order and stage transfers on one worker. Use a line containing wait before dependent commands. Set transfer flags on individual commands in the file; threads, dry-run, and target-environment apply to the entire run.",
 		Args:  cobra.ExactArgs(1),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, word string) ([]string, cobra.ShellCompDirective) {
 			if a.inShell {
@@ -45,10 +45,7 @@ func (a *App) exec() *cobra.Command {
 		},
 	}
 
-	addTransferFlags(cmd, &options)
-	cmd.Flags().BoolVarP(&options.SkipTrash, "delete-skip-trash", "S", false, "Do not move deleted files to trash")
-	cmd.Flags().BoolVarP(&options.CopyMetadata, "metadata", "m", false, "Copy AVU metadata on copy operations")
-	cmd.Flags().BoolVar(&options.DisableUpdateInPlace, "no-update-in-place", false, "Replace existing objects instead of updating in place")
+	addTransferOptionFlags(cmd, &options)
 	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Target environment for cp --remote commands")
 
 	return cmd
@@ -149,6 +146,10 @@ func (a *App) scriptCommand(ctx context.Context, worker *transfer.Worker, target
 
 	var remoteCopy bool
 
+	copyFlags := transfer.Flags{SyncModTime: true}
+	uploadFlags := transfer.Flags{SyncModTime: true}
+	downloadFlags := transfer.Flags{SyncModTime: true}
+
 	copyCmd := &cobra.Command{
 		Use: "cp <path> <target path>", Args: cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -166,14 +167,19 @@ func (a *App) scriptCommand(ctx context.Context, worker *transfer.Worker, target
 				return err
 			}
 
-			paths.copy(ctx, worker, remoteCopy)
+			paths.copy(ctx, worker, remoteCopy, copyFlags)
 
 			return ctx.Err()
 		},
 	}
 	copyCmd.Flags().BoolVar(&remoteCopy, "remote", false, "Copy to the target environment")
+	addTransferFlags(copyCmd, &copyFlags)
+	copyCmd.Flags().BoolVarP(&copyFlags.SkipTrash, "delete-skip-trash", "S", false, "Do not move deleted files to trash")
+	copyCmd.Flags().BoolVarP(&copyFlags.CopyMetadata, "metadata", "m", false, "Copy AVU metadata on copy operations")
+	copyCmd.Flags().BoolVar(&copyFlags.DisableUpdateInPlace, "no-update-in-place", false, "Replace existing objects instead of updating in place")
 	root.AddCommand(copyCmd)
-	root.AddCommand(&cobra.Command{
+
+	uploadCmd := &cobra.Command{
 		Use: "upload <local file> [target path]", Aliases: []string{uploadAlias}, Args: cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			paths, err := a.uploadPaths(args)
@@ -181,12 +187,17 @@ func (a *App) scriptCommand(ctx context.Context, worker *transfer.Worker, target
 				return err
 			}
 
-			paths.upload(ctx, worker)
+			paths.upload(ctx, worker, uploadFlags)
 
 			return ctx.Err()
 		},
-	})
-	root.AddCommand(&cobra.Command{
+	}
+	addTransferFlags(uploadCmd, &uploadFlags)
+	uploadCmd.Flags().BoolVarP(&uploadFlags.SkipTrash, "delete-skip-trash", "S", false, "Do not move deleted files to trash")
+	uploadCmd.Flags().BoolVar(&uploadFlags.DisableUpdateInPlace, "no-update-in-place", false, "Replace existing objects instead of updating in place")
+	root.AddCommand(uploadCmd)
+
+	downloadCmd := &cobra.Command{
 		Use: "download <path> [local file]", Aliases: []string{downloadAlias}, Args: cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			paths, err := a.downloadPaths(ctx, args)
@@ -194,11 +205,13 @@ func (a *App) scriptCommand(ctx context.Context, worker *transfer.Worker, target
 				return err
 			}
 
-			paths.download(ctx, worker)
+			paths.download(ctx, worker, downloadFlags)
 
 			return ctx.Err()
 		},
-	})
+	}
+	addTransferFlags(downloadCmd, &downloadFlags)
+	root.AddCommand(downloadCmd)
 
 	root.AddCommand(
 		a.scriptWrapAction(ctx, worker, a.mkdir(), transfer.CreateDirectory), //nolint:contextcheck // Cobra constructors inherit ctx through ExecuteContext.

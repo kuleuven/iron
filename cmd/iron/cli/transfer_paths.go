@@ -97,31 +97,31 @@ func (a *App) copyPaths(ctx context.Context, args []string, workdir string) (tra
 	return transferPaths{source, a.PathIn(targetArg, workdir), info.IsDir()}, nil
 }
 
-func (paths transferPaths) upload(ctx context.Context, worker *transfer.Worker) {
+func (paths transferPaths) upload(ctx context.Context, worker *transfer.Worker, flags transfer.Flags) {
 	if paths.directory {
-		worker.UploadDir(ctx, paths.source, paths.target)
+		worker.UploadDir(ctx, paths.source, paths.target, flags)
 	} else {
-		worker.Upload(ctx, paths.source, paths.target)
+		worker.Upload(ctx, paths.source, paths.target, flags)
 	}
 }
 
-func (paths transferPaths) download(ctx context.Context, worker *transfer.Worker) {
+func (paths transferPaths) download(ctx context.Context, worker *transfer.Worker, flags transfer.Flags) {
 	if paths.directory {
-		worker.DownloadDir(ctx, paths.target, paths.source)
+		worker.DownloadDir(ctx, paths.target, paths.source, flags)
 	} else {
-		worker.Download(ctx, paths.target, paths.source)
+		worker.Download(ctx, paths.target, paths.source, flags)
 	}
 }
 
-func (paths transferPaths) copy(ctx context.Context, worker *transfer.Worker, remote bool) {
+func (paths transferPaths) copy(ctx context.Context, worker *transfer.Worker, remote bool, flags transfer.Flags) {
 	switch {
 	case remote && paths.directory:
-		worker.RemoteCopyDir(ctx, paths.source, paths.target)
+		worker.RemoteCopyDir(ctx, paths.source, paths.target, flags)
 	case remote:
-		worker.RemoteCopy(ctx, paths.source, paths.target)
+		worker.RemoteCopy(ctx, paths.source, paths.target, flags)
 	case paths.directory:
-		worker.CopyDir(ctx, paths.source, paths.target)
+		worker.CopyDir(ctx, paths.source, paths.target, flags)
 	default:
-		worker.Copy(ctx, paths.source, paths.target)
+		worker.Copy(ctx, paths.source, paths.target, flags)
 	}
 }

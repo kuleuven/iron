@@ -66,13 +66,12 @@ func (tc fileTransferTest) runUpload(t *testing.T) {
 	var progress []Progress
 
 	worker := New(targetAPI, targetAPI, Options{
-		DryRun:             tc.dryRun,
-		IntegrityChecksums: tc.integrity,
+		DryRun: tc.dryRun,
 		ProgressHandler: func(ctx context.Context, p Progress) {
 			progress = append(progress, p)
 		},
 	})
-	worker.FromReader(t.Context(), &fileReader{name: local, stat: stat, File: r}, testCopyDest)
+	worker.FromReader(t.Context(), &fileReader{name: local, stat: stat, File: r}, testCopyDest, Flags{IntegrityChecksums: tc.integrity})
 
 	if err := worker.Wait(); !errors.Is(err, tc.wantErr) {
 		t.Fatalf("Wait() = %v, want %v", err, tc.wantErr)
@@ -124,8 +123,7 @@ func (tc fileTransferTest) run(t *testing.T, remoteCopy bool) {
 	var progress []Progress
 
 	worker := New(sourceAPI, sourceAPI, Options{
-		DryRun:             tc.dryRun,
-		IntegrityChecksums: tc.integrity,
+		DryRun: tc.dryRun,
 		ProgressHandler: func(ctx context.Context, p Progress) {
 			progress = append(progress, p)
 		},
@@ -135,9 +133,9 @@ func (tc fileTransferTest) run(t *testing.T, remoteCopy bool) {
 
 	local := filepath.Join(t.TempDir(), testLocalTxt)
 	if remoteCopy {
-		worker.RemoteCopy(t.Context(), testCopySrc, testCopyDest)
+		worker.RemoteCopy(t.Context(), testCopySrc, testCopyDest, Flags{IntegrityChecksums: tc.integrity})
 	} else {
-		worker.Download(t.Context(), local, testCopySrc)
+		worker.Download(t.Context(), local, testCopySrc, Flags{IntegrityChecksums: tc.integrity})
 	}
 
 	if err := worker.Wait(); !errors.Is(err, tc.wantErr) {

@@ -10,41 +10,41 @@ import (
 
 // Upload uploads a local file to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
-func (c *Client) Upload(ctx context.Context, local, remote string, options transfer.Options) error {
+func (c *Client) Upload(ctx context.Context, local, remote string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.Upload(ctx, local, remote)
+		worker.Upload(ctx, local, remote, flags)
 	})
 }
 
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
-func (c *Client) UploadDir(ctx context.Context, local, remote string, options transfer.Options) error {
+func (c *Client) UploadDir(ctx context.Context, local, remote string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.UploadDir(ctx, local, remote)
+		worker.UploadDir(ctx, local, remote, flags)
 	})
 }
 
 // FromReader streams an io.Reader to a remote file on the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
-func (c *Client) FromReader(ctx context.Context, r io.Reader, remote string, appendToFile bool, options transfer.Options) error {
+func (c *Client) FromReader(ctx context.Context, r io.Reader, remote string, appendToFile bool, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.FromStream(ctx, remote, r, remote, appendToFile)
+		worker.FromStream(ctx, remote, r, remote, appendToFile, flags)
 	})
 }
 
 // Download downloads a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
-func (c *Client) Download(ctx context.Context, local, remote string, options transfer.Options) error {
+func (c *Client) Download(ctx context.Context, local, remote string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.Download(ctx, local, remote)
+		worker.Download(ctx, local, remote, flags)
 	})
 }
 
 // DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
-func (c *Client) DownloadDir(ctx context.Context, local, remote string, options transfer.Options) error {
+func (c *Client) DownloadDir(ctx context.Context, local, remote string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.DownloadDir(ctx, local, remote)
+		worker.DownloadDir(ctx, local, remote, flags)
 	})
 }
 
@@ -58,33 +58,33 @@ func (c *Client) ToWriter(ctx context.Context, w io.Writer, remote string, optio
 
 // RemoveDir removes a remote directory from the iRODS server using client recursion.
 // The remote file refers to an iRODS path.
-func (c *Client) RemoveDir(ctx context.Context, remote string, options transfer.Options) error {
+func (c *Client) RemoveDir(ctx context.Context, remote string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.RemoveDir(ctx, remote)
+		worker.RemoveDir(ctx, remote, flags)
 	})
 }
 
 // Copy copies a single data object on the same iRODS server.
-// Existing targets are overwritten unless options.Exclusive is set.
-func (c *Client) Copy(ctx context.Context, remote1, remote2 string, options transfer.Options) error {
+// Existing targets are overwritten unless flags.Exclusive is set.
+func (c *Client) Copy(ctx context.Context, remote1, remote2 string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.Copy(ctx, remote1, remote2)
+		worker.Copy(ctx, remote1, remote2, flags)
 	})
 }
 
 // CopyDir copies a remote directory to another remote directory from the iRODS server using client recursion.
 // The remote files refers to an iRODS path.
-func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options transfer.Options) error {
+func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.CopyDir(ctx, remote1, remote2)
+		worker.CopyDir(ctx, remote1, remote2, flags)
 	})
 }
 
 // ComputeChecksums computes the checksums of a remote directory on the iRODS server using client recursion.
 // The remote file refers to an iRODS path.
-func (c *Client) ComputeChecksums(ctx context.Context, remote string, options transfer.Options) error {
+func (c *Client) ComputeChecksums(ctx context.Context, remote string, options transfer.Options, flags transfer.Flags) error {
 	return c.RunWorker(options, func(worker *transfer.Worker) {
-		worker.ComputeChecksums(ctx, remote)
+		worker.ComputeChecksums(ctx, remote, flags)
 	})
 }
 

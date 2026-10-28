@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -14,29 +15,33 @@ func TestWorkerCopy(t *testing.T) {
 
 	for _, tc := range []struct {
 		name     string
-		options  Options
+		flags    Flags
+		dryRun   bool
 		copyErr  error
 		touchErr error
 		mismatch bool
 		wantErr  error
 	}{
 		{name: "overwrite"},
-		{name: "exclusive", options: Options{Exclusive: true}},
-		{name: "existing target", options: Options{Exclusive: true}, copyErr: copyErr, wantErr: copyErr},
-		{name: "server-side dry run", options: Options{DryRun: true, SyncModTime: true, IntegrityChecksums: true}},
-		{name: "verify checksum", options: Options{IntegrityChecksums: true}},
-		{name: "different checksums", options: Options{IntegrityChecksums: true}, mismatch: true, wantErr: ErrChecksumMismatch},
-		{name: "sync modification time", options: Options{SyncModTime: true}},
-		{name: "modification time error", options: Options{SyncModTime: true}, touchErr: touchErr, wantErr: touchErr},
-		{name: "metadata", options: Options{CopyMetadata: true}},
+		{name: "exclusive", flags: Flags{Exclusive: true}},
+		{name: "existing target", flags: Flags{Exclusive: true}, copyErr: copyErr, wantErr: copyErr},
+		{name: "server-side dry run", flags: Flags{SyncModTime: true, IntegrityChecksums: true}, dryRun: true},
+		{name: "verify checksum", flags: Flags{IntegrityChecksums: true}},
+		{name: "different checksums", flags: Flags{IntegrityChecksums: true}, mismatch: true, wantErr: ErrChecksumMismatch},
+		{name: "sync modification time", flags: Flags{SyncModTime: true}},
+		{name: "modification time error", flags: Flags{SyncModTime: true}, touchErr: touchErr, wantErr: touchErr},
+		{name: "metadata", flags: Flags{CopyMetadata: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target := &api.MockConn{}
 			target.AddResponse(copySourceResponse())
-			addCopyDialog(target, tc.options, tc.copyErr, tc.touchErr, tc.mismatch)
 
-			worker := New(nil, mockTransferAPI(target), tc.options)
-			worker.Copy(t.Context(), testCopySrc, testCopyDest)
+			if !tc.dryRun {
+				addCopyDialog(target, tc.flags, tc.copyErr, tc.touchErr, tc.mismatch)
+			}
+
+			worker := New(nil, mockTransferAPI(target), Options{DryRun: tc.dryRun})
+			worker.Copy(t.Context(), testCopySrc, testCopyDest, tc.flags)
 
 			if err := worker.Wait(); !errors.Is(err, tc.wantErr) {
 				t.Fatalf("Wait() = %v, want %v", err, tc.wantErr)
@@ -47,13 +52,77 @@ func TestWorkerCopy(t *testing.T) {
 	}
 }
 
+type gatedCopyConn struct {
+	*api.MockConn
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (conn *gatedCopyConn) Request(ctx context.Context, number msg.APINumber, request, response any) error {
+	if number == msg.DATA_OBJ_COPY_AN {
+		conn.started <- struct{}{}
+
+		select {
+		case <-conn.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return conn.MockConn.Request(ctx, number, request, response)
+}
+
+func TestWorkerOverlappingCopyFlags(t *testing.T) {
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	conns := make(chan api.Conn, 4)
+	flags := Flags{Exclusive: true, SyncModTime: true, CopyMetadata: true}
+
+	first, second := &api.MockConn{}, &api.MockConn{}
+	for i, conn := range []*api.MockConn{first, second} {
+		conn.AddResponse(copySourceResponse())
+
+		copyFlags := flags
+		if i == 1 {
+			copyFlags = Flags{}
+		}
+
+		addCopyDialog(conn, copyFlags, nil, nil, false)
+
+		gated := &gatedCopyConn{MockConn: conn, started: started, release: release}
+
+		conns <- gated
+
+		conns <- gated
+	}
+
+	pool := &api.API{Connect: func(context.Context) (api.Conn, error) { return <-conns, nil }}
+	worker := New(nil, pool, Options{})
+	worker.Copy(t.Context(), testCopySrc, testCopyDest, flags)
+
+	flags = Flags{}
+	worker.Copy(t.Context(), testCopySrc, testCopyDest, flags)
+
+	for range 2 {
+		<-started
+	}
+
+	close(release)
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, first, second)
+}
+
 func TestWorkerCopySourceError(t *testing.T) {
 	sourceErr := errors.New("source lookup failed")
 	conn := &api.MockConn{}
 	conn.AddResponse(sourceErr)
 
 	worker := New(nil, mockTransferAPI(conn), Options{})
-	worker.Copy(t.Context(), testCopySrc, testCopyDest)
+	worker.Copy(t.Context(), testCopySrc, testCopyDest, Flags{})
 
 	if err := worker.Wait(); !errors.Is(err, sourceErr) {
 		t.Fatalf("Wait() = %v, want %v", err, sourceErr)
@@ -85,11 +154,7 @@ func copySourceResponse() msg.QueryResponse {
 	}
 }
 
-func addCopyDialog(conn *api.MockConn, options Options, copyErr, touchErr error, mismatch bool) {
-	if options.DryRun {
-		return
-	}
-
+func addCopyDialog(conn *api.MockConn, options Flags, copyErr, touchErr error, mismatch bool) {
 	request := msg.DataObjectCopyRequest{
 		Paths: []msg.DataObjectRequest{
 			{Path: testCopySrc, OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_SRC},

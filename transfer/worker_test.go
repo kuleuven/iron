@@ -166,10 +166,9 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		MaxThreads:      2,
 		ProgressHandler: pb.Handler,
 		ErrorHandler:    pb.ErrorHandler,
-		Delete:          true,
 	})
 
-	worker.UploadDir(t.Context(), dir, "/test")
+	worker.UploadDir(t.Context(), dir, "/test", Flags{Delete: true})
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -275,10 +274,9 @@ func TestFromStream(t *testing.T) { //nolint:funlen
 	worker := New(testTransferAPI, testTransferAPI, Options{
 		MaxThreads: 2,
 		Output:     os.Stdout,
-		Delete:     true,
 	})
 
-	worker.FromStream(t.Context(), "stream", bytes.NewReader(bytes.Repeat([]byte(testStr), 100)), testFile2, false)
+	worker.FromStream(t.Context(), "stream", bytes.NewReader(bytes.Repeat([]byte(testStr), 100)), testFile2, false, Flags{Delete: true})
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -344,10 +342,9 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 
 		worker := New(testIndexAPI, testTransferAPI, Options{
 			MaxThreads: 1,
-			Exclusive:  i%2 == 1,
 		})
 
-		worker.DownloadDir(t.Context(), dir, "/test")
+		worker.DownloadDir(t.Context(), dir, "/test", Flags{Exclusive: i%2 == 1})
 
 		if err := worker.Wait(); err != nil {
 			t.Error(err)
@@ -587,7 +584,7 @@ func TestClientRemoveDir(t *testing.T) {
 		MaxThreads: 1,
 	})
 
-	worker.RemoveDir(t.Context(), "/test")
+	worker.RemoveDir(t.Context(), "/test", Flags{})
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -637,11 +634,10 @@ func TestClientComputeChecksums(t *testing.T) {
 	})
 
 	worker := New(testIndexAPI, testTransferAPI, Options{
-		MaxThreads:         1,
-		IntegrityChecksums: true,
+		MaxThreads: 1,
 	})
 
-	worker.ComputeChecksums(t.Context(), "/test")
+	worker.ComputeChecksums(t.Context(), "/test", Flags{IntegrityChecksums: true})
 
 	if err := worker.Wait(); err != nil {
 		t.Error(err)
@@ -689,10 +685,9 @@ func TestClientCopyDir(t *testing.T) {
 
 		worker := New(testIndexAPI, testTransferAPI, Options{
 			MaxThreads: 1,
-			Delete:     true,
 		})
 
-		worker.CopyDir(t.Context(), "/test", "/test")
+		worker.CopyDir(t.Context(), "/test", "/test", Flags{Delete: true})
 
 		if err := worker.Wait(); err != nil {
 			t.Fatal(err)
@@ -718,11 +713,10 @@ func TestWorkerCopyCollectionMetadata(t *testing.T) {
 	testConn.AddResponse(msg.EmptyResponse{}) // CopyMetadata
 
 	worker := New(testAPI, testAPI, Options{
-		MaxThreads:   1,
-		CopyMetadata: true,
+		MaxThreads: 1,
 	})
 
-	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}); err != nil {
+	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}, Flags{CopyMetadata: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -750,7 +744,7 @@ func TestWorkerCopyCollectionWithoutMetadata(t *testing.T) {
 		MaxThreads: 1,
 	})
 
-	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}); err != nil {
+	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}, Flags{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -777,11 +771,10 @@ func TestWorkerCopyActionMetadata(t *testing.T) {
 	testConn.AddResponse(msg.EmptyResponse{}) // CopyMetadata
 
 	worker := New(testAPI, testAPI, Options{
-		MaxThreads:   1,
-		CopyMetadata: true,
+		MaxThreads: 1,
 	})
 
-	worker.copyObject(t.Context(), Task{Source: testCopySrc, Target: testCopyDest, Size: 4})
+	worker.copyObject(t.Context(), Task{Source: testCopySrc, Target: testCopyDest, Size: 4}, Flags{CopyMetadata: true})
 
 	if err := worker.Wait(); err != nil {
 		t.Fatal(err)

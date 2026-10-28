@@ -14,6 +14,7 @@ import (
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/transfer"
+	"github.com/spf13/cobra"
 )
 
 func scriptTestApp(t *testing.T) *mockApp {
@@ -68,7 +69,8 @@ func TestRunScriptBarriersAndFlagIsolation(t *testing.T) {
 
 func TestRunScriptErrors(t *testing.T) {
 	for _, line := range []string{
-		"wait extra", "cp --exclusive /one /two", "upload --threads 2 /one /two",
+		"wait extra", "cp --target-environment archive /one /two", "upload --threads 2 /one /two",
+		"cp --dry-run /one /two",
 		"auth", "run nested.iron", "mkdir '/unterminated", "mkdir /one; mkdir /two",
 		"mkdir /one | cat", "cd /one",
 	} {
@@ -139,7 +141,7 @@ func TestRunReadError(t *testing.T) {
 	}
 }
 
-func TestExecCommandAndEmbedding(t *testing.T) {
+func TestExecCommandOutput(t *testing.T) {
 	app := scriptTestApp(t)
 	file := filepath.Join(t.TempDir(), "commands.iron")
 
@@ -149,12 +151,119 @@ func TestExecCommandAndEmbedding(t *testing.T) {
 
 	var output bytes.Buffer
 
-	if err := app.Exec(t.Context(), &output, &output, "exec", "--dry-run", "--threads", "1", file); err != nil {
+	cmd := app.exec()
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"--" + dryrunOption, testThreadsFlag, "1", file})
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
 	if !strings.Contains(output.String(), "/preview") {
-		t.Fatalf("output not routed to embedding writer: %q", output.String())
+		t.Fatalf("output not routed to command writer: %q", output.String())
+	}
+}
+
+func TestExecFlagPlacement(t *testing.T) {
+	t.Setenv("IRON_INCLUDE", "*.json")
+	t.Setenv("IRON_IGNORE", "*.tmp")
+
+	app := scriptTestApp(t)
+	exec := app.exec()
+
+	for _, name := range []string{testThreads, dryrunOption, "target-environment"} {
+		if exec.Flags().Lookup(name) == nil {
+			t.Errorf("missing exec option --%s", name)
+		}
+	}
+
+	for _, name := range []string{"cp", "upload", uploadAlias, "download", downloadAlias} {
+		t.Run(name, func(t *testing.T) {
+			root := app.scriptCommand(t.Context(), nil, "", false)
+
+			cmd, _, err := root.Find([]string{name})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assertScriptTransferFlags(t, exec, cmd)
+		})
+	}
+
+	for _, flag := range []string{"metadata", "delete-skip-trash", "no-update-in-place"} {
+		if err := exec.ParseFlags([]string{"--" + flag}); err == nil {
+			t.Errorf("exec accepted per-operation flag --%s", flag)
+		}
+	}
+}
+
+func assertScriptTransferFlags(t *testing.T, exec, cmd *cobra.Command) {
+	t.Helper()
+
+	for _, flag := range []string{
+		"exclusive", "newer", testDelete, "checksum", "verify-checksum",
+		"sync-modtime", testInclude, testIgnore,
+	} {
+		if exec.Flags().Lookup(flag) != nil || cmd.Flags().Lookup(flag) == nil {
+			t.Errorf("--%s must be a per-operation flag", flag)
+		}
+	}
+
+	for _, flag := range []string{testThreads, dryrunOption, "target-environment"} {
+		if cmd.Flags().Lookup(flag) != nil {
+			t.Errorf("unexpected per-operation option --%s", flag)
+		}
+	}
+
+	syncModTime, err := cmd.Flags().GetBool("sync-modtime")
+	if err != nil || !syncModTime {
+		t.Fatalf("unexpected sync-modtime default: %v, %v", syncModTime, err)
+	}
+
+	assertPatternFlag(t, cmd, testInclude, []string{"*.json"})
+	assertPatternFlag(t, cmd, testIgnore, []string{"*.tmp"})
+}
+
+func TestScriptCopyFlagsArePerLine(t *testing.T) {
+	app := scriptTestApp(t)
+
+	for _, exclusive := range []bool{true, false} {
+		app.AddResponse(scriptCopyRecord())
+		app.AddResponse(scriptCopyRecord())
+
+		request := msg.DataObjectCopyRequest{
+			Paths: []msg.DataObjectRequest{
+				{Path: "/source", OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_SRC},
+				{Path: "/target", OperationType: msg.OPER_TYPE_COPY_DATA_OBJ_DEST},
+			},
+		}
+		if !exclusive {
+			request.Paths[1].KeyVals.Add(msg.FORCE_FLAG_KW, "")
+		}
+
+		app.Add(msg.DATA_OBJ_COPY_AN, request, msg.EmptyResponse{})
+
+		if exclusive {
+			app.AddResponse(msg.EmptyResponse{}) // Copy metadata.
+		} else {
+			app.Add(msg.TOUCH_APN, msg.TouchDataObjectReplicaRequest{
+				Path: "/target",
+				Options: msg.TouchOptions{
+					SecondsSinceEpoch: 10000, NoCreate: true,
+				},
+			}, msg.EmptyResponse{})
+		}
+	}
+
+	err := app.execFile(t.Context(), transfer.Options{MaxThreads: 1}, "", "flags.iron",
+		strings.NewReader("cp --exclusive --metadata --sync-modtime=false /source /target\nwait\ncp /source /target\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(app.Dialog) != 0 {
+		t.Fatalf("unconsumed operations: %d", len(app.Dialog))
 	}
 }
 
@@ -163,6 +272,7 @@ func TestRunCopyWaitThenMove(t *testing.T) {
 	record := scriptCopyRecord()
 	app.AddResponse(record)
 	app.AddResponse(record)
+	app.AddResponse(msg.EmptyResponse{})
 	app.AddResponse(msg.EmptyResponse{})
 	app.AddResponse(record)
 	app.AddResponse(msg.EmptyResponse{})

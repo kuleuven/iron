@@ -120,32 +120,45 @@ waits. **Command order alone does not guarantee completion order.** Insert
 `wait` before dependent commands or operations on overlapping paths. Synchronous
 `mkdir` and `mv` commands do not implicitly wait for earlier transfers.
 
-Transfer flags apply to the entire run, not individual lines:
+Transfer flags apply to the individual commands in the file. For example:
+
+```text
+upload --exclusive ./results/part1.csv /zone/home/alice/incoming/part1.csv
+wait
+upload --include '*.csv' --ignore '*.tmp' ./results/ /zone/home/alice/incoming/
+wait
+cp --metadata /zone/home/alice/incoming/part1.csv /zone/home/alice/archive/
+wait
+cp --remote --metadata /zone/home/alice/archive/part1.csv /archive/home/alice/
+```
+
+Each line starts with fresh flag defaults; flags do not carry over to subsequent
+commands. `cp` supports `--metadata`, `--delete-skip-trash`, and
+`--no-update-in-place`; `upload` supports `--delete-skip-trash` and
+`--no-update-in-place`. The common transfer flags, such as `--exclusive`,
+`--delete`, `--checksum`, `--verify-checksum`, `--include`, and `--ignore`, are
+available on `cp`, `upload`/`put`, and `download`/`get`. Operation-specific flags
+such as `mkdir -p` and `mv --preserve-mtime` remain available.
+
+Worker options `--threads` and `--dry-run`, and the destination selection
+`--target-environment`, remain on `exec` and cannot be set on individual lines:
 
 ```sh
-iron exec --threads 5 --exclusive workflow.iron
-iron exec --target-environment archive --metadata workflow.iron
+iron exec --threads 5 workflow.iron
+iron exec --target-environment archive workflow.iron
 iron exec --dry-run workflow.iron
 ```
 
-Per-line transfer flags are rejected. Operation-specific flags such as
-`mkdir -p` and `mv --preserve-mtime` remain available. Run-level
 `--target-environment` selects the destination for per-line `cp --remote`
 commands. Plain `cp` continues to copy within the source environment, so both
 types of copy can be mixed in one command file. `cp --remote` requires
 `--target-environment`; uploads, downloads, mkdir, and moves use the source
-environment. For example:
-
-```text
-cp /zone/home/alice/result.csv /zone/home/alice/archive/
-wait
-cp --remote /zone/home/alice/archive/result.csv /archive/home/alice/
-```
+environment.
 
 Relative copy targets use the source environment's working directory for `cp`
 and the target environment's working directory for `cp --remote`.
 Unlike standalone `cp`, command files default to
-`--sync-modtime=true` for all transfers; disable it with
+`--sync-modtime=true` for all transfers; disable it on a command line with
 `--sync-modtime=false`. The worker reserves `--threads` connections in addition
 to an indexing connection, so library callers must configure enough client
 connections.
@@ -241,6 +254,15 @@ func example() error {
 ```
 
 ## Implementation choices
+
+Transfer configuration is split between `transfer.Options` (worker resources,
+dry-run mode, and reporting) and `transfer.Flags` (per-operation behavior).
+Client transfer helpers accept options followed by flags, for example
+`client.DownloadDir(ctx, local, remote, options, flags)`. When reusing a worker
+through `Client.RunWorker`, pass flags as the last argument to each operation:
+`worker.DownloadDir(ctx, local, remote, transfer.Flags{Exclusive: true})`.
+Each asynchronous operation retains its own flags, so subsequent submissions
+can use different settings without changing work already in progress.
 
 Transfer callbacks receive the operation's context, including values attached by
 the caller: `ProgressHandler(context.Context, transfer.Progress)` and

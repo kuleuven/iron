@@ -89,7 +89,7 @@ func TestSubmissionErrorReportingIsAsync(t *testing.T) {
 	})
 
 	go func() {
-		worker.Upload(ctx, source, testCopyDest)
+		worker.Upload(ctx, source, testCopyDest, Flags{})
 		close(submitted)
 	}()
 
@@ -123,7 +123,7 @@ func TestErrorCallbackContext(t *testing.T) {
 			return err
 		},
 	})
-	worker.Copy(ctx, testCopySrc, testCopyDest)
+	worker.Copy(ctx, testCopySrc, testCopyDest, Flags{})
 
 	err := worker.Wait()
 	if !errors.Is(err, sourceErr) {
@@ -264,7 +264,7 @@ func TestDryDownloadFailurePreservesDestination(t *testing.T) {
 	conn.AddResponse(failure)
 
 	worker := New(nil, mockTransferAPI(conn), Options{DryRun: true})
-	worker.Download(t.Context(), file, testRemoteTxt)
+	worker.Download(t.Context(), file, testRemoteTxt, Flags{})
 
 	if err := worker.Wait(); !errors.Is(err, failure) {
 		t.Fatalf("lost download error: %v", err)

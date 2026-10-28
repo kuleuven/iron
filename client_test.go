@@ -422,7 +422,7 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		return client.Upload(t.Context(), f.Name(), testStr, transfer.Options{
 			//	SyncModTime: true,
 			MaxThreads: 2,
-		})
+		}, transfer.Flags{})
 	})
 
 	if err := wg.Wait(); err != nil {
@@ -515,7 +515,7 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		return client.Download(t.Context(), f.Name(), testStr, transfer.Options{
 			//	SyncModTime: true,
 			MaxThreads: 1,
-		})
+		}, transfer.Flags{})
 	})
 
 	if err := wg.Wait(); err != nil {

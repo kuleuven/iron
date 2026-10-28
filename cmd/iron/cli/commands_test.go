@@ -378,7 +378,7 @@ func TestCopy(t *testing.T) {
 		nil,
 		{"--exclusive"},
 		{"--verify-checksum"},
-		{"--dry-run"},
+		{"--" + dryrunOption},
 		{"--sync-modtime"},
 	} {
 		t.Run(strings.Join(flags, " "), func(t *testing.T) {
@@ -416,7 +416,7 @@ func testCopy(t *testing.T, flags []string) {
 	app.AddResponse(record)
 	app.AddResponse(record)
 
-	if !slices.Contains(flags, "--dry-run") {
+	if !slices.Contains(flags, "--"+dryrunOption) {
 		app.AddResponse(msg.EmptyResponse{})
 	}
 
@@ -452,25 +452,27 @@ func testCopy(t *testing.T, flags []string) {
 
 func TestTransferFlags(t *testing.T) {
 	for _, syncModTime := range []bool{false, true} {
-		options := transfer.Options{SyncModTime: syncModTime}
+		options := transfer.Options{}
+		flags := transfer.Flags{SyncModTime: syncModTime}
 		cmd := &cobra.Command{}
-		addTransferFlags(cmd, &options)
+		addTransferFlags(cmd, &flags)
+		addTransferOptionFlags(cmd, &options)
 
-		if options.SyncModTime != syncModTime || options.MaxThreads != 5 {
-			t.Fatalf("unexpected defaults: %+v", options)
+		if flags.SyncModTime != syncModTime || options.MaxThreads != 5 {
+			t.Fatalf("unexpected defaults: %+v, %+v", options, flags)
 		}
 
 		if err := cmd.ParseFlags([]string{
 			"--exclusive", "--newer", "--delete", "--checksum",
-			"--verify-checksum", "--dry-run", "--sync-modtime=false", "--threads=2",
+			"--verify-checksum", "--" + dryrunOption, "--sync-modtime=false", "--threads=2",
 		}); err != nil {
 			t.Fatal(err)
 		}
 
-		if !options.Exclusive || !options.OnlyIfNewer || !options.Delete ||
-			!options.CompareChecksums || !options.IntegrityChecksums || !options.DryRun ||
-			options.SyncModTime || options.MaxThreads != 2 {
-			t.Errorf("flags did not update transfer options: %+v", options)
+		if !flags.Exclusive || !flags.OnlyIfNewer || !flags.Delete ||
+			!flags.CompareChecksums || !flags.IntegrityChecksums || !options.DryRun ||
+			flags.SyncModTime || options.MaxThreads != 2 {
+			t.Errorf("flags did not update transfer settings: %+v, %+v", options, flags)
 		}
 	}
 }
@@ -481,8 +483,8 @@ func TestTransferCommandDefaults(t *testing.T) {
 	for _, cmd := range []*cobra.Command{app.cp(), app.upload(), app.download()} {
 		t.Run(cmd.Name(), func(t *testing.T) {
 			for _, name := range []string{
-				"exclusive", "newer", "delete", "checksum", "verify-checksum",
-				"include", "ignore", "sync-modtime", "threads", dryrunOption,
+				"exclusive", "newer", testDelete, "checksum", "verify-checksum",
+				testInclude, testIgnore, "sync-modtime", testThreads, dryrunOption,
 			} {
 				if cmd.Flags().Lookup(name) == nil {
 					t.Errorf("missing flag --%s", name)
@@ -510,8 +512,8 @@ func TestTransferPatternFlags(t *testing.T) {
 	for _, cmd := range []*cobra.Command{app.cp(), app.upload(), app.download()} {
 		t.Run(cmd.Name(), func(t *testing.T) {
 			for name, want := range map[string][]string{
-				"include": {"*.json", "*.xml"},
-				"ignore":  {"*.tmp", "cache"},
+				testInclude: {"*.json", "*.xml"},
+				testIgnore:  {"*.tmp", "cache"},
 			} {
 				assertPatternFlag(t, cmd, name, want)
 
@@ -686,7 +688,7 @@ func TestCat(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"cat", "--threads", "1", testTestZoneObj1})
+	cmd.SetArgs([]string{"cat", testThreadsFlag, "1", testTestZoneObj1})
 
 	transfer.BufferSize = 200
 
@@ -724,7 +726,7 @@ func TestSave(t *testing.T) {
 	app.AddResponse(msg.EmptyResponse{})
 
 	cmd := app.Command()
-	cmd.SetArgs([]string{"save", "--threads", "1", testTestZoneObj1})
+	cmd.SetArgs([]string{"save", testThreadsFlag, "1", testTestZoneObj1})
 	cmd.SetIn(strings.NewReader("hello\n"))
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {

@@ -14,7 +14,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type Options struct {
+// Flags controls an individual operation. Pass a separate value for each
+// submission; the worker does not retain mutable operation settings.
+type Flags struct {
 	// Do not overwrite existing files
 	Exclusive bool
 	// Delete unrecognized files at the target when downloading or uploading a directory
@@ -32,11 +34,6 @@ type Options struct {
 	RemovePerDirectory bool
 	// Sync modification time
 	SyncModTime bool
-	// MaxThreads indicates the maximum threads per transferred file
-	MaxThreads int
-	// MaxQueued indicates the maximum number of queued files
-	// when uploading or downloading a directory
-	MaxQueued int
 	// OnlyIfNewer indicates whether files should only be transferred
 	// if the source file is newer than the destination file,
 	// based on the modification time, when syncing directories (UploadDir, DownloadDir, CopyDir, RemoteCopyDir).
@@ -50,8 +47,6 @@ type Options struct {
 	// CopyMetadata indicates whether AVU metadata should be copied along with
 	// data objects and collections when copying (Copy, CopyDir, RemoteCopy, RemoteCopyDir).
 	CopyMetadata bool
-	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
-	DryRun bool
 	// FilterPatterns indicates patterns to include when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir, RemoteCopyDir).
 	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file, directories are always included.
 	// If multiple patterns are specified, a file must match at least one of them to be included.
@@ -60,6 +55,17 @@ type Options struct {
 	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file or directory.
 	// IgnorePatterns takes precedence over FilterPatterns. If a file or directory matches an ignore pattern, it will be excluded even if it matches an include pattern.
 	IgnorePatterns []string
+}
+
+// Options configures a worker's resources and reporting.
+type Options struct {
+	// DryRun will only print actions. No actual transfers will be performed. Progress and errors will still be reported.
+	DryRun bool
+	// MaxThreads indicates the maximum threads per transferred file.
+	MaxThreads int
+	// MaxQueued indicates the maximum number of queued files
+	// when uploading or downloading a directory.
+	MaxQueued int
 	// Output will, if set, display a progress bar and occurring errors
 	// If ErrorHandler or ProgressHandler is set, this option is ignored
 	Output io.Writer
@@ -91,7 +97,7 @@ type Worker struct {
 }
 
 // maxPerDirectorySkip limits the number of data objects directly inside a single directory
-// for which removeAll skips an individual RemoveFile task when Options.RemovePerDirectory is
+// for which removeAll skips an individual RemoveFile task when Flags.RemovePerDirectory is
 // set, since the recursive server-side removal of that directory may not scale to an
 // unbounded number of objects. The limit applies per directory, not across the whole tree.
 const maxPerDirectorySkip = 10000
@@ -211,7 +217,7 @@ func (worker *Worker) Drain() error {
 // Upload schedules the upload of a local file to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) Upload(ctx context.Context, local, remote string) {
+func (worker *Worker) Upload(ctx context.Context, local, remote string, flags Flags) {
 	r, err := os.Open(local)
 	if err != nil {
 		worker.Error(ctx, local, remote, err)
@@ -230,7 +236,7 @@ func (worker *Worker) Upload(ctx context.Context, local, remote string) {
 		name: local,
 		stat: stat,
 		File: r,
-	}, remote)
+	}, remote, flags)
 }
 
 type Reader interface {
@@ -276,7 +282,7 @@ func (r fileReader) Checksum(ctx context.Context) ([]byte, error) {
 // FromReader schedules the upload of a reader to the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
+func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string, flags Flags) {
 	if worker.options.DryRun {
 		worker.transferProgress(ctx, ProgressLabel(ctx, r.Name(), remote), r.Size())
 
@@ -289,7 +295,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
-	if worker.options.Exclusive {
+	if flags.Exclusive {
 		mode |= api.O_EXCL
 	}
 
@@ -319,7 +325,7 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 		err := errors.Join(wg.Wait(), ww.Close())
 
 		// Sync the modification time of the remote file if the option is enabled.
-		if worker.options.SyncModTime {
+		if flags.SyncModTime {
 			err = errors.Join(err, w.Touch(r.ModTime()))
 		}
 
@@ -336,14 +342,14 @@ func (worker *Worker) FromReader(ctx context.Context, r Reader, remote string) {
 
 		defer a.Close()
 
-		return worker.finishUpload(ctx, a.API, r, remote)
+		return worker.finishUpload(ctx, a.API, r, remote, flags)
 	})
 }
 
-func (worker *Worker) finishUpload(ctx context.Context, a *api.API, r Reader, remote string) error {
+func (worker *Worker) finishUpload(ctx context.Context, a *api.API, r Reader, remote string, flags Flags) error {
 	var err error
 
-	if cr, ok := r.(ChecksumReader); ok && worker.options.IntegrityChecksums {
+	if cr, ok := r.(ChecksumReader); ok && flags.IntegrityChecksums {
 		_, _, err = compareChecksums(ctx, cr.Checksum, func(ctx context.Context) ([]byte, error) {
 			return a.Checksum(ctx, remote, false)
 		})
@@ -420,14 +426,14 @@ func computeChecksumAndClose(ctx context.Context, f api.File) ([]byte, error) {
 // FromStream schedules the upload of a io.Reader to the iRODS server using parallel transfers.
 // In contrast to FromReader, FromStream will block until the full file has been uploaded.
 // The remote file refers to an iRODS path.
-func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, remote string, appendToFile bool) {
+func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, remote string, appendToFile bool, flags Flags) {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
 	if appendToFile {
 		mode = api.O_CREAT | api.O_WRONLY | api.O_APPEND
 	}
 
-	if worker.options.Exclusive {
+	if flags.Exclusive {
 		mode |= api.O_EXCL
 	}
 
@@ -469,24 +475,24 @@ func (worker *Worker) FromStream(ctx context.Context, name string, r io.Reader, 
 // Download schedules the download of a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) Download(ctx context.Context, local, remote string) {
+func (worker *Worker) Download(ctx context.Context, local, remote string, flags Flags) {
 	if worker.options.DryRun {
 		worker.ToWriter(ctx, &fileWriter{
 			name: local,
 			File: nil,
-		}, remote)
+		}, remote, flags)
 
 		return
 	}
 
 	mode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
-	if worker.options.Exclusive {
+	if flags.Exclusive {
 		mode |= os.O_EXCL
 	}
 
 	w, err := os.OpenFile(local, mode, 0o600)
-	if errors.Is(err, os.ErrExist) && worker.options.Exclusive {
+	if errors.Is(err, os.ErrExist) && flags.Exclusive {
 		worker.Error(ctx, local, remote, fmt.Errorf("cannot download exclusively: %w", os.ErrExist))
 
 		return
@@ -499,7 +505,7 @@ func (worker *Worker) Download(ctx context.Context, local, remote string) {
 	worker.ToWriter(ctx, &fileWriter{
 		name: local,
 		File: w,
-	}, remote)
+	}, remote, flags)
 }
 
 type Writer interface {
@@ -539,7 +545,7 @@ func (w fileWriter) Checksum(ctx context.Context) ([]byte, error) {
 // ToWriter schedules the download of a remote file from the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
+func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string, flags Flags) {
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote, api.O_RDONLY)
 	if err != nil {
 		if !worker.options.DryRun {
@@ -600,12 +606,12 @@ func (worker *Worker) ToWriter(ctx context.Context, w Writer, remote string) {
 
 		defer a.Close()
 
-		return worker.finishDownload(ctx, a.API, w, remote)
+		return worker.finishDownload(ctx, a.API, w, remote, flags)
 	})
 }
 
-func (worker *Worker) finishDownload(ctx context.Context, a *api.API, w Writer, remote string) error {
-	if cw, ok := w.(ChecksumWriter); ok && worker.options.IntegrityChecksums {
+func (worker *Worker) finishDownload(ctx context.Context, a *api.API, w Writer, remote string, flags Flags) error {
+	if cw, ok := w.(ChecksumWriter); ok && flags.IntegrityChecksums {
 		_, _, err := compareChecksums(ctx, cw.Checksum, func(ctx context.Context) ([]byte, error) {
 			return a.Checksum(ctx, remote, false)
 		})
@@ -614,7 +620,7 @@ func (worker *Worker) finishDownload(ctx context.Context, a *api.API, w Writer, 
 		}
 	}
 
-	if !worker.options.SyncModTime {
+	if !flags.SyncModTime {
 		return nil
 	}
 
@@ -737,7 +743,7 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 // RemoteCopy schedules a remote copy between two iRODS servers using parallel transfers.
 // The remote files refer to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
-func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
+func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string, flags Flags) {
 	// Find out size and other metadata of the source file (remote1) before proceeding with the remote copy.
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote1, api.O_RDONLY)
 	if err != nil {
@@ -763,13 +769,13 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string) {
 		return
 	}
 
-	worker.remoteCopyFrom(ctx, r, remote1, remote2, size)
+	worker.remoteCopyFrom(ctx, r, remote1, remote2, size, flags)
 }
 
-func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, remote2 string, size int64) {
+func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, remote2 string, size int64, flags Flags) {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
-	if worker.options.Exclusive {
+	if flags.Exclusive {
 		mode |= api.O_EXCL
 	}
 
@@ -816,14 +822,14 @@ func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, r
 
 		defer a.Close()
 
-		return worker.finishRemoteCopy(ctx, a.API, w, remote1, remote2)
+		return worker.finishRemoteCopy(ctx, a.API, w, remote1, remote2, flags)
 	})
 }
 
-func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.File, remote1, remote2 string) error {
+func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.File, remote1, remote2 string, flags Flags) error {
 	var err error
 
-	if worker.options.SyncModTime {
+	if flags.SyncModTime {
 		var obj *api.DataObject
 
 		if obj, err = a.GetDataObject(ctx, remote1); err == nil {
@@ -840,7 +846,7 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 
 	defer b.Close()
 
-	if worker.options.IntegrityChecksums {
+	if flags.IntegrityChecksums {
 		_, _, err = compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
 			return a.Checksum(ctx, remote1, false)
 		}, func(ctx context.Context) ([]byte, error) {
@@ -848,7 +854,7 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 		})
 	}
 
-	if worker.options.CopyMetadata {
+	if flags.CopyMetadata {
 		err = errors.Join(err, RemoteCopyMetadata(ctx, a, b.API, remote1, api.DataObjectType, remote2, api.DataObjectType))
 	}
 
@@ -864,7 +870,7 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
+func (worker *Worker) UploadDir(ctx context.Context, local, remote string, flags Flags) {
 	if err := worker.createTarget(ctx, local, remote, func() error {
 		return worker.IndexPool.CreateCollectionAll(ctx, remote)
 	}); err != nil {
@@ -889,17 +895,17 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 				worker.action(ctx, u, func() error { return worker.TransferPool.ModifyModificationTime(ctx, u.Target, u.ModTime) })
 
 			case TransferFile:
-				worker.uploadAction(ctx, u)
+				worker.uploadAction(ctx, u, flags)
 
 			case RemoveFile:
-				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.Target, flags.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.Target, flags.SkipTrash) })
 
 			case RemoveDirectoryAll:
 				worker.action(ctx, u, func() error {
-					return worker.TransferPool.DeleteCollectionAll(ctx, u.Target, worker.options.SkipTrash)
+					return worker.TransferPool.DeleteCollectionAll(ctx, u.Target, flags.SkipTrash)
 				})
 
 			case CreateDirectory:
@@ -910,12 +916,12 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string) {
 		return ctx.Err()
 	})
 
-	if err := worker.ComputeUploadDir(ctx, local, remote, queue); err != nil {
+	if err := worker.ComputeUploadDir(ctx, local, remote, queue, flags); err != nil {
 		worker.Error(ctx, local, remote, err)
 	}
 }
 
-func (worker *Worker) uploadAction(ctx context.Context, u Task) {
+func (worker *Worker) uploadAction(ctx context.Context, u Task, flags Flags) {
 	if worker.options.DryRun {
 		worker.log(ctx, u)
 
@@ -932,7 +938,7 @@ func (worker *Worker) uploadAction(ctx context.Context, u Task) {
 	worker.FromReader(ctx, &taskReader{
 		task: u,
 		File: r,
-	}, u.Target)
+	}, u.Target, flags)
 }
 
 type taskReader struct {
@@ -963,7 +969,7 @@ func (tr *taskReader) Checksum(ctx context.Context) ([]byte, error) {
 // DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
+func (worker *Worker) DownloadDir(ctx context.Context, local, remote string, flags Flags) {
 	if err := worker.createTarget(ctx, remote, local, func() error {
 		return os.MkdirAll(local, 0o755)
 	}); err != nil {
@@ -988,7 +994,7 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 				worker.action(ctx, u, func() error { return os.Chtimes(u.Target, time.Time{}, u.ModTime) })
 
 			case TransferFile:
-				worker.downloadAction(ctx, u)
+				worker.downloadAction(ctx, u, flags)
 
 			case RemoveFile, RemoveDirectory:
 				worker.action(ctx, u, func() error { return os.Remove(u.Target) })
@@ -1004,19 +1010,19 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string) {
 		return ctx.Err()
 	})
 
-	if err := worker.ComputeDownloadDir(ctx, remote, local, queue); err != nil {
+	if err := worker.ComputeDownloadDir(ctx, remote, local, queue, flags); err != nil {
 		worker.Error(ctx, remote, local, err)
 	}
 }
 
-func (worker *Worker) downloadAction(ctx context.Context, u Task) {
+func (worker *Worker) downloadAction(ctx context.Context, u Task, flags Flags) {
 	if worker.options.DryRun {
 		worker.log(ctx, u)
 
 		return
 	}
 
-	worker.Download(ctx, u.Target, u.Source)
+	worker.Download(ctx, u.Target, u.Source, flags)
 }
 
 // RemoveDir removes a directory from the iRODS server entirely,
@@ -1024,7 +1030,7 @@ func (worker *Worker) downloadAction(ctx context.Context, u Task) {
 // it handles the recursion client side. This allows the caller
 // to track the deletion progress better.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
+func (worker *Worker) RemoveDir(ctx context.Context, remote string, flags Flags) {
 	queue := make(chan Task, worker.options.MaxQueued)
 	queueIn := registerProgress(ctx, queue, worker.options.ProgressHandler)
 
@@ -1037,14 +1043,14 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 
 			switch u.Action { //nolint:exhaustive
 			case RemoveFile:
-				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteDataObject(ctx, u.Target, flags.SkipTrash) })
 
 			case RemoveDirectory:
-				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return worker.TransferPool.DeleteCollection(ctx, u.Target, flags.SkipTrash) })
 
 			case RemoveDirectoryAll:
 				worker.action(ctx, u, func() error {
-					return worker.TransferPool.DeleteCollectionAll(ctx, u.Target, worker.options.SkipTrash)
+					return worker.TransferPool.DeleteCollectionAll(ctx, u.Target, flags.SkipTrash)
 				})
 			}
 		}
@@ -1079,7 +1085,7 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 
 	for ok {
 		obj, ok = removeAll(ch, obj, queueIn, SynchronizeOptions{
-			RemovePerDirectory: worker.options.RemovePerDirectory,
+			RemovePerDirectory: flags.RemovePerDirectory,
 		})
 	}
 }
@@ -1087,7 +1093,7 @@ func (worker *Worker) RemoveDir(ctx context.Context, remote string) {
 // ComputeChecksums computes the checksums of all files in a directory on the iRODS server.
 // It handles the recursion client side, but individual files are processed server-side only.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
+func (worker *Worker) ComputeChecksums(ctx context.Context, remote string, flags Flags) {
 	queue := make(chan Task, worker.options.MaxQueued)
 	queueIn := registerProgress(ctx, queue, worker.options.ProgressHandler)
 
@@ -1124,7 +1130,7 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 			return worker.options.ErrorHandler(ctx, "", irodsPath, err)
 		}
 
-		worker.computeChecksum(irodsPath, record, queueIn)
+		worker.computeChecksum(irodsPath, record, queueIn, flags)
 
 		return nil
 	}, api.NoSkip)
@@ -1135,12 +1141,12 @@ func (worker *Worker) ComputeChecksums(ctx context.Context, remote string) {
 	}
 }
 
-func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue chan<- Task) {
+func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue chan<- Task, flags Flags) {
 	if record.IsDir() {
 		return
 	}
 
-	if _, hasChecksum := parseChecksum(record); hasChecksum && worker.options.CompareChecksums {
+	if _, hasChecksum := parseChecksum(record); hasChecksum && flags.CompareChecksums {
 		queue <- Task{
 			Action: TransferFile, // TransferFile = verify checksum
 			Target: irodsPath,
@@ -1148,7 +1154,7 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 		}
 
 		return
-	} else if hasChecksum || !worker.options.IntegrityChecksums {
+	} else if hasChecksum || !flags.IntegrityChecksums {
 		return
 	}
 
@@ -1163,7 +1169,7 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 // Existing targets are overwritten unless Exclusive is set. IntegrityChecksums
 // verifies the source and target checksums after copying. SyncModTime preserves
 // the source modification time.
-func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string) {
+func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags Flags) {
 	obj, err := worker.TransferPool.GetDataObject(ctx, remote1)
 	if err != nil {
 		worker.Error(ctx, remote1, remote2, err)
@@ -1177,13 +1183,13 @@ func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string) {
 		Target:  remote2,
 		Size:    obj.Size(),
 		ModTime: obj.ModTime(),
-	})
+	}, flags)
 }
 
 // CopyDir copies one directory to another on the same iRODS server.
 // It handles the recursion client side, but individual files are copied server-side only.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
+func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
 	if err := worker.createTarget(ctx, remote1, remote2, func() error {
 		return worker.IndexPool.CreateCollectionAll(ctx, remote2)
 	}); err != nil {
@@ -1192,7 +1198,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 		return
 	}
 
-	if worker.options.CopyMetadata && !worker.options.DryRun {
+	if flags.CopyMetadata && !worker.options.DryRun {
 		if err := worker.IndexPool.CopyMetadata(ctx, remote1, api.CollectionType, remote2, api.CollectionType); err != nil {
 			worker.Error(ctx, remote1, remote2, err)
 
@@ -1200,13 +1206,13 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string) {
 		}
 	}
 
-	worker.copyDir(ctx, remote1, remote2, worker.TransferPool, worker.copyObject, worker.copyCollection, worker.ComputeCopyDir)
+	worker.copyDir(ctx, remote1, remote2, worker.TransferPool, worker.copyObject, worker.copyCollection, worker.ComputeCopyDir, flags)
 }
 
 func (worker *Worker) copyDir(
 	ctx context.Context, remote1, remote2 string, target *api.API,
-	copyObject func(context.Context, Task), copyCollection func(context.Context, Task) error,
-	compute func(context.Context, string, string, chan<- Task) error,
+	copyObject func(context.Context, Task, Flags), copyCollection func(context.Context, Task, Flags) error,
+	compute func(context.Context, string, string, chan<- Task, Flags) error, flags Flags,
 ) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
@@ -1220,52 +1226,52 @@ func (worker *Worker) copyDir(
 			switch u.Action {
 			case ComputeChecksum:
 			case TransferFile:
-				copyObject(ctx, u)
+				copyObject(ctx, u, flags)
 			case SetModificationTime:
 				worker.action(ctx, u, func() error { return target.ModifyModificationTime(ctx, u.Target, u.ModTime) })
 			case RemoveFile:
-				worker.action(ctx, u, func() error { return target.DeleteDataObject(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return target.DeleteDataObject(ctx, u.Target, flags.SkipTrash) })
 			case RemoveDirectory:
-				worker.action(ctx, u, func() error { return target.DeleteCollection(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return target.DeleteCollection(ctx, u.Target, flags.SkipTrash) })
 			case RemoveDirectoryAll:
-				worker.action(ctx, u, func() error { return target.DeleteCollectionAll(ctx, u.Target, worker.options.SkipTrash) })
+				worker.action(ctx, u, func() error { return target.DeleteCollectionAll(ctx, u.Target, flags.SkipTrash) })
 			case CreateDirectory:
-				worker.action(ctx, u, func() error { return copyCollection(ctx, u) })
+				worker.action(ctx, u, func() error { return copyCollection(ctx, u, flags) })
 			}
 		}
 
 		return ctx.Err()
 	})
 
-	if err := compute(ctx, remote1, remote2, queue); err != nil {
+	if err := compute(ctx, remote1, remote2, queue, flags); err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 	}
 }
 
-func (worker *Worker) copyObject(ctx context.Context, u Task) {
+func (worker *Worker) copyObject(ctx context.Context, u Task, flags Flags) {
 	worker.deferredAction(ctx, u, func(a *api.API) error {
-		return worker.copyDataObject(ctx, a, u)
+		return worker.copyDataObject(ctx, a, u, flags)
 	})
 }
 
-func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task) error {
-	if err := a.CopyDataObject(ctx, u.Source, u.Target, !worker.options.Exclusive); err != nil {
+func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task, flags Flags) error {
+	if err := a.CopyDataObject(ctx, u.Source, u.Target, !flags.Exclusive); err != nil {
 		return err
 	}
 
-	if worker.options.SyncModTime {
+	if flags.SyncModTime {
 		if err := a.ModifyModificationTime(ctx, u.Target, u.ModTime); err != nil {
 			return err
 		}
 	}
 
-	if worker.options.CopyMetadata {
+	if flags.CopyMetadata {
 		if err := a.CopyMetadata(ctx, u.Source, api.DataObjectType, u.Target, api.DataObjectType); err != nil {
 			return err
 		}
 	}
 
-	if worker.options.IntegrityChecksums {
+	if flags.IntegrityChecksums {
 		_, _, err := VerifyRemoteToRemote(a, a, worker.options.ProgressHandler)(ctx, u.Source, u.Target, nil, nil)
 
 		return err
@@ -1276,12 +1282,12 @@ func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task) er
 
 // copyCollection creates the target collection and, if requested, copies the
 // AVU metadata of the source collection onto it.
-func (worker *Worker) copyCollection(ctx context.Context, u Task) error {
+func (worker *Worker) copyCollection(ctx context.Context, u Task, flags Flags) error {
 	if err := worker.TransferPool.CreateCollection(ctx, u.Target); err != nil {
 		return err
 	}
 
-	if !worker.options.CopyMetadata {
+	if !flags.CopyMetadata {
 		return nil
 	}
 
@@ -1292,7 +1298,7 @@ func (worker *Worker) copyCollection(ctx context.Context, u Task) error {
 // The worker needs to have OtherIndexPool and OtherTransferPool set.
 // It handles the recursion client side. Files are streamed through the local client.
 // The call blocks until the source directory has been completely scanned.
-func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string) {
+func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
 	if err := worker.createTarget(ctx, remote1, remote2, func() error {
 		return worker.RemoteIndexPool.CreateCollectionAll(ctx, remote2)
 	}); err != nil {
@@ -1301,7 +1307,7 @@ func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string
 		return
 	}
 
-	if worker.options.CopyMetadata && !worker.options.DryRun {
+	if flags.CopyMetadata && !worker.options.DryRun {
 		if err := RemoteCopyMetadata(ctx, worker.IndexPool, worker.RemoteIndexPool, remote1, api.CollectionType, remote2, api.CollectionType); err != nil {
 			worker.Error(ctx, remote1, remote2, err)
 
@@ -1309,27 +1315,27 @@ func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string
 		}
 	}
 
-	worker.copyDir(ctx, remote1, remote2, worker.RemoteTransferPool, worker.remoteCopyObject, worker.remoteCopyCollection, worker.ComputeRemoteCopyDir)
+	worker.copyDir(ctx, remote1, remote2, worker.RemoteTransferPool, worker.remoteCopyObject, worker.remoteCopyCollection, worker.ComputeRemoteCopyDir, flags)
 }
 
-func (worker *Worker) remoteCopyObject(ctx context.Context, u Task) {
+func (worker *Worker) remoteCopyObject(ctx context.Context, u Task, flags Flags) {
 	if worker.options.DryRun {
 		worker.log(ctx, u)
 
 		return
 	}
 
-	worker.RemoteCopy(ctx, u.Source, u.Target)
+	worker.RemoteCopy(ctx, u.Source, u.Target, flags)
 }
 
 // remoteCopyCollection creates the target collection and, if requested, copies the
 // AVU metadata of the source collection onto it.
-func (worker *Worker) remoteCopyCollection(ctx context.Context, u Task) error {
+func (worker *Worker) remoteCopyCollection(ctx context.Context, u Task, flags Flags) error {
 	if err := worker.RemoteTransferPool.CreateCollection(ctx, u.Target); err != nil {
 		return err
 	}
 
-	if !worker.options.CopyMetadata {
+	if !flags.CopyMetadata {
 		return nil
 	}
 
@@ -1357,7 +1363,7 @@ func (worker *Worker) createTarget(ctx context.Context, source, target string, c
 }
 
 // Action performs a synchronous action using this worker's dry-run and progress
-// settings. It is not a barrier for previously submitted asynchronous work.
+// settings. It does not wait for earlier asynchronous work.
 func (worker *Worker) Action(ctx context.Context, task Task, callback func() error) {
 	if err := ctx.Err(); err != nil {
 		worker.Error(ctx, task.Source, task.Target, err)

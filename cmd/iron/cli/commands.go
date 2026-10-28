@@ -351,14 +351,16 @@ func (a *App) rm() *cobra.Command {
 				}
 
 				opts := transfer.Options{
-					MaxQueued:          10000,
-					MaxThreads:         1,
-					Output:             cmd.OutOrStdout(),
+					MaxQueued:  10000,
+					MaxThreads: 1,
+					Output:     cmd.OutOrStdout(),
+				}
+				flags := transfer.Flags{
 					SkipTrash:          skip,
 					RemovePerDirectory: perDirectory,
 				}
 
-				return a.RemoveDir(cmd.Context(), path, opts)
+				return a.RemoveDir(cmd.Context(), path, opts, flags)
 			}
 
 			return a.DeleteDataObject(cmd.Context(), path, skip)
@@ -560,6 +562,7 @@ Use --target-environment to copy to a different iRODS environment.
 func (a *App) cp() *cobra.Command {
 	var (
 		options           transfer.Options
+		flags             transfer.Flags
 		targetEnvironment string
 	)
 
@@ -578,20 +581,21 @@ func (a *App) cp() *cobra.Command {
 		Example:           strings.Join(examples, "\n"),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.runCopy(cmd, args, options, targetEnvironment)
+			return a.runCopy(cmd, args, options, flags, targetEnvironment)
 		},
 	}
 
-	addTransferFlags(cmd, &options)
-	cmd.Flags().BoolVarP(&options.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash if a file is deleted")
-	cmd.Flags().BoolVarP(&options.CopyMetadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
+	addTransferFlags(cmd, &flags)
+	addTransferOptionFlags(cmd, &options)
+	cmd.Flags().BoolVarP(&flags.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash if a file is deleted")
+	cmd.Flags().BoolVarP(&flags.CopyMetadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
 	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Environment label of the target iRODS server")
 
 	return cmd
 }
 
 // runCopy performs the cp command, copying a data object or a collection.
-func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Options, targetEnvironment string) error {
+func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Options, flags transfer.Flags, targetEnvironment string) error {
 	paths, err := a.copyPaths(cmd.Context(), args, a.Workdir)
 	if err != nil {
 		return err
@@ -608,14 +612,14 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Option
 				paths.target = a.PathIn(args[1]+Name(paths.source), workdir)
 			}
 
-			paths.copy(cmd.Context(), worker, true)
+			paths.copy(cmd.Context(), worker, true, flags)
 		})
 
 	case paths.directory:
-		return a.CopyDir(cmd.Context(), paths.source, paths.target, options)
+		return a.CopyDir(cmd.Context(), paths.source, paths.target, options, flags)
 
 	default:
-		return a.Copy(cmd.Context(), paths.source, paths.target, options)
+		return a.Copy(cmd.Context(), paths.source, paths.target, options, flags)
 	}
 }
 
@@ -754,14 +758,16 @@ func (a *App) checksums() *cobra.Command {
 			path := a.Path(args[0])
 
 			opts := transfer.Options{
-				MaxQueued:          10000,
-				MaxThreads:         1,
-				Output:             cmd.OutOrStdout(),
+				MaxQueued:  10000,
+				MaxThreads: 1,
+				Output:     cmd.OutOrStdout(),
+			}
+			flags := transfer.Flags{
 				IntegrityChecksums: compute,
 				CompareChecksums:   verify,
 			}
 
-			return a.ComputeChecksums(cmd.Context(), path, opts)
+			return a.ComputeChecksums(cmd.Context(), path, opts, flags)
 		},
 	}
 
@@ -786,9 +792,9 @@ to collection copies.`
 
 func (a *App) upload() *cobra.Command {
 	opts := transfer.Options{
-		SyncModTime: true,
-		MaxQueued:   10000,
+		MaxQueued: 10000,
 	}
+	flags := transfer.Flags{SyncModTime: true}
 
 	examples := []string{
 		"  " + a.name + " upload /local/file.txt",
@@ -816,16 +822,17 @@ func (a *App) upload() *cobra.Command {
 			opts.Output = cmd.OutOrStdout()
 
 			if !paths.directory {
-				return a.Upload(cmd.Context(), paths.source, paths.target, opts)
+				return a.Upload(cmd.Context(), paths.source, paths.target, opts, flags)
 			}
 
-			return a.UploadDir(cmd.Context(), paths.source, paths.target, opts)
+			return a.UploadDir(cmd.Context(), paths.source, paths.target, opts, flags)
 		},
 	}
 
-	addTransferFlags(cmd, &opts)
-	cmd.Flags().BoolVarP(&opts.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
-	cmd.Flags().BoolVar(&opts.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
+	addTransferFlags(cmd, &flags)
+	addTransferOptionFlags(cmd, &opts)
+	cmd.Flags().BoolVarP(&flags.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash when deleting")
+	cmd.Flags().BoolVar(&flags.DisableUpdateInPlace, "no-update-in-place", false, "Do not update objects in place, delete old versions first")
 
 	return cmd
 }
@@ -850,9 +857,9 @@ in the target folder. Otherwise, a subfolder with the same name will be created.
 
 func (a *App) download() *cobra.Command {
 	opts := transfer.Options{
-		SyncModTime: true,
-		MaxQueued:   10000,
+		MaxQueued: 10000,
 	}
+	flags := transfer.Flags{SyncModTime: true}
 
 	examples := []string{
 		a.name + " download /path/to/collection/file.txt",
@@ -880,27 +887,31 @@ func (a *App) download() *cobra.Command {
 			opts.Output = cmd.OutOrStdout()
 
 			if !paths.directory {
-				return a.Download(cmd.Context(), paths.target, paths.source, opts)
+				return a.Download(cmd.Context(), paths.target, paths.source, opts, flags)
 			}
 
-			return a.DownloadDir(cmd.Context(), paths.target, paths.source, opts)
+			return a.DownloadDir(cmd.Context(), paths.target, paths.source, opts, flags)
 		},
 	}
 
-	addTransferFlags(cmd, &opts)
+	addTransferFlags(cmd, &flags)
+	addTransferOptionFlags(cmd, &opts)
 
 	return cmd
 }
 
-func addTransferFlags(cmd *cobra.Command, opts *transfer.Options) {
+func addTransferOptionFlags(cmd *cobra.Command, opts *transfer.Options) {
+	cmd.Flags().IntVar(&opts.MaxThreads, "threads", 5, "Number of transfer threads to use")
+	cmd.Flags().BoolVar(&opts.DryRun, dryrunOption, false, "Only print actions without transferring or deleting files. Server-side checksums may still be computed and stored.")
+}
+
+func addTransferFlags(cmd *cobra.Command, opts *transfer.Flags) {
 	flags := cmd.Flags()
 	flags.BoolVar(&opts.Exclusive, "exclusive", false, "Do not overwrite existing files (fail for a single file; skip existing files when transferring a directory or collection)")
 	flags.BoolVar(&opts.OnlyIfNewer, "newer", false, "Only transfer newer files (applies only to directories and collections)")
 	flags.BoolVar(&opts.Delete, "delete", false, "Delete destination files that no longer exist in the source (applies only to directories and collections)")
-	flags.IntVar(&opts.MaxThreads, "threads", 5, "Number of transfer threads to use")
 	flags.BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums to skip identical files (applies only to directories and collections)")
 	flags.BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Verify checksums after transferring files")
-	flags.BoolVar(&opts.DryRun, dryrunOption, false, "Only print actions without transferring or deleting files. Server-side checksums may still be computed and stored.")
 	flags.BoolVar(&opts.SyncModTime, "sync-modtime", opts.SyncModTime, "Set destination modification times to match source files. Disable with --sync-modtime=false.")
 	flags.StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma-separated patterns matching regular file names, not full paths (directories and collections only). Defaults to IRON_INCLUDE; includes all files if unset.")
 	flags.StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma-separated patterns matching file or directory names, not full paths (directories and collections only). Overrides --include; defaults to IRON_IGNORE.")
@@ -1036,7 +1047,7 @@ func (a *App) save() *cobra.Command {
 			return a.Client.FromReader(cmd.Context(), input, target, appendFlag, transfer.Options{
 				MaxThreads: maxThreads,
 				Output:     output,
-			})
+			}, transfer.Flags{})
 		},
 	}
 
