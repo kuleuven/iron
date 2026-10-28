@@ -15,6 +15,75 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const execDescription = `Read and execute an iron command file, one command per line. Commands are
+submitted to one transfer worker in file order; transfers may run concurrently.
+Use a line containing only "wait" to wait for all previously submitted work
+before continuing, for example when a later command depends on an earlier one.
+
+Blank lines and lines whose first non-space character is # are ignored. Quote
+arguments containing spaces with single or double quotes. Each non-comment line
+must contain exactly one command: shell operators such as ;, |, &&, redirection,
+and command substitution are not supported. Errors identify the script file and
+line number.
+
+Available commands:
+
+  cp <path> <target path> [flags]
+      Copy an iRODS object or collection within the current environment.
+      Collection paths use a trailing slash to distinguish copying the
+      collection's contents from copying it as a subcollection. Add --remote
+      to copy to the environment selected with --target-environment.
+
+  upload|put <local file or directory> [target path] [flags]
+      Upload a local file or directory to iRODS. If the target is omitted, the
+      current iRODS working directory is used. A directory target must end in
+      a slash.
+
+  download|get <iRODS path> [local path] [flags]
+      Download an iRODS object or collection. If the local target is omitted,
+      the current local directory is used. A directory target must end in a
+      path separator.
+
+  mkdir <target path> [-p|--parents]
+      Create an iRODS collection. Use --parents to create missing parent
+      collections as needed.
+
+  mv <path> <target path> [--preserve-mtime]
+      Move or rename an iRODS object or collection. A target ending in a slash
+      places a single source inside that collection. A source collection ending
+      in a slash moves its contents into the target collection, which must also
+      end in a slash. By default, moving updates modification time; use
+      --preserve-mtime to retain it.
+
+Transfer flags go on the command they affect. cp, upload/put, and download/get
+accept --exclusive, --newer, --delete, --checksum, --verify-checksum,
+--sync-modtime[=false], --include, and --ignore. The collection-only flags
+--newer, --delete, --checksum, --include, and --ignore apply only when
+transferring a collection or directory. cp and upload/put also accept
+--delete-skip-trash and --no-update-in-place; cp additionally accepts
+--metadata.
+
+Run-wide options:
+
+  --threads int          Number of transfer threads to use (default 5)
+  --dry-run              Print planned actions without transferring or deleting
+                         files. Server-side checksums may still be computed
+                         and stored.
+  --target-environment   Environment used by cp --remote. Other commands, and
+                         cp without --remote, use the current environment.
+
+Arguments to transfer commands may use paths relative to the relevant working
+directory. Local upload and download paths are resolved relative to the local
+process working directory. Examples:
+
+  cp /zone/home/alice/source /zone/home/alice/copy
+  cp --remote /zone/home/alice/source /zone/home/alice/copy
+  upload "local files/report.csv" /zone/home/alice/
+  download /zone/home/alice/report.csv "local files/"
+  mkdir --parents /zone/home/alice/archive/2025
+  mv /zone/home/alice/old.csv /zone/home/alice/archive/
+  wait`
+
 func (a *App) exec() *cobra.Command {
 	var options transfer.Options
 
@@ -23,7 +92,7 @@ func (a *App) exec() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "exec <local file>",
 		Short: "Run an iron command file containing multiple transfer statements",
-		Long:  "Read commands in order and stage transfers on one worker. Use a line containing wait before dependent commands. Set transfer flags on individual commands in the file; threads, dry-run, and target-environment apply to the entire run.",
+		Long:  execDescription,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file, err := os.Open(args[0])
