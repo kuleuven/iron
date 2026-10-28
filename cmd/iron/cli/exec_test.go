@@ -152,6 +152,7 @@ func TestExecCommandOutput(t *testing.T) {
 	var output bytes.Buffer
 
 	cmd := app.exec()
+	cmd.SetIn(failedScriptReader{})
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
 	cmd.SetArgs([]string{"--" + dryrunOption, testThreadsFlag, "1", file})
@@ -162,6 +163,61 @@ func TestExecCommandOutput(t *testing.T) {
 
 	if !strings.Contains(output.String(), "/preview") {
 		t.Fatalf("output not routed to command writer: %q", output.String())
+	}
+}
+
+func TestExecCommandStdin(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		input   io.Reader
+		wantErr string
+		readErr error
+	}{
+		{name: "commands", input: strings.NewReader("mkdir /preview\nwait")},
+		{name: "empty", input: strings.NewReader("")},
+		{name: "invalid command", input: strings.NewReader("# header\nunsupported"), wantErr: "stdin:2"},
+		{name: "read error", input: failedScriptReader{}, wantErr: "stdin:1", readErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			app := scriptTestApp(t)
+
+			var output bytes.Buffer
+
+			cmd := app.exec()
+			cmd.SetIn(tt.input)
+			cmd.SetOut(&output)
+			cmd.SetErr(io.Discard)
+			cmd.SetArgs([]string{"--" + dryrunOption, testThreadsFlag, "1"})
+
+			err := cmd.ExecuteContext(t.Context())
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+				}
+
+				if tt.readErr != nil && !errors.Is(err, tt.readErr) {
+					t.Fatalf("lost input error: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.name == "commands" && !strings.Contains(output.String(), "/preview") {
+				t.Fatalf("stdin commands not executed or output not routed to command writer: %q", output.String())
+			}
+		})
+	}
+}
+
+func TestExecRejectsMultipleFiles(t *testing.T) {
+	app := scriptTestApp(t)
+	cmd := app.exec()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"first.iron", "second.iron"})
+
+	if err := cmd.ExecuteContext(t.Context()); err == nil || !strings.Contains(err.Error(), "accepts at most 1 arg") {
+		t.Fatalf("expected argument validation error, got %v", err)
 	}
 }
 

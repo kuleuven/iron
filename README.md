@@ -97,7 +97,10 @@ peter.txt
 ### Command files
 
 Use `iron exec workflow.iron` to feed multiple commands to one transfer worker,
-connection pool, and progress display. The file is read one line at a time.
+connection pool, and progress display. If no file is given, `iron exec` reads
+commands from standard input, for example `iron exec < workflow.iron` or
+`printf 'mkdir -p /zone/home/alice/archive\nwait\n' | iron exec`.
+Input is read one line at a time.
 Transfers can overlap; submission blocks when the worker's transfer capacity is
 occupied.
 
@@ -180,7 +183,7 @@ across `wait` barriers.
 Input and command errors stop submission; already submitted work is drained.
 Transfer errors use the worker's existing error handler and are collected by
 `wait` or end-of-file when the handler returns an error. Errors identify the
-command file and line. Earlier changes are not rolled back;
+command file (or `stdin`) and line. Earlier changes are not rolled back;
 in-flight operations may finish, and a syntax error on a later line can be
 reported after earlier operations have executed.
 

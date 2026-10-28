@@ -15,16 +15,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const execDescription = `Read and execute an iron command file, one command per line. Commands are
-submitted to one transfer worker in file order; transfers may run concurrently.
+const execDescription = `Read and execute iron commands, one command per line. If no local file is
+given, read from standard input. Commands are submitted to one transfer worker
+in input order; transfers may run concurrently.
 Use a line containing only "wait" to wait for all previously submitted work
 before continuing, for example when a later command depends on an earlier one.
 
 Blank lines and lines whose first non-space character is # are ignored. Quote
 arguments containing spaces with single or double quotes. Each non-comment line
 must contain exactly one command: shell operators such as ;, |, &&, redirection,
-and command substitution are not supported. Errors identify the script file and
-line number.
+and command substitution are not supported. Errors identify the script file (or
+stdin) and line number.
 
 Available commands:
 
@@ -90,17 +91,22 @@ func (a *App) exec() *cobra.Command {
 	var targetEnvironment string
 
 	cmd := &cobra.Command{
-		Use:   "exec <local file>",
-		Short: "Run an iron command file containing multiple transfer statements",
+		Use:   "exec [local file]",
+		Short: "Run iron commands from a file or standard input",
 		Long:  execDescription,
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.Output = cmd.OutOrStdout()
+
+			if len(args) == 0 {
+				return a.execFile(cmd.Context(), options, targetEnvironment, "stdin", cmd.InOrStdin())
+			}
+
 			file, err := os.Open(args[0])
 			if err != nil {
 				return err
 			}
 
-			options.Output = cmd.OutOrStdout()
 			err = a.execFile(cmd.Context(), options, targetEnvironment, args[0], file)
 
 			return errors.Join(err, file.Close())
