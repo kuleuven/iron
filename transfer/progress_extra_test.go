@@ -2,9 +2,54 @@ package transfer
 
 import (
 	"bytes"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestProgressContextLabels(t *testing.T) {
+	ctx := WithLabel(t.Context(), "workflow:2")
+	if Label(t.Context()) != "" || Label(ctx) != "workflow:2" {
+		t.Fatal("context label was not isolated")
+	}
+
+	if Label(WithLabel(ctx, "")) != "" {
+		t.Fatal("empty label did not clear the inherited label")
+	}
+
+	for _, size := range []int64{0, 10} {
+		var output bytes.Buffer
+
+		pb := ProgressBar(&output)
+		progress := Progress{Action: TransferFile, Label: ProgressLabel(ctx, "", testTxt), Size: size}
+		pb.Handler(ctx, progress)
+
+		progress.StartedAt = time.Now()
+		pb.Handler(ctx, progress)
+
+		progress.FinishedAt = time.Now()
+		progress.Transferred = size
+		progress.Increment = size
+		pb.Handler(ctx, progress)
+
+		if err := pb.ErrorHandler(ctx, "", testTxt, errors.New("failure")); err != nil {
+			t.Fatal(err)
+		}
+
+		pb.ScanCompleted()
+
+		_ = pb.Close()
+
+		if strings.Count(output.String(), "workflow:2: "+testTxt) != 2 {
+			t.Fatalf("missing or duplicated progress/error labels: %q", output.String())
+		}
+
+		if len(pb.actual) != 0 || pb.actionsDone != 1 || pb.bytesTransferred != size {
+			t.Fatalf("label changed progress accounting: %+v", pb)
+		}
+	}
+}
 
 func TestProgressLabel(t *testing.T) {
 	tests := []struct {
@@ -17,9 +62,14 @@ func TestProgressLabel(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := ProgressLabel(tt.local, tt.remote)
+		result := ProgressLabel(t.Context(), tt.local, tt.remote)
 		if result != tt.expected {
 			t.Errorf("ProgressLabel(%q, %q) = %q, want %q", tt.local, tt.remote, result, tt.expected)
+		}
+
+		ctx := WithLabel(t.Context(), "workflow:2")
+		if got := ProgressLabel(ctx, tt.local, tt.remote); got != "workflow:2: "+tt.expected {
+			t.Errorf("labeled ProgressLabel(%q, %q) = %q", tt.local, tt.remote, got)
 		}
 	}
 }
@@ -66,7 +116,7 @@ func TestPBHandlerRegistration(t *testing.T) {
 	}
 
 	// Register a file
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label: testTxt,
 		Size:  1000,
 	})
@@ -76,7 +126,7 @@ func TestPBHandlerRegistration(t *testing.T) {
 	}
 
 	// Update with re-registration of same label with different size
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label: testTxt,
 		Size:  2000,
 	})
@@ -97,13 +147,13 @@ func TestPBHandlerTransferOngoing(t *testing.T) {
 	}
 
 	// Register
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label: testTxt,
 		Size:  1000,
 	})
 
 	// Transfer ongoing
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label:       testTxt,
 		Size:        1000,
 		StartedAt:   time.Now(),
@@ -128,13 +178,13 @@ func TestPBHandlerTransferComplete(t *testing.T) {
 	}
 
 	// Register
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label: testTxt,
 		Size:  1000,
 	})
 
 	// Complete
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label:       testTxt,
 		Size:        1000,
 		StartedAt:   time.Now(),
@@ -172,13 +222,13 @@ func TestPBHandlerComputeChecksum(t *testing.T) {
 
 	startTime := time.Now()
 
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Action:    ComputeChecksum,
 		Label:     testTxt,
 		StartedAt: startTime,
 	})
 
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Action:     ComputeChecksum,
 		Label:      testTxt,
 		StartedAt:  startTime,
@@ -201,7 +251,7 @@ func TestPBHandlerFromStream(t *testing.T) {
 	}
 
 	// FromStream: started but size unknown (Size=0)
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label:       "stream.txt",
 		Size:        0,
 		StartedAt:   time.Now(),
@@ -229,7 +279,7 @@ func TestPBErrorHandler(t *testing.T) {
 		w:            &bytes.Buffer{},
 	}
 
-	err := pb.ErrorHandler(testLocalTxt, testRemoteTxt, bytes.ErrTooLarge)
+	err := pb.ErrorHandler(t.Context(), testLocalTxt, testRemoteTxt, bytes.ErrTooLarge)
 	if err != nil {
 		t.Errorf("expected nil error from ErrorHandler, got %v", err)
 	}
@@ -319,7 +369,7 @@ func TestPBCloseWithErrors(t *testing.T) {
 	w := &bytes.Buffer{}
 	pb := ProgressBar(w)
 
-	pb.ErrorHandler(testTxt, testRemoteTxt, bytes.ErrTooLarge)
+	pb.ErrorHandler(t.Context(), testTxt, testRemoteTxt, bytes.ErrTooLarge)
 
 	err := pb.Close()
 	if err == nil {
@@ -332,13 +382,13 @@ func TestProgressBarOutput(t *testing.T) {
 	pb := ProgressBar(w)
 
 	// Register a file
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label: testTxt,
 		Size:  1000,
 	})
 
 	// Complete it
-	pb.Handler(Progress{
+	pb.Handler(t.Context(), Progress{
 		Label:       testTxt,
 		Size:        1000,
 		StartedAt:   time.Now(),

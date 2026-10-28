@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -10,9 +11,27 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-func ProgressLabel(source, target string) string {
+type labelKey struct{}
+
+// WithLabel attaches an output label to an operation's context.
+func WithLabel(ctx context.Context, label string) context.Context {
+	return context.WithValue(ctx, labelKey{}, label)
+}
+
+// Label returns the output label attached to ctx, or an empty string.
+func Label(ctx context.Context) string {
+	label, _ := ctx.Value(labelKey{}).(string)
+
+	return label
+}
+
+func ProgressLabel(ctx context.Context, source, target string) string {
 	if target == "" {
-		return source
+		target = source
+	}
+
+	if label := Label(ctx); label != "" {
+		return label + ": " + target
 	}
 
 	return target
@@ -65,7 +84,7 @@ type PB struct {
 	sync.Mutex
 }
 
-func (pb *PB) Handler(progress Progress) {
+func (pb *PB) Handler(_ context.Context, progress Progress) {
 	pb.Lock()
 	defer pb.Unlock()
 
@@ -163,13 +182,13 @@ func (pb *PB) handleKnownSize(progress Progress) {
 	}
 }
 
-func (pb *PB) ErrorHandler(source, target string, err error) error {
+func (pb *PB) ErrorHandler(ctx context.Context, source, target string, err error) error {
 	pb.Lock()
 	defer pb.Unlock()
 
 	pb.errors++
 
-	fmt.Fprintf(pb.outputBuffer, "\x1B[31m%s FAILED: %s\x1B[0m\n", ProgressLabel(source, target), err.Error())
+	fmt.Fprintf(pb.outputBuffer, "\x1B[31m%s FAILED: %s\x1B[0m\n", ProgressLabel(ctx, source, target), err.Error())
 
 	return nil
 }

@@ -88,7 +88,7 @@ func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string
 			path := toLocalPath(local, strings.TrimPrefix(irodsPath, remote))
 
 			if err != nil {
-				return worker.options.ErrorHandler(path, irodsPath, err)
+				return worker.options.ErrorHandler(ctx, path, irodsPath, err)
 			}
 
 			rch <- &object{path, irodsPath, record}
@@ -114,7 +114,7 @@ func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string
 			irodsPath := toIrodsPath(remote, relpath)
 
 			if err != nil {
-				return worker.options.ErrorHandler(path, irodsPath, err)
+				return worker.options.ErrorHandler(ctx, path, irodsPath, err)
 			}
 
 			lch <- &object{path, irodsPath, info}
@@ -139,7 +139,7 @@ func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
 
-		return Synchronize(ctx, checkOrder(lch), checkOrder(rch), registerProgress(queue, worker.options.ProgressHandler), opts)
+		return Synchronize(ctx, checkOrder(lch), checkOrder(rch), registerProgress(ctx, queue, worker.options.ProgressHandler), opts)
 	})
 
 	return wg.Wait()
@@ -165,7 +165,7 @@ func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local stri
 			path := toLocalPath(local, strings.TrimPrefix(irodsPath, remote))
 
 			if err != nil {
-				return worker.options.ErrorHandler(irodsPath, path, err)
+				return worker.options.ErrorHandler(ctx, irodsPath, path, err)
 			}
 
 			rch <- &object{irodsPath, path, record}
@@ -191,7 +191,7 @@ func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local stri
 			irodsPath := toIrodsPath(remote, relpath)
 
 			if err != nil {
-				return worker.options.ErrorHandler(irodsPath, path, err)
+				return worker.options.ErrorHandler(ctx, irodsPath, path, err)
 			}
 
 			lch <- &object{irodsPath, path, info}
@@ -216,7 +216,7 @@ func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local stri
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
 
-		return Synchronize(ctx, checkOrder(rch), checkOrder(lch), registerProgress(queue, worker.options.ProgressHandler), opts)
+		return Synchronize(ctx, checkOrder(rch), checkOrder(lch), registerProgress(ctx, queue, worker.options.ProgressHandler), opts)
 	})
 
 	return wg.Wait()
@@ -241,7 +241,7 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 			target := remote2 + strings.TrimPrefix(source, remote1)
 
 			if err != nil {
-				return worker.options.ErrorHandler(source, target, err)
+				return worker.options.ErrorHandler(ctx, source, target, err)
 			}
 
 			r1ch <- &object{source, target, record}
@@ -258,7 +258,7 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 			source := remote1 + strings.TrimPrefix(target, remote2)
 
 			if err != nil {
-				return worker.options.ErrorHandler(source, target, err)
+				return worker.options.ErrorHandler(ctx, source, target, err)
 			}
 
 			r2ch <- &object{source, target, record}
@@ -283,7 +283,7 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
 
-		return Synchronize(ctx, checkOrder(r1ch), checkOrder(r2ch), registerProgress(queue, worker.options.ProgressHandler), opts)
+		return Synchronize(ctx, checkOrder(r1ch), checkOrder(r2ch), registerProgress(ctx, queue, worker.options.ProgressHandler), opts)
 	})
 
 	return wg.Wait()
@@ -308,7 +308,7 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 			target := remote2 + strings.TrimPrefix(source, remote1)
 
 			if err != nil {
-				return worker.options.ErrorHandler(source, target, err)
+				return worker.options.ErrorHandler(ctx, source, target, err)
 			}
 
 			r1ch <- &object{source, target, record}
@@ -325,7 +325,7 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 			source := remote1 + strings.TrimPrefix(target, remote2)
 
 			if err != nil {
-				return worker.options.ErrorHandler(source, target, err)
+				return worker.options.ErrorHandler(ctx, source, target, err)
 			}
 
 			r2ch <- &object{source, target, record}
@@ -350,7 +350,7 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 			ErrorHandler:                     worker.options.ErrorHandler,
 		}
 
-		return Synchronize(ctx, checkOrder(r1ch), checkOrder(r2ch), registerProgress(queue, worker.options.ProgressHandler), opts)
+		return Synchronize(ctx, checkOrder(r1ch), checkOrder(r2ch), registerProgress(ctx, queue, worker.options.ProgressHandler), opts)
 	})
 
 	return wg.Wait()
@@ -418,7 +418,7 @@ type SynchronizeOptions struct {
 
 	// ErrorHandler indicates the function used to handle errors that occur during synchronization.
 	// If set, it will be called with the error and the corresponding object.
-	ErrorHandler func(source, target string, err error) error
+	ErrorHandler func(ctx context.Context, source, target string, err error) error
 }
 
 func Synchronize(ctx context.Context, left, right <-chan *object, queue chan<- Task, opts SynchronizeOptions) error {
@@ -552,7 +552,7 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 			break
 		}
 
-		err = opts.ErrorHandler(left.source, left.target, err)
+		err = opts.ErrorHandler(ctx, left.source, left.target, err)
 		if err == nil {
 			break
 		}
@@ -697,7 +697,7 @@ func checkOrder(ch <-chan *object) <-chan *object {
 	return out
 }
 
-func registerProgress(queue chan<- Task, progressHandler func(Progress)) chan<- Task {
+func registerProgress(ctx context.Context, queue chan<- Task, progressHandler func(context.Context, Progress)) chan<- Task {
 	if progressHandler == nil {
 		return queue
 	}
@@ -708,9 +708,9 @@ func registerProgress(queue chan<- Task, progressHandler func(Progress)) chan<- 
 		defer close(queue)
 
 		for task := range out {
-			progressHandler(Progress{
+			progressHandler(ctx, Progress{
 				Action: task.Action,
-				Label:  ProgressLabel(task.Source, task.Target),
+				Label:  ProgressLabel(ctx, task.Source, task.Target),
 				Size:   task.Size,
 			})
 

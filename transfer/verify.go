@@ -26,7 +26,7 @@ var ErrChecksumMismatch = errors.New("checksum mismatch")
 type CompareFunc func(ctx context.Context, source, target string, sourceInfo, targetInfo os.FileInfo) ([]byte, []byte, error)
 
 // VerifyLocalToRemote checks the checksum of a local file against the checksum of a remote file.
-func VerifyLocalToRemote(a *api.API, progressHandler func(Progress)) CompareFunc {
+func VerifyLocalToRemote(a *api.API, progressHandler func(context.Context, Progress)) CompareFunc {
 	return func(ctx context.Context, local, remote string, localInfo, remoteInfo os.FileInfo) ([]byte, []byte, error) {
 		sourceChecksum := func(ctx context.Context) ([]byte, error) {
 			return Sha256Checksum(ctx, local)
@@ -40,7 +40,7 @@ func VerifyLocalToRemote(a *api.API, progressHandler func(Progress)) CompareFunc
 	}
 }
 
-func VerifyRemoteToLocal(a *api.API, progressHandler func(Progress)) CompareFunc {
+func VerifyRemoteToLocal(a *api.API, progressHandler func(context.Context, Progress)) CompareFunc {
 	return func(ctx context.Context, remote, local string, remoteInfo, localInfo os.FileInfo) ([]byte, []byte, error) {
 		sourceChecksum := func(ctx context.Context) ([]byte, error) {
 			return parseOrComputeChecksum(ctx, a, progressHandler, local, localInfo)
@@ -55,7 +55,7 @@ func VerifyRemoteToLocal(a *api.API, progressHandler func(Progress)) CompareFunc
 }
 
 // VerifyRemote checks the checksum of two remote files
-func VerifyRemoteToRemote(a, b *api.API, progressHandler func(Progress)) CompareFunc {
+func VerifyRemoteToRemote(a, b *api.API, progressHandler func(context.Context, Progress)) CompareFunc {
 	return func(ctx context.Context, remote1, remote2 string, remote1Info, remote2Info os.FileInfo) ([]byte, []byte, error) {
 		return compareChecksums(ctx, func(ctx context.Context) ([]byte, error) {
 			return parseOrComputeChecksum(ctx, a, progressHandler, remote1, remote1Info)
@@ -97,7 +97,7 @@ func parseChecksum(info os.FileInfo) ([]byte, bool) {
 	return nil, false
 }
 
-func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler func(Progress), path string, info os.FileInfo) ([]byte, error) {
+func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler func(context.Context, Progress), path string, info os.FileInfo) ([]byte, error) {
 	// Try to get checksum from remoteInfo
 	if checksum, ok := parseChecksum(info); ok {
 		return checksum, nil
@@ -109,7 +109,7 @@ func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler fun
 
 	startTime := time.Now()
 
-	progressHandler(Progress{
+	progressHandler(ctx, Progress{
 		Action:    ComputeChecksum,
 		Label:     path,
 		StartedAt: startTime,
@@ -117,7 +117,7 @@ func parseOrComputeChecksum(ctx context.Context, a *api.API, progressHandler fun
 
 	checksum, err := a.Checksum(ctx, path, false)
 
-	progressHandler(Progress{
+	progressHandler(ctx, Progress{
 		Action:     ComputeChecksum,
 		Label:      path,
 		StartedAt:  startTime,

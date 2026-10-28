@@ -2,6 +2,7 @@ package iron
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/kuleuven/iron/transfer"
@@ -10,7 +11,7 @@ import (
 // Upload uploads a local file to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 func (c *Client) Upload(ctx context.Context, local, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.Upload(ctx, local, remote)
 	})
 }
@@ -18,7 +19,7 @@ func (c *Client) Upload(ctx context.Context, local, remote string, options trans
 // UploadDir uploads a local directory to the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 func (c *Client) UploadDir(ctx context.Context, local, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.UploadDir(ctx, local, remote)
 	})
 }
@@ -26,7 +27,7 @@ func (c *Client) UploadDir(ctx context.Context, local, remote string, options tr
 // FromReader streams an io.Reader to a remote file on the iRODS server using parallel transfers.
 // The remote file refers to an iRODS path.
 func (c *Client) FromReader(ctx context.Context, r io.Reader, remote string, appendToFile bool, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.FromStream(ctx, remote, r, remote, appendToFile)
 	})
 }
@@ -34,7 +35,7 @@ func (c *Client) FromReader(ctx context.Context, r io.Reader, remote string, app
 // Download downloads a remote file from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 func (c *Client) Download(ctx context.Context, local, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.Download(ctx, local, remote)
 	})
 }
@@ -42,7 +43,7 @@ func (c *Client) Download(ctx context.Context, local, remote string, options tra
 // DownloadDir downloads a remote directory from the iRODS server using parallel transfers.
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 func (c *Client) DownloadDir(ctx context.Context, local, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.DownloadDir(ctx, local, remote)
 	})
 }
@@ -50,7 +51,7 @@ func (c *Client) DownloadDir(ctx context.Context, local, remote string, options 
 // ToWriter streams a remote file from the iRODS server to an io.Writer using parallel transfers.
 // The remote file refers to an iRODS path.
 func (c *Client) ToWriter(ctx context.Context, w io.Writer, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.ToStream(ctx, remote, w, remote)
 	})
 }
@@ -58,7 +59,7 @@ func (c *Client) ToWriter(ctx context.Context, w io.Writer, remote string, optio
 // RemoveDir removes a remote directory from the iRODS server using client recursion.
 // The remote file refers to an iRODS path.
 func (c *Client) RemoveDir(ctx context.Context, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.RemoveDir(ctx, remote)
 	})
 }
@@ -66,7 +67,7 @@ func (c *Client) RemoveDir(ctx context.Context, remote string, options transfer.
 // Copy copies a single data object on the same iRODS server.
 // Existing targets are overwritten unless options.Exclusive is set.
 func (c *Client) Copy(ctx context.Context, remote1, remote2 string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.Copy(ctx, remote1, remote2)
 	})
 }
@@ -74,7 +75,7 @@ func (c *Client) Copy(ctx context.Context, remote1, remote2 string, options tran
 // CopyDir copies a remote directory to another remote directory from the iRODS server using client recursion.
 // The remote files refers to an iRODS path.
 func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.CopyDir(ctx, remote1, remote2)
 	})
 }
@@ -82,22 +83,22 @@ func (c *Client) CopyDir(ctx context.Context, remote1, remote2 string, options t
 // ComputeChecksums computes the checksums of a remote directory on the iRODS server using client recursion.
 // The remote file refers to an iRODS path.
 func (c *Client) ComputeChecksums(ctx context.Context, remote string, options transfer.Options) error {
-	return c.runWorker(options, func(worker *transfer.Worker) {
+	return c.RunWorker(options, func(worker *transfer.Worker) {
 		worker.ComputeChecksums(ctx, remote)
 	})
 }
 
-// runWorker creates a new pool with the given number of threads and
+// RunWorker creates a new pool with the given number of threads and
 // creates a new transfer.Worker with it. The callback function is called
-// with the created worker. The worker is started and the error returned
-// is the error returned by the worker's Wait() function.
-func (c *Client) runWorker(options transfer.Options, callback func(worker *transfer.Worker)) error {
+// with the created worker. It waits for the worker and returns its error along
+// with any pool cleanup error.
+func (c *Client) RunWorker(options transfer.Options, callback func(worker *transfer.Worker)) (err error) {
 	pool, err := c.defaultPool.Pool(options.MaxThreads)
 	if err != nil {
 		return err
 	}
 
-	defer pool.Close()
+	defer func() { err = errors.Join(err, pool.Close()) }()
 
 	worker := transfer.New(c.API, pool.API, options)
 

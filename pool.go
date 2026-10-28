@@ -40,7 +40,7 @@ func newPool(client *Client) *Pool {
 		maxConns:             client.option.MaxConns,
 		allowConcurrentUse:   client.option.AllowConcurrentUse,
 		discardConnectionAge: client.option.DiscardConnectionAge,
-		ready:                make(chan Conn),
+		ready:                make(chan Conn, client.option.MaxConns),
 	}
 
 	// Register api
@@ -154,6 +154,10 @@ func (p *Pool) Pool(size int) (*Pool, error) {
 // If the maximum number of connections has been reached, it will block until a connection becomes available,
 // or reuse an existing connection in case AllowConcurrentUse is enabled.
 func (p *Pool) Connect(ctx context.Context) (Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	p.lock.Lock()
 
 	if conn, err := p.tryConnect(ctx); err != ErrNoConnectionsAvailable {
@@ -180,7 +184,41 @@ func (p *Pool) Connect(ctx context.Context) (Conn, error) {
 	p.waiting++
 	p.lock.Unlock()
 
-	if conn := <-p.ready; conn != nil {
+	return p.waitForConnection(ctx)
+}
+
+func (p *Pool) waitForConnection(ctx context.Context) (Conn, error) {
+	var conn Conn
+
+	select {
+	case conn = <-p.ready:
+	case <-ctx.Done():
+		p.lock.Lock()
+
+		select {
+		case conn = <-p.ready:
+			if conn == nil && p.waiting > 0 {
+				p.waiting--
+				p.ready <- nil
+			}
+
+			p.lock.Unlock()
+
+			if conn != nil {
+				return nil, errors.Join(ctx.Err(), p.returnConn(conn))
+			}
+
+			// A discarded connection handed this waiter a creation permit.
+			return nil, ctx.Err()
+		default:
+			p.waiting--
+			p.lock.Unlock()
+
+			return nil, ctx.Err()
+		}
+	}
+
+	if conn != nil {
 		return &returnOnClose{Conn: conn, pool: p}, nil
 	}
 
@@ -191,6 +229,11 @@ func (p *Pool) Connect(ctx context.Context) (Conn, error) {
 	// In this case we are allowed to create a new connection
 	conn, err := p.newConn(ctx)
 	if err != nil {
+		if p.waiting > 0 {
+			p.waiting--
+			p.ready <- nil
+		}
+
 		return nil, err
 	}
 

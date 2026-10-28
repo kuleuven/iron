@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -181,14 +182,14 @@ func TestWorkerErrorAndLog(t *testing.T) {
 	worker := New(nil, nil, Options{
 		MaxThreads: 1,
 		Output:     io.Discard,
-		ErrorHandler: func(_, _ string, err error) error {
+		ErrorHandler: func(_ context.Context, _, _ string, err error) error {
 			errCh <- err
 			return nil
 		},
 	})
 
 	want := errors.New("scheduled")
-	worker.Error("/local", "/remote", want)
+	worker.Error(t.Context(), "/local", "/remote", want)
 
 	if err := worker.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
@@ -204,12 +205,12 @@ func TestWorkerErrorAndLog(t *testing.T) {
 	}
 
 	// log shouldn't panic.
-	worker.log(Task{Source: "/a", Target: "/b"})
+	worker.log(t.Context(), Task{Source: "/a", Target: "/b"})
 }
 
 func TestWorkerProgressNoopHandler(t *testing.T) {
 	worker := New(nil, nil, Options{})
 
 	// Should not panic with default no-op handler.
-	worker.Progress(Progress{Label: testStr})
+	worker.Progress(t.Context(), Progress{Label: testStr})
 }

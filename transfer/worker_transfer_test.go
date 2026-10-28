@@ -68,7 +68,7 @@ func (tc fileTransferTest) runUpload(t *testing.T) {
 	worker := New(targetAPI, targetAPI, Options{
 		DryRun:             tc.dryRun,
 		IntegrityChecksums: tc.integrity,
-		ProgressHandler: func(p Progress) {
+		ProgressHandler: func(ctx context.Context, p Progress) {
 			progress = append(progress, p)
 		},
 	})
@@ -126,7 +126,7 @@ func (tc fileTransferTest) run(t *testing.T, remoteCopy bool) {
 	worker := New(sourceAPI, sourceAPI, Options{
 		DryRun:             tc.dryRun,
 		IntegrityChecksums: tc.integrity,
-		ProgressHandler: func(p Progress) {
+		ProgressHandler: func(ctx context.Context, p Progress) {
 			progress = append(progress, p)
 		},
 	})

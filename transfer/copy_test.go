@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -93,7 +94,7 @@ func TestCopyBuffer(t *testing.T) {
 	reader := bytes.NewReader(data)
 	writer := &bytes.Buffer{}
 	pw := &progressWriter{
-		handler: func(progress Progress) {},
+		handler: func(ctx context.Context, progress Progress) {},
 	}
 
 	err := copyBuffer(writer, reader, pw)
@@ -114,7 +115,7 @@ func TestCopyBufferEmpty(t *testing.T) {
 	reader := bytes.NewReader(nil)
 	writer := &bytes.Buffer{}
 	pw := &progressWriter{
-		handler: func(progress Progress) {},
+		handler: func(ctx context.Context, progress Progress) {},
 	}
 
 	err := copyBuffer(writer, reader, pw)
