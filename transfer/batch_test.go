@@ -326,6 +326,7 @@ func TestRegistrationContext(t *testing.T) {
 	close(input)
 
 	for range tasks {
+		// Drain the tasks channel to ensure all tasks are processed.
 	}
 
 	if got := <-contexts; got != ctx {

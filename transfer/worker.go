@@ -1206,13 +1206,24 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flag
 		}
 	}
 
-	worker.copyDir(ctx, remote1, remote2, worker.TransferPool, worker.copyObject, worker.copyCollection, worker.ComputeCopyDir, flags)
+	worker.copyDir(ctx, remote1, remote2, worker.TransferPool, struct {
+		copyObject     func(context.Context, Task, Flags)
+		copyCollection func(context.Context, Task, Flags) error
+		compute        func(context.Context, string, string, chan<- Task, Flags) error
+	}{
+		copyObject:     worker.copyObject,
+		copyCollection: worker.copyCollection,
+		compute:        worker.ComputeCopyDir,
+	}, flags)
 }
 
 func (worker *Worker) copyDir(
 	ctx context.Context, remote1, remote2 string, target *api.API,
-	copyObject func(context.Context, Task, Flags), copyCollection func(context.Context, Task, Flags) error,
-	compute func(context.Context, string, string, chan<- Task, Flags) error, flags Flags,
+	callbacks struct {
+		copyObject     func(context.Context, Task, Flags)
+		copyCollection func(context.Context, Task, Flags) error
+		compute        func(context.Context, string, string, chan<- Task, Flags) error
+	}, flags Flags,
 ) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
@@ -1226,7 +1237,7 @@ func (worker *Worker) copyDir(
 			switch u.Action {
 			case ComputeChecksum:
 			case TransferFile:
-				copyObject(ctx, u, flags)
+				callbacks.copyObject(ctx, u, flags)
 			case SetModificationTime:
 				worker.action(ctx, u, func() error { return target.ModifyModificationTime(ctx, u.Target, u.ModTime) })
 			case RemoveFile:
@@ -1236,14 +1247,14 @@ func (worker *Worker) copyDir(
 			case RemoveDirectoryAll:
 				worker.action(ctx, u, func() error { return target.DeleteCollectionAll(ctx, u.Target, flags.SkipTrash) })
 			case CreateDirectory:
-				worker.action(ctx, u, func() error { return copyCollection(ctx, u, flags) })
+				worker.action(ctx, u, func() error { return callbacks.copyCollection(ctx, u, flags) })
 			}
 		}
 
 		return ctx.Err()
 	})
 
-	if err := compute(ctx, remote1, remote2, queue, flags); err != nil {
+	if err := callbacks.compute(ctx, remote1, remote2, queue, flags); err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 	}
 }
@@ -1315,7 +1326,15 @@ func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string
 		}
 	}
 
-	worker.copyDir(ctx, remote1, remote2, worker.RemoteTransferPool, worker.remoteCopyObject, worker.remoteCopyCollection, worker.ComputeRemoteCopyDir, flags)
+	worker.copyDir(ctx, remote1, remote2, worker.RemoteTransferPool, struct {
+		copyObject     func(context.Context, Task, Flags)
+		copyCollection func(context.Context, Task, Flags) error
+		compute        func(context.Context, string, string, chan<- Task, Flags) error
+	}{
+		copyObject:     worker.remoteCopyObject,
+		copyCollection: worker.remoteCopyCollection,
+		compute:        worker.ComputeRemoteCopyDir,
+	}, flags)
 }
 
 func (worker *Worker) remoteCopyObject(ctx context.Context, u Task, flags Flags) {
