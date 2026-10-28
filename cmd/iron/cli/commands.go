@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -593,17 +592,7 @@ func (a *App) cp() *cobra.Command {
 
 // runCopy performs the cp command, copying a data object or a collection.
 func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Options, targetEnvironment string) error {
-	src := a.Path(args[0])
-
-	resolveDest := func(workdir string) string {
-		if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
-			return a.PathIn(args[1]+Name(src), workdir)
-		}
-
-		return a.PathIn(args[1], workdir)
-	}
-
-	obj, err := a.GetRecord(cmd.Context(), src)
+	paths, err := a.copyPaths(cmd.Context(), args, a.Workdir)
 	if err != nil {
 		return err
 	}
@@ -614,27 +603,19 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Option
 	switch {
 	case targetEnvironment != "":
 		return a.doRemoteTransfer(cmd, targetEnvironment, options, func(worker *transfer.Worker, workdir string) {
-			dest := resolveDest(workdir)
-
-			if obj.IsDir() {
-				worker.RemoteCopyDir(cmd.Context(), src, dest)
-			} else {
-				worker.RemoteCopy(cmd.Context(), src, dest)
+			paths.target = a.PathIn(args[1], workdir)
+			if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
+				paths.target = a.PathIn(args[1]+Name(paths.source), workdir)
 			}
+
+			paths.copy(cmd.Context(), worker, true)
 		})
 
-	case obj.IsDir():
-		dest := resolveDest(a.Workdir)
-
-		if !strings.HasSuffix(args[1], "/") {
-			return ErrAmbiguousTarget
-		}
-
-		return a.CopyDir(cmd.Context(), src, dest, options)
+	case paths.directory:
+		return a.CopyDir(cmd.Context(), paths.source, paths.target, options)
 
 	default:
-		dest := resolveDest(a.Workdir)
-		return a.Copy(cmd.Context(), src, dest, options)
+		return a.Copy(cmd.Context(), paths.source, paths.target, options)
 	}
 }
 
@@ -820,40 +801,25 @@ func (a *App) upload() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "upload <local file> [target path]",
-		Aliases:           []string{"put"},
+		Aliases:           []string{uploadAlias},
 		Short:             "Upload a local file or directory to the destination path",
 		Long:              uploadDescription,
 		Example:           strings.Join(examples, "\n"),
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				args = append(args, a.Workdir+"/")
-			}
-
-			source := filepath.Clean(args[0])
-			target := a.Path(args[1])
-
-			if strings.HasSuffix(args[1], "/") && !localPathEndsWithSeparator(args[0]) {
-				target = a.Path(args[1] + filepath.Base(source))
-			}
-
-			fi, err := os.Stat(source)
+			paths, err := a.uploadPaths(args)
 			if err != nil {
 				return err
 			}
 
 			opts.Output = cmd.OutOrStdout()
 
-			if !fi.IsDir() {
-				return a.Upload(cmd.Context(), source, target, opts)
+			if !paths.directory {
+				return a.Upload(cmd.Context(), paths.source, paths.target, opts)
 			}
 
-			if !strings.HasSuffix(args[1], "/") {
-				return ErrAmbiguousTarget
-			}
-
-			return a.UploadDir(cmd.Context(), source, target, opts)
+			return a.UploadDir(cmd.Context(), paths.source, paths.target, opts)
 		},
 	}
 
@@ -882,7 +848,7 @@ in the target folder. Otherwise, a subfolder with the same name will be created.
 
 --newer, --delete, --checksum, --include and --ignore apply only to collection copies.`
 
-func (a *App) download() *cobra.Command { //nolint:funlen
+func (a *App) download() *cobra.Command {
 	opts := transfer.Options{
 		SyncModTime: true,
 		MaxQueued:   10000,
@@ -899,45 +865,25 @@ func (a *App) download() *cobra.Command { //nolint:funlen
 
 	cmd := &cobra.Command{
 		Use:               "download <path> [local file]",
-		Aliases:           []string{"get"},
+		Aliases:           []string{downloadAlias},
 		Short:             "Download a data object or a collection to the local path",
 		Long:              downloadDescription,
 		Example:           strings.Join(examples, "\n"),
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				dir, err := os.Getwd()
-				if err != nil {
-					return err
-				}
-
-				args = append(args, dir+"/")
-			}
-
-			source := a.Path(args[0])
-			target := filepath.Clean(args[1])
-
-			if localPathEndsWithSeparator(args[1]) && !strings.HasSuffix(args[0], "/") {
-				target = filepath.Join(target, Name(source))
-			}
-
-			record, err := a.GetRecord(cmd.Context(), source)
+			paths, err := a.downloadPaths(cmd.Context(), args)
 			if err != nil {
 				return err
 			}
 
 			opts.Output = cmd.OutOrStdout()
 
-			if !record.IsDir() {
-				return a.Download(cmd.Context(), target, source, opts)
+			if !paths.directory {
+				return a.Download(cmd.Context(), paths.target, paths.source, opts)
 			}
 
-			if !localPathEndsWithSeparator(args[1]) {
-				return ErrAmbiguousTarget
-			}
-
-			return a.DownloadDir(cmd.Context(), target, source, opts)
+			return a.DownloadDir(cmd.Context(), paths.target, paths.source, opts)
 		},
 	}
 

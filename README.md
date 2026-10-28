@@ -94,6 +94,89 @@ $ ls /home/peter/sub/localdir
 peter.txt
 ```
 
+### Command files
+
+Use `iron exec workflow.iron` to feed multiple commands to one transfer worker,
+connection pool, and progress display. The file is read one line at a time.
+Transfers can overlap; submission blocks when the worker's transfer capacity is
+occupied.
+
+```text
+# workflow.iron
+upload './results/part 1.csv' /zone/home/alice/incoming/part1.csv
+upload ./results/part2.csv /zone/home/alice/incoming/part2.csv
+wait
+mkdir -p /zone/home/alice/archive
+cp /zone/home/alice/incoming/part1.csv /zone/home/alice/archive/
+cp /zone/home/alice/incoming/part2.csv /zone/home/alice/archive/
+wait
+mv /zone/home/alice/archive/part1.csv /zone/home/alice/archive/final.csv
+```
+
+Supported commands are `cp`, `mv`, `mkdir`, `upload`/`put`, `download`/`get`,
+and `wait`. A `wait` line waits for all preceding work, including verification
+and timestamp updates, without closing the progress display. End-of-file also
+waits. **Command order alone does not guarantee completion order.** Insert
+`wait` before dependent commands or operations on overlapping paths. Synchronous
+`mkdir` and `mv` commands do not implicitly wait for earlier transfers.
+
+Transfer flags apply to the entire run, not individual lines:
+
+```sh
+iron exec --threads 5 --exclusive workflow.iron
+iron exec --target-environment archive --metadata workflow.iron
+iron exec --dry-run workflow.iron
+```
+
+Per-line transfer flags are rejected. Operation-specific flags such as
+`mkdir -p` and `mv --preserve-mtime` remain available. Run-level
+`--target-environment` selects the destination for per-line `cp --remote`
+commands. Plain `cp` continues to copy within the source environment, so both
+types of copy can be mixed in one command file. `cp --remote` requires
+`--target-environment`; uploads, downloads, mkdir, and moves use the source
+environment. For example:
+
+```text
+cp /zone/home/alice/result.csv /zone/home/alice/archive/
+wait
+cp --remote /zone/home/alice/archive/result.csv /archive/home/alice/
+```
+
+Relative copy targets use the source environment's working directory for `cp`
+and the target environment's working directory for `cp --remote`.
+Unlike standalone `cp`, command files default to
+`--sync-modtime=true` for all transfers; disable it with
+`--sync-modtime=false`. The worker reserves `--threads` connections in addition
+to an indexing connection, so library callers must configure enough client
+connections.
+
+Blank lines and whole-line `#` comments are allowed. Paths can be quoted,
+including paths containing spaces; Windows path backslashes are preserved.
+Relative local paths use the invocation directory, not the command file's
+directory. Remote paths use the selected environment's working directory.
+The usual trailing-slash source/target rules still apply.
+
+There is no shell execution, wildcard expansion, variable substitution,
+command chaining, or control flow. Generate concrete `.iron` commands with an
+external script when wildcard selection is needed.
+
+The existing progress display stays indeterminate while commands are being read
+and files discovered, since its totals can grow. The same display stays open
+across `wait` barriers.
+
+Input and command errors stop submission; already submitted work is drained.
+Transfer errors use the worker's existing error handler and are collected by
+`wait` or end-of-file when the handler returns an error. Errors identify the
+command file and line. Earlier changes are not rolled back;
+in-flight operations may finish, and a syntax error on a later line can be
+reported after earlier operations have executed.
+
+Dry-run previews operations without copying, moving, deleting, creating
+destinations, or updating metadata/timestamps. As with existing transfer
+dry-runs, checksum comparison may compute and store missing server checksums.
+Dry-run does not simulate files or directories an earlier command would create:
+a later dependent preview can fail because those paths do not exist yet.
+
 ## GUI
 
 A Fyne-based desktop GUI is available as a separate project <https://github.com/kuleuven/iron-gui>. It reuses the same `~/.irods/irods_environment.json`, `.irodsA` and `.irodsA.json` files as the CLI, supports `pam_interactive` authentication from a login form, and lets you browse collections, transfer files edit metadata/permissions, and compute checksums.
@@ -158,6 +241,19 @@ func example() error {
 ```
 
 ## Implementation choices
+
+Transfer callbacks receive the operation's context, including values attached by
+the caller: `ProgressHandler(context.Context, transfer.Progress)` and
+`ErrorHandler(context.Context, string, string, error) error`. This also applies
+to checksum progress callbacks and synchronization error handlers. Callbacks may
+run concurrently. The progress bar's `Handler` and `ErrorHandler` methods accept
+the same context-first arguments and can be assigned directly to these callbacks.
+`transfer.ProgressLabel` also accepts the operation context as its first argument.
+Use `transfer.WithLabel(ctx, "label")` to annotate progress and error output
+through `transfer.ProgressLabel`. Custom callbacks can retrieve it with `transfer.Label(ctx)`.
+Command files use the filename and line number as the operation label.
+Worker errors are reported asynchronously; `Drain` and `Wait` wait for pending
+error callbacks and return any errors those callbacks propagate.
 
 * The client currently requires 4.3.2 or later. We currently use it against 5.0.2 production services. 
 * New features might require a recent version of irods, i.e. support for older versions is not guaranteed.

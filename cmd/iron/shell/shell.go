@@ -449,6 +449,20 @@ func closeQuoteOrWrite(b *strings.Builder, r, quote rune) rune {
 // characters the way a general-purpose lexer would. An unterminated quote is
 // reported as an error.
 func splitTokens(s string) ([]string, error) {
+	return SplitTokens(s)
+}
+
+// SplitTokens splits an iron command line, preserving Windows path backslashes.
+func SplitTokens(s string) ([]string, error) {
+	return splitCommandTokens(s, false)
+}
+
+// SplitScriptTokens rejects shell operators instead of treating them as paths.
+func SplitScriptTokens(s string) ([]string, error) {
+	return splitCommandTokens(s, true)
+}
+
+func splitCommandTokens(s string, script bool) ([]string, error) {
 	var (
 		tokens  []string
 		b       strings.Builder
@@ -468,6 +482,8 @@ func splitTokens(s string) ([]string, error) {
 			// so double-quote backslashes fall through to the next case.
 			started = true
 			quote = closeQuoteOrWrite(&b, r, quote)
+		case script && quote == 0 && strings.ContainsRune("|;&<>`", r):
+			return nil, fmt.Errorf("shell operator %q is not supported", r)
 		case r == '\\':
 			started = true
 			i = appendEscaped(&b, runes, i)
