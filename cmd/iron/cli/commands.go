@@ -360,7 +360,9 @@ func (a *App) rm() *cobra.Command {
 					RemovePerDirectory: perDirectory,
 				}
 
-				return a.RemoveDir(cmd.Context(), path, opts, flags)
+				return a.RunWorker(opts, func(worker *transfer.Worker) {
+					worker.RemoveDir(cmd.Context(), path, flags)
+				})
 			}
 
 			return a.DeleteDataObject(cmd.Context(), path, skip)
@@ -604,8 +606,7 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Option
 	options.MaxQueued = 10000
 	options.Output = cmd.OutOrStdout()
 
-	switch {
-	case targetEnvironment != "":
+	if targetEnvironment != "" {
 		return a.doRemoteTransfer(cmd, targetEnvironment, options, func(worker *transfer.Worker, workdir string) {
 			paths.target = a.PathIn(args[1], workdir)
 			if strings.HasSuffix(args[1], "/") && !strings.HasSuffix(args[0], "/") {
@@ -614,13 +615,11 @@ func (a *App) runCopy(cmd *cobra.Command, args []string, options transfer.Option
 
 			paths.copy(cmd.Context(), worker, true, flags)
 		})
-
-	case paths.directory:
-		return a.CopyDir(cmd.Context(), paths.source, paths.target, options, flags)
-
-	default:
-		return a.Copy(cmd.Context(), paths.source, paths.target, options, flags)
 	}
+
+	return a.RunWorker(options, func(worker *transfer.Worker) {
+		paths.copy(cmd.Context(), worker, false, flags)
+	})
 }
 
 func (a *App) doRemoteTransfer(cmd *cobra.Command, targetEnvironment string, options transfer.Options, fn func(worker *transfer.Worker, workdir string)) error {
@@ -767,7 +766,9 @@ func (a *App) checksums() *cobra.Command {
 				CompareChecksums:   verify,
 			}
 
-			return a.ComputeChecksums(cmd.Context(), path, opts, flags)
+			return a.RunWorker(opts, func(worker *transfer.Worker) {
+				worker.ComputeChecksums(cmd.Context(), path, flags)
+			})
 		},
 	}
 
@@ -821,11 +822,9 @@ func (a *App) upload() *cobra.Command {
 
 			opts.Output = cmd.OutOrStdout()
 
-			if !paths.directory {
-				return a.Upload(cmd.Context(), paths.source, paths.target, opts, flags)
-			}
-
-			return a.UploadDir(cmd.Context(), paths.source, paths.target, opts, flags)
+			return a.RunWorker(opts, func(worker *transfer.Worker) {
+				paths.upload(cmd.Context(), worker, flags)
+			})
 		},
 	}
 
@@ -886,11 +885,9 @@ func (a *App) download() *cobra.Command {
 
 			opts.Output = cmd.OutOrStdout()
 
-			if !paths.directory {
-				return a.Download(cmd.Context(), paths.target, paths.source, opts, flags)
-			}
-
-			return a.DownloadDir(cmd.Context(), paths.target, paths.source, opts, flags)
+			return a.RunWorker(opts, func(worker *transfer.Worker) {
+				paths.download(cmd.Context(), worker, flags)
+			})
 		},
 	}
 
@@ -938,9 +935,11 @@ func (a *App) cat() *cobra.Command {
 				output = cmd.ErrOrStderr()
 			}
 
-			return a.Client.ToWriter(cmd.Context(), cmd.OutOrStdout(), source, transfer.Options{
+			return a.RunWorker(transfer.Options{
 				MaxThreads: maxThreads,
 				Output:     output,
+			}, func(worker *transfer.Worker) {
+				worker.ToStream(cmd.Context(), source, cmd.OutOrStdout(), source)
 			})
 		},
 	}
@@ -1044,10 +1043,12 @@ func (a *App) save() *cobra.Command {
 				input = io.TeeReader(input, cmd.OutOrStdout())
 			}
 
-			return a.Client.FromReader(cmd.Context(), input, target, appendFlag, transfer.Options{
+			return a.RunWorker(transfer.Options{
 				MaxThreads: maxThreads,
 				Output:     output,
-			}, transfer.Flags{})
+			}, func(worker *transfer.Worker) {
+				worker.FromStream(cmd.Context(), target, input, target, appendFlag, transfer.Flags{})
+			})
 		},
 	}
 

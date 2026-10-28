@@ -419,10 +419,11 @@ func TestClientUpload(t *testing.T) { //nolint:funlen
 		transfer.MinimumRangeSize = 200
 		transfer.CopyBufferDelay = 5 * time.Second
 
-		return client.Upload(t.Context(), f.Name(), testStr, transfer.Options{
-			//	SyncModTime: true,
+		return client.RunWorker(transfer.Options{
 			MaxThreads: 2,
-		}, transfer.Flags{})
+		}, func(worker *transfer.Worker) {
+			worker.Upload(t.Context(), f.Name(), testStr, transfer.Flags{})
+		})
 	})
 
 	if err := wg.Wait(); err != nil {
@@ -512,10 +513,11 @@ func TestClientDownload(t *testing.T) { //nolint:funlen
 		transfer.BufferSize = 100
 		transfer.MinimumRangeSize = 200
 
-		return client.Download(t.Context(), f.Name(), testStr, transfer.Options{
-			//	SyncModTime: true,
+		return client.RunWorker(transfer.Options{
 			MaxThreads: 1,
-		}, transfer.Flags{})
+		}, func(worker *transfer.Worker) {
+			worker.Download(t.Context(), f.Name(), testStr, transfer.Flags{})
+		})
 	})
 
 	if err := wg.Wait(); err != nil {
@@ -599,7 +601,9 @@ func TestClientVerify(t *testing.T) { //nolint:funlen
 			return err
 		}
 
-		return client.Verify(t.Context(), f.Name(), testStr)
+		_, _, err = transfer.VerifyLocalToRemote(client.API, nil)(t.Context(), f.Name(), testStr, nil, nil)
+
+		return err
 	})
 
 	if err := wg.Wait(); err != nil {

@@ -257,10 +257,16 @@ func example() error {
 
 Transfer configuration is split between `transfer.Options` (worker resources,
 dry-run mode, and reporting) and `transfer.Flags` (per-operation behavior).
-Client transfer helpers accept options followed by flags, for example
-`client.DownloadDir(ctx, local, remote, options, flags)`. When reusing a worker
-through `Client.RunWorker`, pass flags as the last argument to each operation:
-`worker.DownloadDir(ctx, local, remote, transfer.Flags{Exclusive: true})`.
+Use `Client.RunWorker` to create a worker and wait for its submitted operations.
+Pass flags as the last argument to each operation:
+
+```go
+err := client.RunWorker(transfer.Options{MaxThreads: 5}, func(worker *transfer.Worker) {
+    worker.DownloadDir(ctx, local, remote, transfer.Flags{Exclusive: true})
+})
+```
+
+For standalone checksum verification, use `transfer.VerifyLocalToRemote`.
 Each asynchronous operation retains its own flags, so subsequent submissions
 can use different settings without changing work already in progress.
 
