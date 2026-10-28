@@ -16,6 +16,7 @@ import (
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/cmd/iron/shell"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func New(_ context.Context, options ...Option) *App {
@@ -70,6 +71,13 @@ type App struct {
 	inShell   bool
 	inTesting bool
 }
+
+const (
+	defaultTerminalWidth   = 80
+	promptInputWidth       = 20
+	promptSeparatorsWidth  = 6
+	minimumPromptPathWidth = 12
+)
 
 // Name returns the application name (used for client telemetry, prompts, etc.).
 func (a *App) Name() string { return a.name }
@@ -323,7 +331,65 @@ func (a *App) executeCommand(cmd *cobra.Command, line string) error {
 }
 
 func (a *App) prefix() string {
-	return fmt.Sprintf("%s > %s > ", a.name, a.Workdir)
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		width = defaultTerminalWidth
+	}
+
+	pathWidth := max(width-len([]rune(a.name))-promptInputWidth-promptSeparatorsWidth, minimumPromptPathWidth)
+
+	return fmt.Sprintf("%s > %s > ", a.name, abbreviatePath(a.Workdir, pathWidth))
+}
+
+func abbreviatePath(path string, maxLength int) string {
+	if maxLength <= 0 {
+		return ""
+	}
+
+	pathRunes := []rune(path)
+	if len(pathRunes) <= maxLength {
+		return path
+	}
+
+	absolute := strings.HasPrefix(path, "/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	if len(parts) == 1 && parts[0] == "" {
+		return path
+	}
+
+	for i := range len(parts) - 1 {
+		runes := []rune(parts[i])
+		if len(runes) > 1 {
+			parts[i] = string(runes[:1])
+		}
+	}
+
+	shortened := strings.Join(parts, "/")
+	if absolute {
+		shortened = "/" + shortened
+	}
+
+	if len([]rune(shortened)) <= maxLength {
+		return shortened
+	}
+
+	prefix := ".../"
+	if absolute {
+		prefix = "/.../"
+	}
+
+	remaining := maxLength - len([]rune(prefix))
+	if remaining <= 0 {
+		return string([]rune(prefix)[:maxLength])
+	}
+
+	base := []rune(parts[len(parts)-1])
+	if len(base) > remaining {
+		base = base[len(base)-remaining:]
+	}
+
+	return prefix + string(base)
 }
 
 // ResetClient closes the client and sets it to nil

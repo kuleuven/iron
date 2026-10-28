@@ -45,6 +45,48 @@ func writeConfig(t *testing.T, env iron.Env) (string, error) {
 	return f.Name(), os.WriteFile(filepath.Join(filepath.Dir(f.Name()), ".irodsA"), scrambledPassword, 0o600)
 }
 
+func TestAbbreviatePath(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		maxLength int
+		expected  string
+	}{
+		{
+			name:      "path fits",
+			path:      "/zone/home/user",
+			maxLength: 20,
+			expected:  "/zone/home/user",
+		},
+		{
+			name:      "abbreviates parent directories",
+			path:      "/very/long/parent/final",
+			maxLength: 20,
+			expected:  "/v/l/p/final",
+		},
+		{
+			name:      "collapses parent directories",
+			path:      "/one/two/three/final",
+			maxLength: 10,
+			expected:  "/.../final",
+		},
+		{
+			name:      "truncates a long final directory",
+			path:      "/one/a-very-long-directory-name",
+			maxLength: 12,
+			expected:  "/.../ry-name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := abbreviatePath(tt.path, tt.maxLength); got != tt.expected {
+				t.Errorf("abbreviatePath(%q, %d) = %q, want %q", tt.path, tt.maxLength, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestNew(t *testing.T) { //nolint:funlen
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
