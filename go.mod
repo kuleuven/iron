@@ -9,7 +9,7 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.7.0
 	github.com/dustin/go-humanize v1.1.0
 	github.com/elk-language/go-prompt v1.4.0
-	github.com/evanphx/json-patch v0.5.2
+	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-openapi/jsonpointer v1.0.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hashicorp/go-rootcerts v1.1.0

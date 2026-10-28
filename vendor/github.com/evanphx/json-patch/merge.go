@@ -38,7 +38,10 @@ func mergeDocs(doc, patch *partialDoc, mergeMerge bool) {
 			cur, ok := (*doc)[k]
 
 			if !ok || cur == nil {
-				pruneNulls(v)
+				if !mergeMerge {
+					pruneNulls(v)
+				}
+
 				(*doc)[k] = v
 			} else {
 				(*doc)[k] = merge(cur, v, mergeMerge)
@@ -79,8 +82,8 @@ func pruneAryNulls(ary *partialArray) *partialArray {
 	for _, v := range *ary {
 		if v != nil {
 			pruneNulls(v)
-			newAry = append(newAry, v)
 		}
+		newAry = append(newAry, v)
 	}
 
 	*ary = newAry

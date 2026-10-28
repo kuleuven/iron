@@ -98,8 +98,8 @@ github.com/elk-language/go-prompt/bisect
 github.com/elk-language/go-prompt/debug
 github.com/elk-language/go-prompt/strings
 github.com/elk-language/go-prompt/term
-# github.com/evanphx/json-patch v0.5.2
-## explicit; go 1.14
+# github.com/evanphx/json-patch v5.9.11+incompatible
+## explicit
 github.com/evanphx/json-patch
 # github.com/go-fed/httpsig v1.1.0
 ## explicit; go 1.13
@@ -149,7 +149,6 @@ github.com/mattn/go-tty
 github.com/mitchellh/go-homedir
 # github.com/pkg/errors v0.9.1
 ## explicit
-github.com/pkg/errors
 # github.com/pkg/term v1.2.0-beta.2
 ## explicit; go 1.14
 github.com/pkg/term/termios
