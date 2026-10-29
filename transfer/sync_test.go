@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -9,6 +10,37 @@ import (
 
 	"github.com/kuleuven/iron/api"
 )
+
+func TestDownloadDirDryRunExistingTarget(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	for _, local := range []string{".", "./", dir, dir + "/"} {
+		t.Run(local, func(t *testing.T) {
+			writeIdenticalLocalFile(t)
+
+			conn := &api.MockConn{}
+			conn.AddResponses(responses)
+
+			var output bytes.Buffer
+
+			worker := New(mockTransferAPI(conn), nil, Options{
+				DryRun:          true,
+				Output:          &output,
+				ProgressHandler: func(context.Context, Progress) {},
+			})
+			worker.DownloadDir(t.Context(), local, "/test", Flags{})
+
+			if err := worker.Wait(); err != nil {
+				t.Fatal(err)
+			}
+
+			if output.Len() != 0 {
+				t.Fatalf("unchanged directory has dry-run actions: %q", output.String())
+			}
+		})
+	}
+}
 
 func TestComputeLocalDirPaths(t *testing.T) {
 	dir := t.TempDir()

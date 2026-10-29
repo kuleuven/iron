@@ -871,12 +871,12 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) UploadDir(ctx context.Context, local, remote string, flags Flags) {
-	if err := worker.createTarget(ctx, local, remote, func() error {
-		return worker.IndexPool.CreateCollectionAll(ctx, remote)
-	}); err != nil {
-		worker.Error(ctx, local, remote, err)
+	if !worker.options.DryRun {
+		if err := worker.IndexPool.CreateCollectionAll(ctx, remote); err != nil {
+			worker.Error(ctx, local, remote, err)
 
-		return
+			return
+		}
 	}
 
 	queue := make(chan Task, worker.options.MaxQueued)
@@ -970,12 +970,12 @@ func (tr *taskReader) Checksum(ctx context.Context) ([]byte, error) {
 // The local file refers to the local file system. The remote file refers to an iRODS path.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) DownloadDir(ctx context.Context, local, remote string, flags Flags) {
-	if err := worker.createTarget(ctx, remote, local, func() error {
-		return os.MkdirAll(local, 0o755)
-	}); err != nil {
-		worker.Error(ctx, local, remote, err)
+	if !worker.options.DryRun {
+		if err := os.MkdirAll(local, 0o755); err != nil {
+			worker.Error(ctx, local, remote, err)
 
-		return
+			return
+		}
 	}
 
 	queue := make(chan Task, worker.options.MaxQueued)
@@ -1190,12 +1190,12 @@ func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags F
 // It handles the recursion client side, but individual files are copied server-side only.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
-	if err := worker.createTarget(ctx, remote1, remote2, func() error {
-		return worker.IndexPool.CreateCollectionAll(ctx, remote2)
-	}); err != nil {
-		worker.Error(ctx, remote1, remote2, err)
+	if !worker.options.DryRun {
+		if err := worker.IndexPool.CreateCollectionAll(ctx, remote2); err != nil {
+			worker.Error(ctx, remote1, remote2, err)
 
-		return
+			return
+		}
 	}
 
 	if flags.CopyMetadata && !worker.options.DryRun {
@@ -1310,12 +1310,12 @@ func (worker *Worker) copyCollection(ctx context.Context, u Task, flags Flags) e
 // It handles the recursion client side. Files are streamed through the local client.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
-	if err := worker.createTarget(ctx, remote1, remote2, func() error {
-		return worker.RemoteIndexPool.CreateCollectionAll(ctx, remote2)
-	}); err != nil {
-		worker.Error(ctx, remote1, remote2, err)
+	if !worker.options.DryRun {
+		if err := worker.RemoteIndexPool.CreateCollectionAll(ctx, remote2); err != nil {
+			worker.Error(ctx, remote1, remote2, err)
 
-		return
+			return
+		}
 	}
 
 	if flags.CopyMetadata && !worker.options.DryRun {
@@ -1369,16 +1369,6 @@ func (worker *Worker) log(ctx context.Context, u Task) {
 	}
 
 	fmt.Fprintf(w, "would %s\n", u.Action.Format(ProgressLabel(ctx, u.Source, u.Target)))
-}
-
-func (worker *Worker) createTarget(ctx context.Context, source, target string, create func() error) error {
-	if worker.options.DryRun {
-		worker.log(ctx, Task{Action: CreateDirectory, Source: source, Target: target})
-
-		return nil
-	}
-
-	return create()
 }
 
 // Action performs a synchronous action using this worker's dry-run and progress
