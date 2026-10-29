@@ -66,6 +66,48 @@ func TestVerifyLocalToRemoteCallbacks(t *testing.T) {
 	}
 }
 
+func testVerifyRemoteToLocalPaths(t *testing.T, local string, localHash []byte, tc struct {
+	name     string
+	cached   bool
+	mismatch bool
+},
+) {
+	response := transferTestChecksum(testStr, tc.mismatch)
+
+	remoteHash, err := api.ParseIrodsChecksum(response.String)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn := &api.MockConn{}
+	info := &fakeFileInfo{}
+
+	if tc.cached {
+		info.sys = &api.DataObject{Replicas: []api.Replica{{Status: "1", Checksum: response.String}}}
+	} else {
+		conn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{Path: testFile1}, response)
+	}
+
+	verify := VerifyRemoteToLocal(mockTransferAPI(conn), nil)
+	sourceHash, targetHash, err := verify(t.Context(), testFile1, local, info, nil)
+
+	var wantErr error
+
+	if tc.mismatch {
+		wantErr = ErrChecksumMismatch
+	}
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("verification error = %v, want %v", err, wantErr)
+	}
+
+	if !bytes.Equal(sourceHash, remoteHash) || !bytes.Equal(targetHash, localHash) {
+		t.Errorf("unexpected source/target checksums: %x / %x", sourceHash, targetHash)
+	}
+
+	assertTransferDialogs(t, conn)
+}
+
 func TestVerifyRemoteToLocalPaths(t *testing.T) {
 	local := filepath.Join(t.TempDir(), testFileTxt)
 	if err := os.WriteFile(local, []byte(testStr), 0o600); err != nil {
@@ -88,40 +130,7 @@ func TestVerifyRemoteToLocalPaths(t *testing.T) {
 		{name: "cached mismatch", cached: true, mismatch: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			response := transferTestChecksum(testStr, tc.mismatch)
-
-			remoteHash, err := api.ParseIrodsChecksum(response.String)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			conn := &api.MockConn{}
-			info := &fakeFileInfo{}
-
-			if tc.cached {
-				info.sys = &api.DataObject{Replicas: []api.Replica{{Status: "1", Checksum: response.String}}}
-			} else {
-				conn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{Path: testFile1}, response)
-			}
-
-			verify := VerifyRemoteToLocal(mockTransferAPI(conn), nil)
-			sourceHash, targetHash, err := verify(t.Context(), testFile1, local, info, nil)
-
-			var wantErr error
-
-			if tc.mismatch {
-				wantErr = ErrChecksumMismatch
-			}
-
-			if !errors.Is(err, wantErr) {
-				t.Fatalf("verification error = %v, want %v", err, wantErr)
-			}
-
-			if !bytes.Equal(sourceHash, remoteHash) || !bytes.Equal(targetHash, localHash) {
-				t.Errorf("unexpected source/target checksums: %x / %x", sourceHash, targetHash)
-			}
-
-			assertTransferDialogs(t, conn)
+			testVerifyRemoteToLocalPaths(t, local, localHash, tc)
 		})
 	}
 }
