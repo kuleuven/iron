@@ -13,6 +13,7 @@ import (
 	"github.com/kuleuven/iron/cmd/iron/shell"
 	"github.com/kuleuven/iron/transfer"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 const execDescription = `Read and execute iron commands, one command per line. If no local file is
@@ -99,6 +100,10 @@ func (a *App) exec() *cobra.Command {
 			options.Output = cmd.OutOrStdout()
 
 			if len(args) == 0 {
+				if term.IsTerminal(int(os.Stdin.Fd())) {
+					return errors.New("exec requires a file or non-terminal stdin")
+				}
+
 				return a.execFile(cmd.Context(), options, targetEnvironment, "stdin", cmd.InOrStdin())
 			}
 
