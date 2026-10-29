@@ -40,14 +40,15 @@ func VerifyLocalToRemote(a *api.API, progressHandler func(context.Context, Progr
 	}
 }
 
+// VerifyRemoteToLocal checks a remote source checksum against a local target checksum.
 func VerifyRemoteToLocal(a *api.API, progressHandler func(context.Context, Progress)) CompareFunc {
 	return func(ctx context.Context, remote, local string, remoteInfo, localInfo os.FileInfo) ([]byte, []byte, error) {
 		sourceChecksum := func(ctx context.Context) ([]byte, error) {
-			return parseOrComputeChecksum(ctx, a, progressHandler, local, localInfo)
+			return parseOrComputeChecksum(ctx, a, progressHandler, remote, remoteInfo)
 		}
 
 		targetChecksum := func(ctx context.Context) ([]byte, error) {
-			return Sha256Checksum(ctx, remote)
+			return Sha256Checksum(ctx, local)
 		}
 
 		return compareChecksums(ctx, sourceChecksum, targetChecksum)

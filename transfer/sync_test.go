@@ -9,7 +9,36 @@ import (
 	"time"
 
 	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/msg"
 )
+
+func TestDownloadDirCompareChecksumPaths(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeIdenticalLocalFile(t)
+
+	conn := &api.MockConn{}
+	conn.AddResponses(responses)
+	conn.Add(msg.DATA_OBJ_CHKSUM_AN, msg.DataObjectRequest{Path: testFile1}, transferTestChecksum(testStr, false))
+
+	var output bytes.Buffer
+
+	worker := New(mockTransferAPI(conn), nil, Options{
+		DryRun:          true,
+		Output:          &output,
+		ProgressHandler: func(context.Context, Progress) {},
+	})
+	worker.DownloadDir(t.Context(), "./", "/test", Flags{CompareChecksums: true})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if output.Len() != 0 {
+		t.Fatalf("identical checksums scheduled a download: %q", output.String())
+	}
+
+	assertTransferDialogs(t, conn)
+}
 
 func TestDownloadDirDryRunExistingTarget(t *testing.T) {
 	dir := t.TempDir()
