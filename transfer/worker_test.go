@@ -56,6 +56,51 @@ var responses = []any{
 	},
 }
 
+func TestWorkerDryRunProgress(t *testing.T) {
+	var (
+		output bytes.Buffer
+		events []Progress
+	)
+
+	ctx := WithLabel(t.Context(), "workflow:2")
+	worker := New(nil, nil, Options{
+		DryRun: true,
+		Output: &output,
+		ProgressHandler: func(got context.Context, progress Progress) {
+			if got != ctx {
+				t.Error("dry-run progress lost the operation context")
+			}
+
+			events = append(events, progress)
+		},
+	})
+	task := Task{Action: TransferFile, Source: testLocalTxt, Target: testRemoteTxt, Size: 100}
+	worker.Action(ctx, task, func() error {
+		t.Error("dry run executed the action")
+
+		return nil
+	})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if output.Len() != 0 {
+		t.Errorf("dry run bypassed the progress handler: %q", output.String())
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("got %d progress events, want 1", len(events))
+	}
+
+	progress := events[0]
+	if progress.Action != task.Action || progress.Label != ProgressLabel(ctx, task.Source, task.Target) ||
+		progress.Size != task.Size || progress.StartedAt.IsZero() || progress.FinishedAt.IsZero() ||
+		progress.Failed || !progress.DryRun || progress.Transferred != 0 || progress.Increment != 0 {
+		t.Fatalf("unexpected dry-run progress: %+v", progress)
+	}
+}
+
 func TestClientUpload(t *testing.T) { //nolint:funlen
 	testConn0 := &api.MockConn{}
 

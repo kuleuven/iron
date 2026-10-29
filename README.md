@@ -279,6 +279,10 @@ the caller: `ProgressHandler(context.Context, transfer.Progress)` and
 to checksum progress callbacks and synchronization error handlers. Callbacks may
 run concurrently. The progress bar's `Handler` and `ErrorHandler` methods accept
 the same context-first arguments and can be assigned directly to these callbacks.
+Planned dry-run actions also use `ProgressHandler`, with `Progress.DryRun` set
+and both timestamps populated, but no transferred bytes. The progress bar renders
+them as `would ...` alongside its other output. Set `Options.Output` or provide a
+progress handler to receive these messages; without either, they are not printed.
 `transfer.ProgressLabel` also accepts the operation context as its first argument.
 Use `transfer.WithLabel(ctx, "label")` to annotate progress and error output
 through `transfer.ProgressLabel`. Custom callbacks can retrieve it with `transfer.Label(ctx)`.

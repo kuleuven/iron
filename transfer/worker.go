@@ -69,7 +69,8 @@ type Options struct {
 	// Output will, if set, display a progress bar and occurring errors
 	// If ErrorHandler or ProgressHandler is set, this option is ignored
 	Output io.Writer
-	// Progress handler, called with the context of the operation being reported.
+	// Progress handler, called with the context of the operation being reported,
+	// including planned actions in dry-run mode.
 	ProgressHandler func(ctx context.Context, progress Progress)
 	// Error handler, called with the context of the operation that failed.
 	// If this callback is not set or returns an error, the worker will stop and Wait() will return the error
@@ -151,6 +152,8 @@ type Progress struct {
 	StartedAt   time.Time
 	FinishedAt  time.Time
 	Failed      bool
+	// DryRun marks a planned action that was not performed.
+	DryRun bool
 }
 
 type progressWriter struct {
@@ -1363,12 +1366,15 @@ func (worker *Worker) remoteCopyCollection(ctx context.Context, u Task, flags Fl
 
 // log logs a task without performing it, for dry-run mode.
 func (worker *Worker) log(ctx context.Context, u Task) {
-	w := worker.options.Output
-	if w == nil {
-		w = os.Stdout
-	}
-
-	fmt.Fprintf(w, "would %s\n", u.Action.Format(ProgressLabel(ctx, u.Source, u.Target)))
+	now := time.Now()
+	worker.options.ProgressHandler(ctx, Progress{
+		Action:     u.Action,
+		Label:      ProgressLabel(ctx, u.Source, u.Target),
+		Size:       u.Size,
+		StartedAt:  now,
+		FinishedAt: now,
+		DryRun:     true,
+	})
 }
 
 // Action performs a synchronous action using this worker's dry-run and progress

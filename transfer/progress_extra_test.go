@@ -3,10 +3,81 @@ package transfer
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestProgressBarDryRun(t *testing.T) {
+	tests := []struct {
+		size       int64
+		registered bool
+	}{
+		{0, false},
+		{0, true},
+		{100, false},
+		{100, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("size=%d/registered=%t", tt.size, tt.registered), func(t *testing.T) {
+			var output bytes.Buffer
+
+			pb := ProgressBar(&output)
+			ctx := WithLabel(t.Context(), "workflow:2")
+			task := Task{Action: TransferFile, Target: testRemoteTxt, Size: tt.size}
+
+			if tt.registered {
+				pb.Handler(ctx, Progress{Action: task.Action, Label: ProgressLabel(ctx, "", task.Target), Size: tt.size})
+			}
+
+			worker := New(nil, nil, Options{DryRun: true, ProgressHandler: pb.Handler})
+			worker.Action(ctx, task, func() error {
+				t.Error("dry run executed the action")
+
+				return nil
+			})
+
+			if err := worker.Wait(); err != nil {
+				t.Error(err)
+			}
+
+			if err := pb.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			want := "would " + task.Action.Format(ProgressLabel(ctx, "", task.Target)) + "\n"
+			if strings.Count(output.String(), want) != 1 {
+				t.Errorf("missing or duplicated dry-run output: %q", output.String())
+			}
+
+			if len(pb.actual) != 0 || pb.actionsDone != 1 || pb.actionsTotal != 1 ||
+				pb.bytesTransferred != 0 || pb.bytesTotal != 0 {
+				t.Fatalf("unexpected dry-run accounting: %+v", pb)
+			}
+		})
+	}
+}
+
+func TestWorkerDryRunOutput(t *testing.T) {
+	var output bytes.Buffer
+
+	worker := New(nil, nil, Options{DryRun: true, Output: &output})
+	worker.Action(t.Context(), Task{Action: TransferFile, Target: testRemoteTxt}, func() error {
+		t.Error("dry run executed the action")
+
+		return nil
+	})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := "\r\033[Kwould + " + testRemoteTxt + "\n"; output.String() != want {
+		t.Errorf("got output %q, want %q", output.String(), want)
+	}
+}
 
 func TestProgressContextLabels(t *testing.T) {
 	ctx := WithLabel(t.Context(), "workflow:2")

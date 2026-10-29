@@ -122,12 +122,7 @@ func (pb *PB) handleUnknownSize(progress Progress) {
 		pb.bytesTotal += progress.Increment
 		pb.actionsDone++
 
-		if progress.Label == "" || progress.Failed {
-			// Assume error, don't print
-			return
-		}
-
-		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
+		pb.printCompleted(progress)
 	}
 }
 
@@ -173,13 +168,20 @@ func (pb *PB) handleKnownSize(progress Progress) {
 		pb.bytesTransferred += progress.Increment
 		pb.actionsDone++
 
-		if progress.Label == "" || progress.Failed {
-			// Assume error, don't print
-			return
-		}
-
-		fmt.Fprintf(pb.outputBuffer, "%s\n", progress.Action.Format(progress.Label))
+		pb.printCompleted(progress)
 	}
+}
+
+func (pb *PB) printCompleted(progress Progress) {
+	if progress.Label == "" || progress.Failed {
+		return
+	}
+
+	if progress.DryRun {
+		fmt.Fprint(pb.outputBuffer, "would ")
+	}
+
+	fmt.Fprintln(pb.outputBuffer, progress.Action.Format(progress.Label))
 }
 
 func (pb *PB) ErrorHandler(ctx context.Context, source, target string, err error) error {

@@ -416,14 +416,19 @@ func TestScriptMixedCopyDestinations(t *testing.T) {
 		t.Fatalf("mixed copies failed: %v, %v", err, waitErr)
 	}
 
-	if len(labels) != 1 || !strings.HasSuffix(labels[0], "/archive/second") {
-		t.Fatalf("incorrect remote copy destination: %v", labels)
+	targets := []string{app.Path("first"), "/archive/second", app.Path("third")}
+	if len(labels) != len(targets) {
+		t.Fatalf("incorrect copy destinations: %v", labels)
 	}
 
-	for _, target := range []string{app.Path("first"), app.Path("third")} {
-		if !strings.Contains(output.String(), target) {
-			t.Fatalf("incorrect local copy destination: %q", output.String())
+	for i, target := range targets {
+		if !strings.HasSuffix(labels[i], ": "+target) {
+			t.Fatalf("incorrect copy destination: %q, want %q", labels[i], target)
 		}
+	}
+
+	if output.Len() != 0 {
+		t.Fatalf("dry run bypassed the progress handler: %q", output.String())
 	}
 
 	if len(app.Dialog) != 0 {
