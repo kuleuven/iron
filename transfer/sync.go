@@ -73,8 +73,10 @@ type object struct {
 // The Direction dictates the order of deletes and transfers. The deleteFirst parameter
 // indicates whether to delete files first before retransferring, or whether files might
 // be updated in place.
+// Local paths are cleaned to match the paths produced by filepath.Walk.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string, queue chan<- Task, flags Flags) error { //nolint:dupl,funlen
+	local = filepath.Clean(local)
 	lch := make(chan *object)
 	rch := make(chan *object)
 
@@ -150,8 +152,10 @@ func (worker *Worker) ComputeUploadDir(ctx context.Context, local, remote string
 // The Direction dictates the order of deletes and transfers. The deleteFirst parameter
 // indicates whether to delete files first before retransferring, or whether files might
 // be updated in place.
+// Local paths are cleaned to match the paths produced by filepath.Walk.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local string, queue chan<- Task, flags Flags) error { //nolint:dupl,funlen
+	local = filepath.Clean(local)
 	lch := make(chan *object)
 	rch := make(chan *object)
 
@@ -365,11 +369,7 @@ func toIrodsPath(base, path string) string {
 }
 
 func toLocalPath(base, path string) string {
-	if path == "" {
-		return base
-	}
-
-	return base + strings.Join(strings.Split(path, "/"), string(os.PathSeparator))
+	return filepath.Join(base, filepath.FromSlash(path))
 }
 
 type SynchronizeOptions struct {
