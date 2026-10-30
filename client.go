@@ -61,6 +61,9 @@ type Option struct {
 
 	// DiscardConnectionAge is the maximum age of a connection before it is discarded.
 	DiscardConnectionAge time.Duration
+
+	// Time is an optional function that returns the current time for validating TLS certificates.
+	Time func() time.Time
 }
 
 type HandshakeFunc func(ctx context.Context) (Conn, error)
@@ -230,7 +233,7 @@ func (c *Client) newConn(ctx context.Context) (Conn, error) {
 	}
 
 	dialer := Dialer{
-		DialFunc: c.option.DialFunc, Time: tlsTime,
+		DialFunc: c.option.DialFunc, Time: time.Now,
 		Protocol: c.protocol, Prompt: c.option.AuthenticationPrompt,
 	}
 	conn, err := dialer.Dial(ctx, env, c.option.ClientName)

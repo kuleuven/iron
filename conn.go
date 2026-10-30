@@ -111,7 +111,7 @@ type DialFunc func(ctx context.Context, env Env, clientName string) (net.Conn, e
 // Dialer connects to an IRODS server with custom dial and TLS time settings.
 type Dialer struct {
 	DialFunc DialFunc
-	Time     func() time.Time
+	Time     func() time.Time // Returns the current time for TLS certificate validation.
 	Protocol msg.Protocol
 	Prompt   Prompt
 }
@@ -134,15 +134,15 @@ func (d Dialer) Dial(ctx context.Context, env Env, clientName string) (Conn, err
 		prompt = StdPrompt
 	}
 
-	return newConn(ctx, transport, env, clientName, prompt, d.Protocol, d.currentTime)
+	return newConn(ctx, transport, env, clientName, prompt, d.Protocol, d.tlsCurrentTime)
 }
 
-func (d Dialer) currentTime() time.Time {
+func (d Dialer) tlsCurrentTime() time.Time {
 	if d.Time != nil {
 		return d.Time()
 	}
 
-	return tlsTime()
+	return time.Now()
 }
 
 func DefaultDialFunc(ctx context.Context, env Env, clientName string) (net.Conn, error) {
@@ -172,25 +172,25 @@ var HandshakeTimeout = time.Minute
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // Returns an error if the handshake fails.
 func NewConn(ctx context.Context, transport net.Conn, env Env, clientName string) (Conn, error) {
-	return newConn(ctx, transport, env, clientName, StdPrompt, msg.XML, tlsTime)
+	return newConn(ctx, transport, env, clientName, StdPrompt, msg.XML, time.Now)
 }
 
 // NewPromptConn initializes a new Conn instance with the provided network connection and environment settings.
 // It performs a handshake as part of the initialization process and returns the constructed Conn instance.
 // For interactive authentication, the provided prompt will be used. Returns an error if the handshake fails.
 func NewPromptConn(ctx context.Context, transport net.Conn, env Env, prompt Prompt, clientName string) (Conn, error) {
-	return newConn(ctx, transport, env, clientName, prompt, msg.XML, tlsTime)
+	return newConn(ctx, transport, env, clientName, prompt, msg.XML, time.Now)
 }
 
 const requestServerNegotiationToken = "request_server_negotiation"
 
-func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, prompt Prompt, protocol msg.Protocol, timeFunc func() time.Time) (*conn, error) {
+func newConn(ctx context.Context, transport net.Conn, env Env, clientName string, prompt Prompt, protocol msg.Protocol, tlsTimeFunc func() time.Time) (*conn, error) {
 	c := &conn{
 		transport:   transport,
 		env:         &env,
 		option:      clientName,
 		protocol:    protocol,
-		tlsTime:     timeFunc,
+		tlsTime:     tlsTimeFunc,
 		connectedAt: time.Now(),
 	}
 
@@ -383,9 +383,6 @@ func (c *conn) handshakeNegotiation() error {
 }
 
 var ErrUnknownSSLVerifyPolicy = fmt.Errorf("unknown SSL verification policy")
-
-// Make configurable for testing
-var tlsTime = time.Now
 
 func verifyPeerCertificateNoHostname(tlsConfig *tls.Config, certificates [][]byte) error {
 	certs := make([]*x509.Certificate, len(certificates))

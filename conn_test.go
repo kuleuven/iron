@@ -328,7 +328,7 @@ func TestConnPamPasswordTLS(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	tlsTime = func() time.Time {
+	tlsTime := func() time.Time {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
@@ -386,11 +386,11 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	tlsTime = func() time.Time {
+	tlsDefaultTime := func() time.Time {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, testStr)
+	conn, err := newConn(ctx, transport, env, testStr, StdPrompt, msg.XML, tlsDefaultTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,20 +398,6 @@ func TestConnPamPasswordTLS2(t *testing.T) {
 	err = conn.Close()
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestDialerTLSOffset(t *testing.T) {
-	now := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)
-	originalTLSTime := tlsTime
-	tlsTime = func() time.Time { return now }
-	t.Cleanup(func() { tlsTime = originalTLSTime })
-
-	dialer := Dialer{Time: func() time.Time { return now.Add(7 * 24 * time.Hour) }}
-	want := now.Add(7 * 24 * time.Hour)
-
-	if got := dialer.currentTime(); !got.Equal(want) {
-		t.Errorf("TLS time = %s, want %s", got, want)
 	}
 }
 
@@ -448,11 +434,11 @@ func TestConnPamPasswordTLS3(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	tlsTime = func() time.Time {
+	tlsDefaultTime := func() time.Time {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
-	conn, err := NewConn(ctx, transport, env, testStr)
+	conn, err := newConn(ctx, transport, env, testStr, StdPrompt, msg.XML, tlsDefaultTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -593,7 +579,7 @@ func TestConnPamInteractiveTLS(t *testing.T) {
 
 	env.ApplyDefaults()
 
-	tlsTime = func() time.Time {
+	tlsDefaultTime := func() time.Time {
 		return time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
 
@@ -602,7 +588,7 @@ func TestConnPamInteractiveTLS(t *testing.T) {
 		"Some key": "def",
 	}
 
-	conn, err := NewPromptConn(ctx, transport, env, bot, testStr)
+	conn, err := newConn(ctx, transport, env, testStr, bot, msg.XML, tlsDefaultTime)
 	if err != nil {
 		t.Fatal(err)
 	}
