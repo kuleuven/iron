@@ -1012,6 +1012,10 @@ func (c *conn) Close() error {
 	c.closeErr = errors.Join(c.closeErr, c.Transport().Close())
 	c.closed = true
 
+	if c.closeErr != nil {
+		logrus.WithError(c.closeErr).Debug("connection close error")
+	}
+
 	return c.closeErr
 }
 

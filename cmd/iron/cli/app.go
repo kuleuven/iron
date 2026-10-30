@@ -229,7 +229,7 @@ func (a *App) addRootFlags(rootCmd *cobra.Command) {
 	rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "In case pam authentication is used, request a session that is valid for the given duration. This value is rounded down to the nearest hour.")
 
 	if a.environmentFlag {
-		rootCmd.PersistentFlags().StringVarP(&a.Environment, "environment", "e", "", "Environment label to use. Change this to switch between different iRODS environments, while preserving authentication information.")
+		rootCmd.PersistentFlags().StringVarP(&a.Environment, "environment", "e", "", "Environment label to use. Useful for multi-zone environments to specify which iRODS configuration to use (e.g., 'production', 'staging'). If not set, uses automatic detection.")
 	}
 }
 
