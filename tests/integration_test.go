@@ -493,3 +493,21 @@ func TestGenerateUniqueCollectionNameFormat(t *testing.T) {
 		t.Errorf("timestamp in name is not recent: %d vs current %d", timestamp, now)
 	}
 }
+
+func TestIntegrationClientCreation(t *testing.T) {
+	if ShouldSkipIntegration(t) {
+		t.Skip("integration tests disabled")
+	}
+
+	client := NewTestClient(t, t.Context())
+	if client == nil {
+		t.Fatal("NewTestClient returned nil")
+	}
+
+	testColl := CreateTestCollection(t, client.API, GetIntegrationWorkdir(t))
+	if testColl == "" {
+		t.Fatal("CreateTestCollection returned empty collection name")
+	}
+
+	RemoveTestCollection(t, client.API, testColl)
+}
