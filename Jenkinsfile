@@ -15,11 +15,6 @@ node() {
       [$class: 'VaultSecretValue', envVar: 'IRON_INTEGRATION_TEST_CONFIG', vaultKey: 'value'],
     ]]) {
 
-    sh '''
-      set +x
-      printf '%s' "$IRON_INTEGRATION_TEST_CONFIG" > irods_environment.json
-    '''
-
     buildGo {
       noNode = true
       name = "iron"
@@ -27,8 +22,16 @@ node() {
       // Disable updates
       ldflags = "-X main.updateSlug="
 
+      // Write out irods test environment file
+      prepare = {
+	 sh '''
+           set -x
+           echo $IRON_INTEGRATION_TEST_CONFIG > irods_environment.json
+         '''
+      }
+
       // Pass IRON_INTEGRATION_TEST_CONFIG to the build
-      testflags = "' -e 'IRON_INTEGRATION_TEST_CONFIG=irods_environment.json"
+      testflags = "' -e 'IRON_INTEGRATION_TEST_CONFIG=/src/irods_environment.json"
 
       rpm=true
       rpm_params=[
