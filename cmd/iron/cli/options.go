@@ -367,6 +367,11 @@ func validateConfigFile(configPath string, ctx context.Context) error {
 	// Extract App from context to check if configurator is available
 	app, _ := ctx.Value(appKey).(*App)
 	hasConfigurator := app != nil && app.configurator != nil
+	cmdArgs := ""
+
+	if app != nil && len(app.configurationArguments) > 0 {
+		cmdArgs = " " + strings.Join(app.configurationArguments, " ")
+	}
 
 	// Check if file exists
 	// Note: gosec G703 warning is acceptable here - configPath comes from App initialization,
@@ -375,7 +380,7 @@ func validateConfigFile(configPath string, ctx context.Context) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if hasConfigurator {
-				return fmt.Errorf("configuration file not found at %s. To set up iRODS configuration, run the configurator command interactively", configPath)
+				return fmt.Errorf("configuration file not found at %s. To set up iRODS configuration, run '%s auth%s' interactively", configPath, app.name, cmdArgs)
 			}
 
 			return fmt.Errorf("configuration file not found at %s. Create the configuration file manually or use a configuration tool", configPath)
@@ -414,7 +419,7 @@ func validateConfigFile(configPath string, ctx context.Context) error {
 	if len(missingFields) > 0 {
 		missing := strings.Join(missingFields, ", ")
 		if hasConfigurator {
-			return fmt.Errorf("configuration file is missing required fields: %s. To reconfigure iRODS, run the configurator command interactively", missing)
+			return fmt.Errorf("configuration file is missing required fields: %s. To reconfigure iRODS, run '%s auth%s' interactively", missing, app.name, cmdArgs)
 		}
 
 		return fmt.Errorf("configuration file is missing required fields: %s. Update the configuration file with the missing fields", missing)

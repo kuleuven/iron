@@ -44,6 +44,7 @@ func TestStoreWorkdirInFile(t *testing.T) {
 // Test validateConfigFile directly to avoid GetRuntimeConfigFile path lookup
 func TestValidateConfigFile_NotFound_WithConfigurator(t *testing.T) {
 	ctx := context.WithValue(context.Background(), appKey, &App{
+		name: testIron,
 		configurator: func(ctx context.Context, environment string, args []string) error {
 			return nil
 		},
@@ -59,8 +60,8 @@ func TestValidateConfigFile_NotFound_WithConfigurator(t *testing.T) {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
 
-	if !strings.Contains(errMsg, "configurator") {
-		t.Errorf("expected guidance about configurator command, got: %v", err)
+	if !strings.Contains(errMsg, "iron auth") {
+		t.Errorf("expected guidance about 'iron auth' command, got: %v", err)
 	}
 }
 
@@ -122,6 +123,7 @@ func TestValidateConfigFile_MissingRequiredFields_WithConfigurator(t *testing.T)
 	}
 
 	ctx := context.WithValue(context.Background(), appKey, &App{
+		name: testIron,
 		configurator: func(ctx context.Context, environment string, args []string) error {
 			return nil
 		},
@@ -141,8 +143,8 @@ func TestValidateConfigFile_MissingRequiredFields_WithConfigurator(t *testing.T)
 		t.Errorf("expected error to mention '%s', got: %v", testIrodsPort, err)
 	}
 
-	if !strings.Contains(errMsg, "configurator") {
-		t.Errorf("expected guidance about configurator, got: %v", err)
+	if !strings.Contains(errMsg, "iron auth") {
+		t.Errorf("expected guidance about 'iron auth' command, got: %v", err)
 	}
 }
 

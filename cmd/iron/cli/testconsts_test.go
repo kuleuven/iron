@@ -4,6 +4,7 @@ package cli
 // goconst linter for repeated literals.
 const (
 	testStr              = "test"
+	testIron             = "iron"
 	testRods501          = "rods5.0.1"
 	testTestZoneColl     = "/testzone/coll"
 	testTestZoneObj1     = "/testzone/obj1"
