@@ -3,13 +3,13 @@ package iron
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
 
@@ -39,7 +39,7 @@ func (p *prompt) Print(message string) error {
 	// If we need to open an URL, print a newline
 	if result := AuthenticateURL.FindStringSubmatch(message); len(result) > 1 {
 		if err := SystemOpenBrowser(result[1]); err != nil {
-			logrus.Debugf("could not open browser: %s", err)
+			slog.Debug("could not open browser", "err", err)
 		}
 	}
 

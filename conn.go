@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -25,7 +26,6 @@ import (
 	"github.com/kuleuven/iron/api"
 	"github.com/kuleuven/iron/msg"
 	"github.com/kuleuven/iron/scramble"
-	"github.com/sirupsen/logrus"
 )
 
 type Conn interface {
@@ -580,7 +580,7 @@ func (c *conn) authenticateNativeDeprecated(ctx context.Context) error {
 		Username: c.env.ProxyUsername,
 	}
 
-	logrus.Debugf("Responding %s %s ", response.Response, response.Username)
+	slog.Debug("Responding", "response", response.Response, "username", response.Username)
 
 	return c.Request(ctx, msg.AUTH_RESPONSE_AN, response, &msg.AuthResponse{})
 }
@@ -1013,7 +1013,7 @@ func (c *conn) Close() error {
 	c.closed = true
 
 	if c.closeErr != nil {
-		logrus.WithError(c.closeErr).Debug("connection close error")
+		slog.Debug("connection close error", "err", c.closeErr)
 	}
 
 	return c.closeErr

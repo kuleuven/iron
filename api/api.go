@@ -3,12 +3,11 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/kuleuven/iron/msg"
-
-	"github.com/sirupsen/logrus"
 )
 
 // API provides the interface to IRODS using the provided connection function.
@@ -237,13 +236,13 @@ func (api *API) gainAccess(ctx context.Context, conn Conn, path string) error {
 
 	err := conn.Request(ctx, msg.MOD_ACCESS_CONTROL_AN, request, &msg.EmptyResponse{})
 	if err == nil {
-		logrus.Infof("Admin keyword not supported. Elevated permissions on directory %s", path)
+		slog.Info("Admin keyword not supported. Elevated permissions on directory", "path", path)
 
 		return nil
 	}
 
 	if !Is(err, msg.CAT_NO_ROWS_FOUND) && !Is(err, msg.INVALID_OBJECT_TYPE) {
-		logrus.Warnf("Admin keyword not supported. Failed to elevate permissions on directory %s: %s", path, err)
+		slog.Warn("Admin keyword not supported. Failed to elevate permissions on directory", "path", path, "err", err)
 
 		return err
 	}

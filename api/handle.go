@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/kuleuven/iron/msg"
-	"github.com/sirupsen/logrus"
 )
 
 type object struct {
@@ -405,7 +405,7 @@ func (h *handle) Reopen(conn Conn, mode int) (File, error) {
 	h.object.wg.Add(1) // Add to waitgroup
 
 	h2.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error {
-		logrus.Warnf("Emergency close of %s", h.object.path)
+		slog.Warn("Emergency close of", "path", h.object.path)
 
 		return h2.Close()
 	})

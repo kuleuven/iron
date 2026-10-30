@@ -5,9 +5,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log/slog"
 	"unicode/utf8"
-
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -60,7 +59,7 @@ func unmarshalXML(msg Message, obj any) error {
 	}
 
 	if msg.Header.ErrorLen > 0 {
-		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
+		slog.Warn("error is not empty", "err", string(msg.Body.Error))
 	}
 
 	body, err := PostprocessXML(msg.Body.Message)

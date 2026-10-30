@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/kuleuven/iron"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -16,8 +16,9 @@ import (
 // It is used under the PersistentPreRunE hook.
 // To override, either adjust SkipInit or implement your own PersistentPreRunE hook.
 func (a *App) PreRun(cmd *cobra.Command, args []string) error {
-	// If a.Debug is zero, this sets logrus to Info
-	logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
+	// If a.Debug is zero, this sets slog to Info level
+	level := slog.LevelInfo - slog.Level(a.Debug-1)
+	slog.SetLogLoggerLevel(level)
 
 	if a.Client != nil || SkipInit(cmd) {
 		return nil
@@ -75,7 +76,8 @@ func (a *App) PreRunAuthConfigurator(cmd *cobra.Command, args []string) error {
 	}
 
 	if a.Debug > 0 {
-		logrus.SetLevel(logrus.DebugLevel + logrus.Level(a.Debug-1))
+		level := slog.LevelInfo - slog.Level(a.Debug-1)
+		slog.SetLogLoggerLevel(level)
 	}
 
 	if a.Client != nil {

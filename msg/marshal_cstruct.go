@@ -7,11 +7,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strconv"
 	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
 func marshalCStruct(obj any, msgType string) (*Message, error) {
@@ -39,7 +38,7 @@ func unmarshalCStruct(msg Message, obj any) error {
 	}
 
 	if msg.Header.ErrorLen > 0 {
-		logrus.Warnf("error is not empty: %s", string(msg.Body.Error))
+		slog.Warn("error is not empty", "err", string(msg.Body.Error))
 	}
 
 	return DecodeC(msg.Body.Message, obj)

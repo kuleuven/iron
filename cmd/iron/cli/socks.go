@@ -3,13 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/kuleuven/iron"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 )
 
@@ -41,7 +41,7 @@ func WrapLoaderWithSOCKS5(loader Loader, proxyURL string) Loader {
 			return env, nil, werr
 		}
 
-		logrus.Infof("routing iRODS connections via SOCKS proxy %s", proxyURL)
+		slog.Info("routing iRODS connections via SOCKS proxy", "proxyURL", proxyURL)
 
 		return env, wrapped, nil
 	}

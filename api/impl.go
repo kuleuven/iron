@@ -6,12 +6,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kuleuven/iron/msg"
-	"github.com/sirupsen/logrus"
 )
 
 // CreateCollection creates a collection.
@@ -287,7 +287,7 @@ func (api *API) CreateDataObject(ctx context.Context, path string, mode int) (Fi
 	}
 
 	h.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error { //nolint:contextcheck
-		logrus.Warnf("Emergency close of %s", path)
+		slog.Warn("Emergency close of", "path", path)
 
 		return h.Close()
 	})
@@ -353,7 +353,7 @@ func (api *API) OpenDataObject(ctx context.Context, path string, mode int) (File
 	}
 
 	h.unregisterEmergencyCloser = conn.RegisterCloseHandler(func() error { //nolint:contextcheck
-		logrus.Warnf("Emergency close of %s", path)
+		slog.Warn("Emergency close of", "path", path)
 
 		return h.Close()
 	})

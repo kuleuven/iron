@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +47,7 @@ func (a *App) CheckUpdate(ctx context.Context) {
 
 	latest, err := a.LatestVersion(ctx)
 	if err != nil {
-		logrus.Debugf("failed to check for updates: %s", err)
+		slog.Debug("failed to check for updates", "err", err)
 
 		return
 	}
@@ -58,7 +58,7 @@ func (a *App) CheckUpdate(ctx context.Context) {
 		return
 	}
 
-	logrus.Infof("Currently running version %s of %s. Version %s has been released and is available for installation.", current, a.name, latest)
+	slog.Info("Currently running version", "current", current, "name", a.name, "latest", latest)
 }
 
 func (a *App) LatestVersion(ctx context.Context) (*semver.Version, error) {
@@ -93,9 +93,9 @@ func (a *App) LatestVersion(ctx context.Context) (*semver.Version, error) {
 
 	// Write to cache file
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		logrus.Debugf("failed to create dir %s: %s", cacheDir, err)
+		slog.Debug("failed to create dir", "cacheDir", cacheDir, "err", err)
 	} else if err := os.WriteFile(releaseFile, []byte(latest.Version()), 0o600); err != nil {
-		logrus.Debugf("failed to write %s: %s", releaseFile, err)
+		slog.Debug("failed to write", "releaseFile", releaseFile, "err", err)
 	}
 
 	return semver.NewVersion(latest.Version())

@@ -7,11 +7,10 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Header struct {
@@ -60,7 +59,7 @@ func (msg Message) Write(w io.Writer) error {
 		return err
 	}
 
-	logrus.Tracef("-> bin: %d bytes", len(msg.Bin))
+	slog.Debug("-> bin", "bytes", len(msg.Bin))
 
 	_, err := w.Write(msg.Bin)
 
@@ -73,7 +72,7 @@ func (header Header) Write(w io.Writer) error {
 		return err
 	}
 
-	logrus.Tracef("-> %s", payload)
+	slog.Debug("-> header", "payload", string(payload))
 
 	// Write header
 	headerLenBuffer := make([]byte, 4)
@@ -92,9 +91,9 @@ func (header Header) Write(w io.Writer) error {
 
 func (body Body) Write(w io.Writer) error {
 	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s", body.Message, body.Error), "\n", ""); isPrintable(toLog) {
-		logrus.Tracef("-> %s", toLog)
+		slog.Debug("-> body", "msg", toLog)
 	} else {
-		logrus.Tracef("-> %d bytes", len(body.Message)+len(body.Error))
+		slog.Debug("-> body", "bytes", len(body.Message)+len(body.Error))
 	}
 
 	if _, err := w.Write(body.Message); err != nil {
@@ -143,12 +142,12 @@ func (msg *Message) Read(r io.Reader) error {
 	}
 
 	if len(msg.Bin) < int(msg.Header.BsLen) {
-		logrus.Warnf("expected %d bytes, got %d, cannot use provided buffer", msg.Header.BsLen, len(msg.Bin))
+		slog.Warn("size mismatch", "expected", msg.Header.BsLen, "got", len(msg.Bin))
 
 		msg.Bin = make([]byte, msg.Header.BsLen)
 	}
 
-	logrus.Tracef("<- bin: %d bytes", msg.Header.BsLen)
+	slog.Debug("<- bin", "bytes", msg.Header.BsLen)
 
 	_, err := io.ReadFull(r, msg.Bin[:msg.Header.BsLen])
 	if err != nil {
@@ -173,7 +172,7 @@ func (header *Header) Read(r io.Reader) error {
 		return err
 	}
 
-	logrus.Tracef("<- %s", bytes.ReplaceAll(headerBuffer, []byte("\n"), nil))
+	slog.Debug("<- header", "payload", string(bytes.ReplaceAll(headerBuffer, []byte("\n"), nil)))
 
 	return xml.Unmarshal(headerBuffer, &header)
 }
@@ -191,9 +190,9 @@ func (body *Body) Read(r io.Reader, header Header) error {
 	}
 
 	if toLog := strings.ReplaceAll(fmt.Sprintf("%s %s", body.Message, body.Error), "\n", ""); isPrintable(toLog) {
-		logrus.Tracef("<- %s", toLog)
+		slog.Debug("<- body", "msg", toLog)
 	} else {
-		logrus.Tracef("<- %d bytes", len(body.Message)+len(body.Error))
+		slog.Debug("<- body", "bytes", len(body.Message)+len(body.Error))
 	}
 
 	return nil
@@ -208,7 +207,7 @@ func waitContext(ctx context.Context, ch chan error) error {
 	case err := <-ch:
 		return err
 	case <-ctx.Done():
-		logrus.Warnf("%s, but waiting %s for in-flight request to complete...", ctx.Err(), MinimumRequestWaitTime)
+		slog.Warn("context error but waiting for request", "error", ctx.Err(), "wait_time", MinimumRequestWaitTime)
 
 		select {
 		case err := <-ch:

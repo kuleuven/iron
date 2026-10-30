@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/kuleuven/iron/api"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -635,13 +635,13 @@ func removeAll(ch <-chan *object, obj *object, queue chan<- Task, opts Synchroni
 }
 
 func skipAll(ch <-chan *object, obj *object) (*object, bool) {
-	logrus.Debugf("skipping %s [%s]", obj.target, obj.info)
+	slog.Debug("skipping", "target", obj.target, "info", fmt.Sprint(obj.info))
 
 	next, ok := <-ch
 
 	if obj.info.IsDir() {
 		for ok && strings.HasPrefix(next.target, obj.target+"/") {
-			logrus.Debugf("skipping %s [%s]", next.target, next.info)
+			slog.Debug("skipping", "target", next.target, "info", fmt.Sprint(next.info))
 
 			next, ok = <-ch
 		}
@@ -685,7 +685,7 @@ func checkOrder(ch <-chan *object) <-chan *object {
 
 		for obj := range ch {
 			if prev != nil && api.ComparePaths(prev.target, obj.target) >= 0 {
-				logrus.Errorf("expected lexicographical order: %q >= %q", prev.target, obj.target)
+				slog.Error("expected lexicographical order", "prev", prev.target, "curr", obj.target)
 			}
 
 			prev = obj
