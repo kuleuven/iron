@@ -158,6 +158,9 @@ func (a *App) DetectEnvironment(cmd *cobra.Command, args []string, toComplete st
 // partially-loaded env, when available). On success, App.Client is set
 // and App.Workdir is defaulted if it was empty.
 func (a *App) Init(ctx context.Context) error {
+	// Add the App to the context so loaders and other components can access it
+	ctx = context.WithValue(ctx, appKey, a)
+
 	env, dialer, err := a.loader(ctx, a.Environment)
 	if err != nil {
 		return InitError{a, env, err}

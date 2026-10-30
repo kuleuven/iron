@@ -7,10 +7,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/kuleuven/iron"
 	"github.com/spf13/cobra"
+)
+
+// appContextKey is the context key for storing the App pointer.
+type appContextKey struct{}
+
+var (
+	appKey appContextKey
 )
 
 // EnvironmentFunc is a helper function that attempts to detect an iRODS environment
@@ -75,7 +83,7 @@ type ContextKey string
 
 var ForceReauthentication ContextKey = "force_reauthentication"
 
-// FileLoader loads an irods environment from a file and returns a Loader.
+// FileLoaderWithApp loads an irods environment from a file and returns a Loader.
 // The environment is loaded from the file, and the password is read from the
 // .irodsA file in the same directory, or the file specified by the
 // IRODS_AUTHENTICATION_FILE environment variable if set.
@@ -83,6 +91,11 @@ var ForceReauthentication ContextKey = "force_reauthentication"
 // If the SOCKS_PROXY environment variable is set, the returned Loader's
 // DialFunc routes iRODS connections through that SOCKS5 proxy. See
 // WrapLoaderWithSOCKS5 for the accepted proxy URL formats.
+//
+// FileLoader validates the configuration file exists, is readable, contains valid JSON,
+// and has all required fields (irods_host, irods_port, irods_user_name, irods_zone_name).
+// It extracts the App from the context to check if a configurator is available,
+// and returns helpful error messages tailored to what tools are available.
 func FileLoader(file string) Loader {
 	loader := func(ctx context.Context, environment string) (iron.Env, iron.DialFunc, error) {
 		var env iron.Env
@@ -92,6 +105,12 @@ func FileLoader(file string) Loader {
 
 		// Find the runtime configuration file based on the current process ID and its parent processes.
 		environmentFile = GetRuntimeConfigFile(environmentFile)
+
+		// Validate the configuration file before attempting to load it.
+		// This provides early, actionable error messages if configuration is missing or broken.
+		if err := validateConfigFile(environmentFile, ctx); err != nil {
+			return env, nil, err
+		}
 
 		// Load the environment from the runtime configuration file.
 		if err := env.LoadFromFile(environmentFile); err != nil {
@@ -111,6 +130,12 @@ func FileLoader(file string) Loader {
 	}
 
 	return WrapLoaderWithSOCKS5(loader, socksProxyFromEnv())
+}
+
+// WithLoaderFromApp creates a loader using the App context (which includes configurator).
+// Deprecated: Use WithLoader with FileLoader directly; the context is now passed automatically.
+func WithLoaderFromApp(file string) Option {
+	return WithLoader(FileLoader(file))
 }
 
 // RewriteConfigFileForEnvironment rewrites the given file path for the specified environment.
@@ -340,4 +365,59 @@ func WithoutAuthentication() Option {
 	return func(a *App) {
 		a.disableAuthentication = true
 	}
+}
+
+// validateConfigFile checks if the config file exists, is readable, contains valid JSON,
+// and has all required fields. Returns a helpful error message if validation fails.
+// This function is called by FileLoader to provide early, actionable error messages.
+// It extracts the App from the context to check if a configurator is available.
+func validateConfigFile(configPath string, ctx context.Context) error {
+	// Extract App from context to check if configurator is available
+	app, _ := ctx.Value(appKey).(*App)
+	hasConfigurator := app != nil && app.configurator != nil
+
+	// Check if file exists
+	_, err := os.Stat(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if hasConfigurator {
+				return fmt.Errorf("configuration file not found at %s\n\nTo set up iRODS configuration, run the configurator command interactively.", configPath)
+			}
+			return fmt.Errorf("configuration file not found at %s\n\nCreate the configuration file manually or use a configuration tool.", configPath)
+		}
+		return fmt.Errorf("cannot access configuration file %s: %w", configPath, err)
+	}
+
+	// Check if file is readable
+	file, err := os.Open(configPath)
+	if err != nil {
+		return fmt.Errorf("cannot read configuration file %s: %w", configPath, err)
+	}
+	defer file.Close()
+
+	// Validate JSON structure and check required fields
+	var config map[string]interface{}
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		return fmt.Errorf("invalid JSON in configuration file %s: %w", configPath, err)
+	}
+
+	// Check for required fields
+	requiredFields := []string{"irods_host", "irods_port", "irods_user_name", "irods_zone_name"}
+	var missingFields []string
+
+	for _, field := range requiredFields {
+		if _, ok := config[field]; !ok {
+			missingFields = append(missingFields, field)
+		}
+	}
+
+	if len(missingFields) > 0 {
+		missing := strings.Join(missingFields, ", ")
+		if hasConfigurator {
+			return fmt.Errorf("configuration file is missing required fields: %s\n\nTo reconfigure iRODS, run the configurator command interactively.", missing)
+		}
+		return fmt.Errorf("configuration file is missing required fields: %s\n\nUpdate the configuration file with the missing fields.", missing)
+	}
+
+	return nil
 }
