@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,7 +31,7 @@ func (a *App) update() *cobra.Command {
 				return err
 			}
 
-			return a.Update(cmd.Context(), exe, downgrade)
+			return a.Update(cmd.Context(), cmd.OutOrStdout(), exe, downgrade)
 		},
 	}
 
@@ -100,7 +101,7 @@ func (a *App) LatestVersion(ctx context.Context) (*semver.Version, error) {
 	return semver.NewVersion(latest.Version())
 }
 
-func (a *App) Update(ctx context.Context, path string, allowDowngrade bool) error {
+func (a *App) Update(ctx context.Context, out io.Writer, path string, allowDowngrade bool) error {
 	if a.updater == nil {
 		return nil
 	}
@@ -116,10 +117,10 @@ func (a *App) Update(ctx context.Context, path string, allowDowngrade bool) erro
 
 	current := a.Version()
 
-	fmt.Printf("Current version: %s\nLatest release:  %s\n", current, latest.Version())
+	fmt.Fprintf(out, "Current version: %s\nLatest release:  %s\n", current, latest.Version())
 
 	if latest.LessOrEqual(current.String()) && !allowDowngrade {
-		fmt.Println("Nothing to update.")
+		fmt.Fprintln(out, "Nothing to update.")
 
 		return nil
 	}
@@ -130,7 +131,7 @@ func (a *App) Update(ctx context.Context, path string, allowDowngrade bool) erro
 		return fmt.Errorf("error occurred while updating binary: %w", err)
 	}
 
-	fmt.Printf("Successfully updated to version %s.\n", latest.Version())
+	fmt.Fprintf(out, "Successfully updated to version %s.\n", latest.Version())
 
 	return nil
 }

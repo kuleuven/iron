@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,7 +29,11 @@ func main() {
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Error: unable to determine home directory: %v\n", err)
+
+		exitCode = 1
+
+		return
 	}
 
 	if home == "" {
@@ -61,18 +66,28 @@ func main() {
 
 	cmd := app.Command()
 
+	// Default to interactive shell when no command is specified
 	if len(os.Args) < 2 {
 		cmd.SetArgs([]string{"shell"})
 	}
 
-	// Disable Cobra's mouse trap, we have our own shell to fall back to
-	cobra.MousetrapHelpText = ""
-
-	if mousetrap.StartedByExplorer() {
-		_ = os.Chdir(home) //nolint:errcheck
-	}
+	handleExplorerStartup(home)
 
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		exitCode = 1
+	}
+}
+
+// handleExplorerStartup handles special behavior when started by Windows Explorer.
+// This includes changing to the home directory.
+func handleExplorerStartup(home string) {
+	if !mousetrap.StartedByExplorer() {
+		return
+	}
+
+	cobra.MousetrapHelpText = ""
+
+	if err := os.Chdir(home); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not change to home directory: %v\n", err)
 	}
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,9 @@ func TestUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := app.Update(t.Context(), testPath, true); err != nil {
+	var out bytes.Buffer
+
+	if err := app.Update(t.Context(), &out, testPath, true); err != nil {
 		t.Fatal(err)
 	}
 }

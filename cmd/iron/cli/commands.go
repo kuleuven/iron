@@ -34,7 +34,7 @@ func (a *App) version() *cobra.Command {
 		Use:   versionCommandName,
 		Short: "Print the version number of iron",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(a.Version())
+			fmt.Fprintln(cmd.OutOrStdout(), a.Version())
 		},
 	}
 }
@@ -288,6 +288,7 @@ func (a *App) stat() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "stat <path>",
+		Aliases:           []string{"info"},
 		Short:             "Get information about an object or collection",
 		Long:              "Get information about an object or collection.",
 		Args:              cobra.ExactArgs(1),
@@ -334,6 +335,7 @@ func (a *App) rm() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "rm <path>",
+		Aliases:           []string{"delete", "del"},
 		Short:             "Remove a data object or collection",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: a.CompleteArgs,
@@ -1028,7 +1030,7 @@ func (a *App) save() *cobra.Command {
 			target := a.Path(args[0])
 
 			if a.inShell {
-				fmt.Printf("[%s]\n", eofMessage)
+				fmt.Fprintf(cmd.OutOrStdout(), "[%s]\n", eofMessage)
 			}
 
 			var output io.Writer
@@ -1640,7 +1642,7 @@ func (a *App) pwd() *cobra.Command {
 		Short: "Print the current working directory",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(a.Workdir)
+			fmt.Fprintln(cmd.OutOrStdout(), a.Workdir)
 		},
 	}
 }
@@ -1691,7 +1693,7 @@ func (a *App) local() *cobra.Command { //nolint:funlen
 					return err
 				}
 
-				fmt.Println(dir)
+				fmt.Fprintln(cmd.OutOrStdout(), dir)
 
 				return nil
 			},

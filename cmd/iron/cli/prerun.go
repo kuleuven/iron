@@ -114,7 +114,7 @@ func (a *App) PreRunShell(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println(err)
+	fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
 
 	a.Workdir = "not authenticated"
 
