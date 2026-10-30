@@ -17,9 +17,7 @@ import (
 // appContextKey is the context key for storing the App pointer.
 type appContextKey struct{}
 
-var (
-	appKey appContextKey
-)
+var appKey appContextKey
 
 // EnvironmentFunc is a helper function that attempts to detect an iRODS environment
 // label based on the provided command-line arguments and the current working directory.
@@ -83,7 +81,7 @@ type ContextKey string
 
 var ForceReauthentication ContextKey = "force_reauthentication"
 
-// FileLoaderWithApp loads an irods environment from a file and returns a Loader.
+// FileLoader loads an irods environment from a file and returns a Loader.
 // The environment is loaded from the file, and the password is read from the
 // .irodsA file in the same directory, or the file specified by the
 // IRODS_AUTHENTICATION_FILE environment variable if set.
@@ -130,12 +128,6 @@ func FileLoader(file string) Loader {
 	}
 
 	return WrapLoaderWithSOCKS5(loader, socksProxyFromEnv())
-}
-
-// WithLoaderFromApp creates a loader using the App context (which includes configurator).
-// Deprecated: Use WithLoader with FileLoader directly; the context is now passed automatically.
-func WithLoaderFromApp(file string) Option {
-	return WithLoader(FileLoader(file))
 }
 
 // RewriteConfigFileForEnvironment rewrites the given file path for the specified environment.
@@ -377,32 +369,40 @@ func validateConfigFile(configPath string, ctx context.Context) error {
 	hasConfigurator := app != nil && app.configurator != nil
 
 	// Check if file exists
-	_, err := os.Stat(configPath)
+	// Note: gosec G703 warning is acceptable here - configPath comes from App initialization,
+	// not from untrusted user input, and this is specifically config file validation.
+	_, err := os.Stat(configPath) //nolint:gosec
 	if err != nil {
 		if os.IsNotExist(err) {
 			if hasConfigurator {
-				return fmt.Errorf("configuration file not found at %s\n\nTo set up iRODS configuration, run the configurator command interactively.", configPath)
+				return fmt.Errorf("configuration file not found at %s. To set up iRODS configuration, run the configurator command interactively", configPath)
 			}
-			return fmt.Errorf("configuration file not found at %s\n\nCreate the configuration file manually or use a configuration tool.", configPath)
+
+			return fmt.Errorf("configuration file not found at %s. Create the configuration file manually or use a configuration tool", configPath)
 		}
+
 		return fmt.Errorf("cannot access configuration file %s: %w", configPath, err)
 	}
 
 	// Check if file is readable
-	file, err := os.Open(configPath)
+	// Note: gosec G703 warning is acceptable here - configPath comes from App initialization,
+	// not from untrusted user input, and this is specifically config file validation.
+	file, err := os.Open(configPath) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("cannot read configuration file %s: %w", configPath, err)
 	}
 	defer file.Close()
 
 	// Validate JSON structure and check required fields
-	var config map[string]interface{}
+	var config map[string]any
+
 	if err := json.NewDecoder(file).Decode(&config); err != nil {
 		return fmt.Errorf("invalid JSON in configuration file %s: %w", configPath, err)
 	}
 
 	// Check for required fields
 	requiredFields := []string{"irods_host", "irods_port", "irods_user_name", "irods_zone_name"}
+
 	var missingFields []string
 
 	for _, field := range requiredFields {
@@ -414,9 +414,10 @@ func validateConfigFile(configPath string, ctx context.Context) error {
 	if len(missingFields) > 0 {
 		missing := strings.Join(missingFields, ", ")
 		if hasConfigurator {
-			return fmt.Errorf("configuration file is missing required fields: %s\n\nTo reconfigure iRODS, run the configurator command interactively.", missing)
+			return fmt.Errorf("configuration file is missing required fields: %s. To reconfigure iRODS, run the configurator command interactively", missing)
 		}
-		return fmt.Errorf("configuration file is missing required fields: %s\n\nUpdate the configuration file with the missing fields.", missing)
+
+		return fmt.Errorf("configuration file is missing required fields: %s. Update the configuration file with the missing fields", missing)
 	}
 
 	return nil

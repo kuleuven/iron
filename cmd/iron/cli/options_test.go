@@ -48,6 +48,7 @@ func TestValidateConfigFile_NotFound_WithConfigurator(t *testing.T) {
 			return nil
 		},
 	})
+
 	err := validateConfigFile("/nonexistent/path/.irods/irods_environment.json", ctx)
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
@@ -57,6 +58,7 @@ func TestValidateConfigFile_NotFound_WithConfigurator(t *testing.T) {
 	if !strings.Contains(errMsg, "configuration file not found") {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
+
 	if !strings.Contains(errMsg, "configurator") {
 		t.Errorf("expected guidance about configurator command, got: %v", err)
 	}
@@ -64,6 +66,7 @@ func TestValidateConfigFile_NotFound_WithConfigurator(t *testing.T) {
 
 func TestValidateConfigFile_NotFound_WithoutConfigurator(t *testing.T) {
 	ctx := context.Background()
+
 	err := validateConfigFile("/nonexistent/path/.irods/irods_environment.json", ctx)
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
@@ -73,6 +76,7 @@ func TestValidateConfigFile_NotFound_WithoutConfigurator(t *testing.T) {
 	if !strings.Contains(errMsg, "configuration file not found") {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
+
 	if !strings.Contains(errMsg, "manually") {
 		t.Errorf("expected guidance about setting up manually, got: %v", err)
 	}
@@ -104,10 +108,15 @@ func TestValidateConfigFile_MissingRequiredFields_WithConfigurator(t *testing.T)
 
 	// Write valid JSON but missing required fields
 	config := map[string]string{
-		"irods_host": "example.com",
+		testIrodsHost: testExampleHost,
 		// missing irods_port, irods_user_name, irods_zone_name
 	}
-	data, _ := json.Marshal(config)
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("failed to marshal config: %v", err)
+	}
+
 	if err := os.WriteFile(configFile, data, 0o600); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -117,7 +126,8 @@ func TestValidateConfigFile_MissingRequiredFields_WithConfigurator(t *testing.T)
 			return nil
 		},
 	})
-	err := validateConfigFile(configFile, ctx)
+
+	err = validateConfigFile(configFile, ctx)
 	if err == nil {
 		t.Fatal("expected error for missing fields")
 	}
@@ -126,9 +136,11 @@ func TestValidateConfigFile_MissingRequiredFields_WithConfigurator(t *testing.T)
 	if !strings.Contains(errMsg, "missing required fields") {
 		t.Errorf("expected 'missing required fields' error, got: %v", err)
 	}
-	if !strings.Contains(errMsg, "irods_port") {
-		t.Errorf("expected error to mention 'irods_port', got: %v", err)
+
+	if !strings.Contains(errMsg, testIrodsPort) {
+		t.Errorf("expected error to mention '%s', got: %v", testIrodsPort, err)
 	}
+
 	if !strings.Contains(errMsg, "configurator") {
 		t.Errorf("expected guidance about configurator, got: %v", err)
 	}
@@ -139,18 +151,23 @@ func TestValidateConfigFile_Valid(t *testing.T) {
 	configFile := filepath.Join(tmpDir, "irods_environment.json")
 
 	// Write valid config with all required fields
-	config := map[string]interface{}{
-		"irods_host":      "example.com",
-		"irods_port":      1247,
-		"irods_user_name": "alice",
-		"irods_zone_name": "production",
+	config := map[string]any{
+		testIrodsHost:     testExampleHost,
+		testIrodsPort:     1247,
+		testIrodsUserName: testAlice,
+		testIrodsZoneName: testProduction,
 	}
-	data, _ := json.Marshal(config)
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("failed to marshal config: %v", err)
+	}
+
 	if err := os.WriteFile(configFile, data, 0o600); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	err := validateConfigFile(configFile, context.Background())
+	err = validateConfigFile(configFile, context.Background())
 	if err != nil {
 		t.Errorf("expected no error for valid config, got: %v", err)
 	}
@@ -161,15 +178,20 @@ func TestValidateConfigFile_ValidWithExtraFields(t *testing.T) {
 	configFile := filepath.Join(tmpDir, "irods_environment.json")
 
 	// Write valid config with extra optional fields
-	config := map[string]interface{}{
-		"irods_host":                 "example.com",
-		"irods_port":                 1247,
-		"irods_user_name":            "alice",
-		"irods_zone_name":            "production",
-		"irods_authentication_scheme": "pam_interactive",
-		"irods_default_resource":     "default",
+	config := map[string]any{
+		testIrodsHost:        testExampleHost,
+		testIrodsPort:        1247,
+		testIrodsUserName:    testAlice,
+		testIrodsZoneName:    testProduction,
+		testIrodsAuthScheme:  testPamInteractive,
+		testIrodsDefResource: "default",
 	}
-	data, _ := json.Marshal(config)
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("failed to marshal config: %v", err)
+	}
+
 	if err := os.WriteFile(configFile, data, 0o600); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
@@ -179,9 +201,9 @@ func TestValidateConfigFile_ValidWithExtraFields(t *testing.T) {
 			return nil
 		},
 	})
-	err := validateConfigFile(configFile, ctx)
+
+	err = validateConfigFile(configFile, ctx)
 	if err != nil {
 		t.Errorf("expected no error for valid config with extra fields, got: %v", err)
 	}
 }
-
