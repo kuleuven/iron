@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/creativeprojects/go-selfupdate"
@@ -27,6 +28,10 @@ func TestUpdate(t *testing.T) {
 	var out bytes.Buffer
 
 	if err := app.Update(t.Context(), &out, testPath, true); err != nil {
+		if strings.Contains(err.Error(), "API rate limit") {
+			t.Skip(err.Error())
+		}
+
 		t.Fatal(err)
 	}
 }
@@ -42,6 +47,10 @@ func TestUpdateCommand(t *testing.T) {
 	cmd.SetArgs([]string{updateCommandName})
 
 	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		if strings.Contains(err.Error(), "API rate limit") {
+			t.Skip(err.Error())
+		}
+
 		t.Fatal(err)
 	}
 }
