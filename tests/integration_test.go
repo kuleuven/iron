@@ -499,15 +499,16 @@ func TestIntegrationClientCreation(t *testing.T) {
 		t.Skip("integration tests disabled")
 	}
 
-	client := NewTestClient(t, t.Context())
-	if client == nil {
-		t.Fatal("NewTestClient returned nil")
-	}
+	WithClients(t, func(t *testing.T, client *iron.Client, workdir string) {
+		if client == nil {
+			t.Fatal("NewTestClient returned nil")
+		}
 
-	testColl := CreateTestCollection(t, client.API, GetIntegrationWorkdir(t))
-	if testColl == "" {
-		t.Fatal("CreateTestCollection returned empty collection name")
-	}
+		testColl := CreateTestCollection(t, client.API, workdir)
+		if testColl == "" {
+			t.Fatal("CreateTestCollection returned empty collection name")
+		}
 
-	RemoveTestCollection(t, client.API, testColl)
+		RemoveTestCollection(t, client.API, testColl)
+	})
 }

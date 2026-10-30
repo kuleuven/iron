@@ -126,7 +126,7 @@ type SQLResult struct {
 	XMLName        xml.Name     `xml:"SqlResult_PI"`
 	AttributeIndex ColumnNumber `xml:"attriInx"`
 	ResultLen      int          `xml:"reslen"`
-	Values         []string     `xml:"value" sizeField:"reslen"`
+	Values         []string     `xml:"value" sizeField:"rowCnt"` // Size is determined by rowCnt in the QueryResponse!
 }
 
 type CreateCollectionRequest struct {

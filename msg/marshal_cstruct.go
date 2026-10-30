@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -66,15 +68,6 @@ func EncodeC(obj any) ([]byte, error) {
 	body := buf.Bytes()
 
 	return body, nil
-}
-
-func DecodeC(payload []byte, obj any) error {
-	e := reflect.ValueOf(obj).Elem()
-
-	// We append a 0 byte just in case, but in principal all strings should be 0-terminated
-	buf := bufio.NewReader(bytes.NewBuffer(append(payload, 0)))
-
-	return decodeC(e, buf)
 }
 
 // ErrUnknownType is returned if an unknown type must be translated
@@ -182,25 +175,64 @@ func encodeCSlice(e reflect.Value, buf *bufio.Writer) error {
 	return nil
 }
 
-func decodeC(e reflect.Value, buf *bufio.Reader) error {
+// decoder carries the reader plus the chain of structs currently being
+// decoded, so a slice length can be resolved against enclosing structs.
+type decoder struct {
+	buf    *bufio.Reader
+	scopes []scope
+}
+
+// scope is one struct on the decode stack. Fields before `field` are already
+// decoded and may serve as length fields; `field` itself is in progress.
+type scope struct {
+	val   reflect.Value
+	field int
+}
+
+func DecodeC(payload []byte, obj any) error {
+	e := reflect.ValueOf(obj).Elem()
+
+	// We append a 0 byte just in case, but in principal all strings should be 0-terminated
+	d := &decoder{buf: bufio.NewReader(bytes.NewBuffer(append(payload, 0)))}
+
+	err := d.decode(e)
+	if errors.Is(err, io.EOF) {
+		slog.Info("unexpected EOF while decoding C struct", "cstruct", e.Type().Name(), "payload", payload)
+	}
+
+	return err
+}
+
+// skipNull consumes an anullstr marker if one is next and reports whether it did.
+func (d *decoder) skipNull() (bool, error) {
+	peek, err := d.buf.Peek(len(anullstr))
+	if err != nil || !bytes.Equal(peek, []byte(anullstr)) {
+		return false, nil //nolint:nilerr
+	}
+
+	_, err = d.buf.Discard(len(anullstr) + 1) // marker + terminating 0
+
+	return true, err
+}
+
+func (d *decoder) decode(e reflect.Value) error {
 	switch e.Type().Kind() { //nolint:exhaustive
 	case reflect.Pointer:
-		if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
-			_, err = buf.Discard(14)
-
+		if null, err := d.skipNull(); null || err != nil {
 			return err
 		}
 
 		e.Set(reflect.New(e.Type().Elem()))
 
-		return decodeC(e.Elem(), buf)
+		return d.decode(e.Elem())
+
 	case reflect.Struct:
-		return decodeCStruct(e, buf)
+		return d.decodeStruct(e)
 
 	case reflect.Int, reflect.Int32:
 		var res int32
 
-		if err := binary.Read(buf, binary.BigEndian, &res); err != nil {
+		if err := binary.Read(d.buf, binary.BigEndian, &res); err != nil {
 			return err
 		}
 
@@ -211,7 +243,7 @@ func decodeC(e reflect.Value, buf *bufio.Reader) error {
 	case reflect.Int64:
 		var res int64
 
-		if err := binary.Read(buf, binary.BigEndian, &res); err != nil {
+		if err := binary.Read(d.buf, binary.BigEndian, &res); err != nil {
 			return err
 		}
 
@@ -220,13 +252,12 @@ func decodeC(e reflect.Value, buf *bufio.Reader) error {
 		return nil
 
 	case reflect.String:
-		value, err := buf.ReadString(0)
+		value, err := d.buf.ReadString(0)
 		if err != nil {
 			return fmt.Errorf("could not read next 0-ended string: %w", err)
 		}
 
-		value = value[0 : len(value)-1]
-
+		value = value[:len(value)-1]
 		if value == anullstr {
 			return nil
 		}
@@ -240,9 +271,16 @@ func decodeC(e reflect.Value, buf *bufio.Reader) error {
 	}
 }
 
-func decodeCStruct(e reflect.Value, buf *bufio.Reader) error {
+func (d *decoder) decodeStruct(e reflect.Value) error {
+	depth := len(d.scopes)
+	d.scopes = append(d.scopes, scope{val: e})
+
+	defer func() { d.scopes = d.scopes[:depth] }()
+
 	for i := 1; i < e.NumField(); i++ {
-		if err := decodeCStructField(e, buf, i); err != nil {
+		d.scopes[depth].field = i
+
+		if err := d.decodeStructField(e, i); err != nil {
 			return err
 		}
 	}
@@ -250,21 +288,20 @@ func decodeCStruct(e reflect.Value, buf *bufio.Reader) error {
 	return nil
 }
 
-func decodeCStructField(e reflect.Value, buf *bufio.Reader, i int) error {
+func (d *decoder) decodeStructField(e reflect.Value, i int) error {
 	switch e.Field(i).Type().Kind() { //nolint:exhaustive
 	case reflect.Slice:
-		if peek, err := buf.Peek(13); err == nil && bytes.Equal(peek, []byte(anullstr)) {
-			_, err = buf.Discard(14)
-
+		if null, err := d.skipNull(); null || err != nil {
 			return err
 		}
 
-		size, err := findCStructSliceSize(e, i)
+		size, err := d.sliceSize(e.Type().Field(i))
 		if err != nil {
 			return err
 		}
 
-		return decodeCSlice(e.Field(i), size, buf)
+		return d.decodeSlice(e.Field(i), size)
+
 	case reflect.String:
 		tag := e.Type().Field(i).Tag.Get("native")
 		if !strings.HasPrefix(tag, base64tag) {
@@ -276,20 +313,18 @@ func decodeCStructField(e reflect.Value, buf *bufio.Reader, i int) error {
 			return err
 		}
 
-		return decodeCBase64String(e.Field(i), buf, size)
+		return d.decodeBase64String(e.Field(i), size)
 	default:
 	}
 
-	return decodeC(e.Field(i), buf)
+	return d.decode(e.Field(i))
 }
 
-func decodeCSlice(e reflect.Value, size int, buf *bufio.Reader) error {
-	slice := reflect.MakeSlice(e.Type(), size, size)
-
-	e.Set(slice)
+func (d *decoder) decodeSlice(e reflect.Value, size int) error {
+	e.Set(reflect.MakeSlice(e.Type(), size, size))
 
 	for j := range size {
-		if err := decodeC(e.Index(j), buf); err != nil {
+		if err := d.decode(e.Index(j)); err != nil {
 			return err
 		}
 	}
@@ -297,11 +332,10 @@ func decodeCSlice(e reflect.Value, size int, buf *bufio.Reader) error {
 	return nil
 }
 
-func decodeCBase64String(e reflect.Value, buf *bufio.Reader, size int) error {
+func (d *decoder) decodeBase64String(e reflect.Value, size int) error {
 	value := make([]byte, size)
 
-	_, err := buf.Read(value)
-	if err != nil {
+	if _, err := io.ReadFull(d.buf, value); err != nil {
 		return fmt.Errorf("could not read next %d bytes: %w", size, err)
 	}
 
@@ -313,23 +347,32 @@ func decodeCBase64String(e reflect.Value, buf *bufio.Reader, size int) error {
 // ErrExpectLen is returned if a slice is not proceeded by a int field
 var ErrExpectLen = errors.New("except a length integer proceeding a slice")
 
-func findCStructSliceSize(e reflect.Value, i int) (int, error) {
-	if sizeStr := e.Type().Field(i).Tag.Get("size"); sizeStr != "" {
+// sliceSize determines a slice's length from its `size` tag, or else from the
+// already-decoded integer field named by its `sizeField` tag.
+func (d *decoder) sliceSize(field reflect.StructField) (int, error) {
+	if sizeStr := field.Tag.Get("size"); sizeStr != "" {
 		return strconv.Atoi(sizeStr)
 	}
 
-	sizeField := e.Type().Field(i).Tag.Get("sizeField")
-	if sizeField == "" {
+	name := field.Tag.Get("sizeField")
+	if name == "" {
 		return 0, ErrExpectLen
 	}
 
-	// Find field in struct
-	for j := 1; j < i; j++ {
-		if e.Type().Field(j).Tag.Get("xml") != sizeField {
-			continue
-		}
+	// Innermost struct first, then outward through the enclosing structs, so a
+	// nested length field shadows an outer one of the same name.
+	for _, sc := range slices.Backward(d.scopes) {
+		for j := 1; j < sc.field; j++ {
+			if sc.val.Type().Field(j).Tag.Get("xml") != name {
+				continue
+			}
 
-		return int(e.Field(j).Int()), nil
+			if f := sc.val.Field(j); f.CanInt() {
+				return int(f.Int()), nil
+			}
+
+			return 0, ErrExpectLen
+		}
 	}
 
 	return 0, ErrExpectLen

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kuleuven/iron"
 	"github.com/kuleuven/iron/api"
+	"github.com/kuleuven/iron/msg"
 )
 
 // integrationConfigPath returns the path to the integration test configuration file.
@@ -135,7 +136,7 @@ func GetIntegrationWorkdir(t testing.TB) string {
 // NewTestClient creates a new iron.Client for integration testing.
 // Skips the test if integration tests are disabled.
 // Returns nil and fails the test if the environment cannot be loaded or client creation fails.
-func NewTestClient(t testing.TB, ctx context.Context) *iron.Client {
+func NewTestClient(t testing.TB, proto msg.Protocol) *iron.Client {
 	if ShouldSkipIntegration(t) {
 		t.Skip("integration tests disabled")
 	}
@@ -145,9 +146,10 @@ func NewTestClient(t testing.TB, ctx context.Context) *iron.Client {
 		t.Fatal("failed to load integration config")
 	}
 
-	client, err := iron.New(ctx, *env, iron.Option{
-		MaxConns:   4,
-		ClientName: "integration-test",
+	client, err := iron.New(t.Context(), *env, iron.Option{
+		MaxConns:          4,
+		ClientName:        "integration-test",
+		UseNativeProtocol: proto == msg.Native,
 	})
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
@@ -161,4 +163,26 @@ func NewTestClient(t testing.TB, ctx context.Context) *iron.Client {
 	})
 
 	return client
+}
+
+// WithClients executes the provided function with a new test client.
+// It ensures that the client is properly closed after the function completes.
+// Skips the test if integration tests are disabled.
+func WithClients(t *testing.T, fn func(t *testing.T, client *iron.Client, workdir string)) {
+	if ShouldSkipIntegration(t) {
+		t.Skip("integration tests disabled")
+	}
+
+	for _, proto := range []msg.Protocol{msg.XML, msg.Native} {
+		t.Run(proto.String(), func(t *testing.T) {
+			client := NewTestClient(t, proto)
+
+			workdir := GetIntegrationWorkdir(t)
+			if workdir == "" {
+				t.Skip("integration workdir not set")
+			}
+
+			fn(t, client, workdir)
+		})
+	}
 }

@@ -17,6 +17,17 @@ const (
 	XML
 )
 
+func (p Protocol) String() string {
+	switch p {
+	case Native:
+		return "native"
+	case XML:
+		return "xml"
+	default:
+		return "unknown"
+	}
+}
+
 // Marshal marshals the argument into a message.
 // The Message is initialized with Bin unset.
 func Marshal(obj any, protocol Protocol, msgType string) (*Message, error) {
