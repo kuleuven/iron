@@ -685,7 +685,7 @@ func checkOrder(ch <-chan *object) <-chan *object {
 
 		for obj := range ch {
 			if prev != nil && api.ComparePaths(prev.target, obj.target) >= 0 {
-				logrus.Errorf("expected lexicographical order: %s >= %s [%s]", prev.target, obj.target, obj.info)
+				logrus.Errorf("expected lexicographical order: %q >= %q", prev.target, obj.target)
 			}
 
 			prev = obj

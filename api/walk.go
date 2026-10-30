@@ -402,6 +402,15 @@ func (api *API) walkLexographicalNoSkipBatch(ctx context.Context, fn WalkFunc, p
 }
 
 func ComparePaths(a, b string) int {
+	// "." should come before any other path
+	if a == "." && b != "." {
+		return -1
+	}
+
+	if b == "." && a != "." {
+		return 1
+	}
+
 	aParts := strings.Split(a, "/")
 	bParts := strings.Split(b, "/")
 
