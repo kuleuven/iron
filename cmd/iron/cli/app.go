@@ -162,6 +162,7 @@ func (a *App) root(shellCommand bool) *cobra.Command { //nolint:funlen
 		a.rmdir(),
 		a.rm(),
 		a.unlock(),
+		a.replicate(),
 		a.mv(),
 		a.cp(),
 		a.create(),

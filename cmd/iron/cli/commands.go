@@ -378,6 +378,79 @@ func (a *App) rm() *cobra.Command {
 	return cmd
 }
 
+func (a *App) replicate() *cobra.Command {
+	var trimReplicas bool
+
+	cmd := &cobra.Command{
+		Use:               "replicate <object path> <resource>",
+		Short:             "Replicate an object to another resource",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: a.CompleteArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return a.replicateDataObject(cmd.Context(), a.Path(args[0]), args[1], trimReplicas)
+		},
+	}
+
+	cmd.Flags().BoolVar(&trimReplicas, "trim-replicas", false, "Trim replicas after replication")
+
+	return cmd
+}
+
+func (a *App) replicateDataObject(ctx context.Context, path, targetResourceName string, trimReplicas bool) error {
+	object, err := a.GetDataObject(ctx, path)
+	if err != nil {
+		return fmt.Errorf("cannot lookup data object: %w", err)
+	}
+
+	targetResource, err := a.GetResource(ctx, targetResourceName)
+	if err != nil {
+		return fmt.Errorf("cannot lookup target resource: %w", err)
+	}
+
+	replicated, removeReplicas := replicasToRemove(object, targetResource.Name)
+
+	if !replicated {
+		if err := a.Client.WithNumThreads(1).ReplicateDataObject(ctx, object.Path, targetResource.Name); err != nil {
+			if api.Is(err, msg.REPLICA_IS_BEING_STAGED) {
+				return fmt.Errorf("archive is in GLACIER and is currently being restored, please resubmit request later")
+			}
+
+			return err
+		}
+	}
+
+	if !trimReplicas {
+		return nil
+	}
+
+	for _, replicaNumber := range removeReplicas {
+		if err := a.TrimDataObjectReplica(ctx, object.Path, replicaNumber); err != nil {
+			return fmt.Errorf("cannot trim data object replica: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func replicasToRemove(object *api.DataObject, targetResourceName string) (bool, []int) {
+	var (
+		removeReplicas []int
+		replicated     bool
+	)
+
+	for _, replica := range object.Replicas {
+		if replica.ResourceHierarchy == targetResourceName || strings.HasPrefix(replica.ResourceHierarchy, targetResourceName+";") {
+			replicated = replica.Status == "1"
+
+			continue
+		}
+
+		removeReplicas = append(removeReplicas, replica.Number)
+	}
+
+	return replicated, removeReplicas
+}
+
 const (
 	dataSizeKW   = "dataSize"
 	replStatusKW = "replStatus"

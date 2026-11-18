@@ -120,6 +120,98 @@ func TestRmdir(t *testing.T) {
 	}
 }
 
+func TestReplicate(t *testing.T) {
+	const (
+		targetResource   = "target"
+		replicateCommand = "replicate"
+	)
+
+	tests := []struct {
+		name           string
+		targetStatus   string
+		trimReplicas   bool
+		expectedAction string
+	}{
+		{
+			name:           "replicate target without trimming",
+			targetStatus:   "0",
+			expectedAction: "replicate",
+		},
+		{
+			name:           "trim replicas when target is already valid",
+			targetStatus:   "1",
+			trimReplicas:   true,
+			expectedAction: "trim",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := testApp(t)
+			addReplicateResponses(app, targetResource, tt.targetStatus)
+
+			args := []string{replicateCommand, testTestZoneObj1, targetResource}
+			if tt.trimReplicas {
+				args = append([]string{replicateCommand, "--trim-replicas"}, testTestZoneObj1, targetResource)
+			}
+
+			cmd := app.Command()
+			cmd.SetArgs(args)
+
+			if err := cmd.ExecuteContext(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+
+			if len(app.Dialog) != 0 {
+				t.Fatalf("expected command to perform %s and consume all responses, %d remain", tt.expectedAction, len(app.Dialog))
+			}
+		})
+	}
+}
+
+func addReplicateResponses(app *mockApp, targetResource, targetStatus string) {
+	app.AddResponse(msg.QueryResponse{
+		RowCount:       2,
+		AttributeCount: 14,
+		TotalRowCount:  2,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 401, ResultLen: 2, Values: []string{"1", "1"}},
+			{AttributeIndex: 500, ResultLen: 2, Values: []string{"1", "1"}},
+			{AttributeIndex: 406, ResultLen: 2, Values: []string{testGeneric, testGeneric}},
+			{AttributeIndex: 404, ResultLen: 2, Values: []string{"0", "1"}},
+			{AttributeIndex: 407, ResultLen: 2, Values: []string{"1024000", "1024000"}},
+			{AttributeIndex: 411, ResultLen: 2, Values: []string{testRods, testRods}},
+			{AttributeIndex: 412, ResultLen: 2, Values: []string{testTestZoneName, testTestZoneName}},
+			{AttributeIndex: 415, ResultLen: 2, Values: []string{testChecksum, testChecksum}},
+			{AttributeIndex: 413, ResultLen: 2, Values: []string{targetStatus, "1"}},
+			{AttributeIndex: 409, ResultLen: 2, Values: []string{targetResource, testResc1}},
+			{AttributeIndex: 410, ResultLen: 2, Values: []string{testPath1, testPath1 + "2"}},
+			{AttributeIndex: 422, ResultLen: 2, Values: []string{targetResource + ";leaf", testResc1}},
+			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
+			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
+		},
+	})
+	app.AddResponse(msg.QueryResponse{
+		RowCount:       1,
+		AttributeCount: 11,
+		TotalRowCount:  1,
+		SQLResult: []msg.SQLResult{
+			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
+			{AttributeIndex: 302, ResultLen: 1, Values: []string{targetResource}},
+			{AttributeIndex: 303, ResultLen: 1, Values: []string{testTestZoneName}},
+			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
+			{AttributeIndex: 305, ResultLen: 1, Values: []string{"class"}},
+			{AttributeIndex: 306, ResultLen: 1, Values: []string{"server"}},
+			{AttributeIndex: 307, ResultLen: 1, Values: []string{"/path/to/resc"}},
+			{AttributeIndex: 316, ResultLen: 1, Values: []string{"context string"}},
+			{AttributeIndex: 311, ResultLen: 1, Values: []string{"10000"}},
+			{AttributeIndex: 312, ResultLen: 1, Values: []string{"10000"}},
+		},
+	})
+	app.AddResponse(msg.EmptyResponse{})
+}
+
 func TestUnlock(t *testing.T) {
 	app := testApp(t)
 
