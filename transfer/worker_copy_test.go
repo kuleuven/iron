@@ -78,6 +78,33 @@ func TestWorkerCopySkipsIdenticalACL(t *testing.T) {
 	assertTransferDialogs(t, conn)
 }
 
+func TestWorkerCopyMetadataDeleteUsesExplicitChanges(t *testing.T) {
+	conn := &api.MockConn{}
+	conn.AddResponse(copySourceResponse())
+	addMetadataResponse(conn, []api.Metadata{{Name: testMetadataName, Value: testValue}}, msg.ICAT_COLUMN_META_DATA_ATTR_NAME, nil)
+	conn.AddResponse(copySourceResponse())
+	addMetadataResponse(conn, []api.Metadata{{Name: testTargetOnly, Value: testDifferent}}, msg.ICAT_COLUMN_META_DATA_ATTR_NAME, nil)
+
+	addCopyDialog(conn, Flags{}, nil, nil, false)
+	conn.Add(msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, &msg.AtomicMetadataRequest{
+		ItemName: testCopyDest,
+		ItemType: api.DataObjectType.String(),
+		Operations: []msg.MetadataOperation{
+			{Operation: "remove", Name: testTargetOnly, Value: testDifferent},
+			{Operation: "add", Name: testMetadataName, Value: testValue},
+		},
+	}, msg.EmptyResponse{})
+
+	worker := New(nil, mockTransferAPI(conn), Options{})
+	worker.Copy(t.Context(), testCopySrc, testCopyDest, Flags{CopyMetadata: true, Delete: true})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, conn)
+}
+
 func TestWorkerCopyRequiresDataObject(t *testing.T) {
 	conn := &api.MockConn{}
 	conn.AddResponse(msg.QueryResponse{})

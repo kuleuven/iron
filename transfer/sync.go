@@ -529,7 +529,11 @@ func queueMetadataSync(source, target *object, queue chan<- Task, opts Synchroni
 		return fmt.Errorf("metadata synchronization requires source and target records for %q", source.target)
 	}
 
-	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, Flags{
+		CopyMetadata: opts.CopyMetadata,
+		CopyACL:      opts.CopyACL,
+		Delete:       opts.Delete,
+	}, opts.SameZone)
 	if err != nil {
 		return err
 	}
@@ -659,7 +663,16 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 		}
 	}
 
-	attributes, err := ComputeAttributeChanges(recordFrom(left.info), recordFrom(right.info), opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+	targetRecord := recordFrom(right.info)
+	if opts.DisableUpdateInPlace {
+		targetRecord = nil
+	}
+
+	attributes, err := ComputeAttributeChanges(recordFrom(left.info), targetRecord, Flags{
+		CopyMetadata: opts.CopyMetadata,
+		CopyACL:      opts.CopyACL,
+		Delete:       opts.Delete,
+	}, opts.SameZone)
 	if err != nil {
 		return err
 	}
@@ -746,7 +759,11 @@ func skipAll(ch <-chan *object, obj *object) (*object, bool) {
 
 func transferNewCollectionOrObject(obj *object, queue chan<- Task, opts SynchronizeOptions) error {
 	if obj.info.IsDir() {
-		attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+		attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, Flags{
+			CopyMetadata: opts.CopyMetadata,
+			CopyACL:      opts.CopyACL,
+			Delete:       opts.Delete,
+		}, opts.SameZone)
 		if err != nil {
 			return err
 		}
@@ -766,7 +783,11 @@ func transferNewCollectionOrObject(obj *object, queue chan<- Task, opts Synchron
 		return nil
 	}
 
-	attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+	attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, Flags{
+		CopyMetadata: opts.CopyMetadata,
+		CopyACL:      opts.CopyACL,
+		Delete:       opts.Delete,
+	}, opts.SameZone)
 	if err != nil {
 		return err
 	}

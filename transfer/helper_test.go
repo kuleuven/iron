@@ -14,7 +14,7 @@ func TestRemoteCopyMetadata(t *testing.T) {
 	missing := api.Metadata{Name: "missing", Value: testValue}
 	differentValue := api.Metadata{Name: shared.Name, Value: testDifferent, Units: shared.Units}
 	differentUnits := api.Metadata{Name: shared.Name, Value: shared.Value, Units: testDifferent}
-	targetOnly := api.Metadata{Name: "target-only", Value: "keep"}
+	targetOnly := api.Metadata{Name: testTargetOnly, Value: "keep"}
 	requestError := errors.New("metadata request failed")
 
 	tests := []struct {
@@ -138,7 +138,7 @@ func TestCopyACLCollectionInheritance(t *testing.T) {
 		access:     []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
 	}
 
-	attributes, err := ComputeAttributeChanges(record, nil, false, true, true)
+	attributes, err := ComputeAttributeChanges(record, nil, Flags{CopyACL: true}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestAttributeChangesMetadataStrategy(t *testing.T) {
 		{name: "different zones", wantAdd: 1, wantChanges: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			changes, err := ComputeAttributeChanges(source, target, true, false, tc.sameZone)
+			changes, err := ComputeAttributeChanges(source, target, Flags{CopyMetadata: true}, tc.sameZone)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -193,7 +193,7 @@ func TestAttributeChangesMetadataStrategy(t *testing.T) {
 	t.Run("identical metadata", func(t *testing.T) {
 		target.metadata = append([]api.Metadata(nil), source.metadata...)
 
-		changes, err := ComputeAttributeChanges(source, target, true, false, true)
+		changes, err := ComputeAttributeChanges(source, target, Flags{CopyMetadata: true}, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -202,6 +202,87 @@ func TestAttributeChangesMetadataStrategy(t *testing.T) {
 			t.Fatalf("identical metadata produced changes: %+v", changes)
 		}
 	})
+}
+
+func TestDeleteAttributeChangesRemoveMetadataAndACL(t *testing.T) {
+	targetOnlyMetadata := api.Metadata{Name: testTargetOnly, Value: testDifferent}
+	newMetadata := api.Metadata{Name: "new", Value: testValue}
+	source := &testCopyRecord{
+		DataObject: &api.DataObject{Path: testCopySrc},
+		metadata: []api.Metadata{
+			{Name: testMetadataName, Value: testValue},
+			newMetadata,
+		},
+		access: []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
+	}
+	target := &testCopyRecord{
+		DataObject: &api.DataObject{Path: testCopyDest},
+		metadata: []api.Metadata{
+			{Name: testMetadataName, Value: testValue},
+			targetOnlyMetadata,
+		},
+		access: []api.Access{
+			{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission},
+			{User: api.User{Name: testRemovedUser, Zone: testZone}, Permission: testOwnPermission},
+		},
+	}
+
+	changes, err := ComputeAttributeChanges(source, target, Flags{
+		CopyMetadata: true,
+		CopyACL:      true,
+		Delete:       true,
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertDeleteAttributeChanges(t, changes, newMetadata, targetOnlyMetadata)
+
+	targetConn := &api.MockConn{}
+	targetConn.Add(msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, &msg.AtomicMetadataRequest{
+		ItemName: testCopyDest,
+		ItemType: api.DataObjectType.String(),
+		Operations: []msg.MetadataOperation{
+			{Operation: "remove", Name: targetOnlyMetadata.Name, Value: targetOnlyMetadata.Value},
+			{Operation: "add", Name: newMetadata.Name, Value: newMetadata.Value},
+		},
+	}, msg.EmptyResponse{})
+	targetConn.Add(msg.MOD_ACCESS_CONTROL_AN, msg.ModifyAccessRequest{
+		Path:        testCopyDest,
+		UserName:    testRemovedUser,
+		Zone:        testZone,
+		AccessLevel: removeAccessPermission,
+	}, msg.EmptyResponse{})
+
+	if err := changes.Apply(t.Context(), mockTransferAPI(targetConn), testCopyDest); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, targetConn)
+}
+
+func assertDeleteAttributeChanges(t *testing.T, changes AttributeChanges, newMetadata, targetOnlyMetadata api.Metadata) {
+	t.Helper()
+
+	if changes.MetadataToCopyFrom != "" {
+		t.Fatalf("delete-mode metadata copy source = %q, want none", changes.MetadataToCopyFrom)
+	}
+
+	if len(changes.MetadataToAdd) != 1 || changes.MetadataToAdd[0] != newMetadata {
+		t.Errorf("metadata to add = %v, want %v", changes.MetadataToAdd, []api.Metadata{newMetadata})
+	}
+
+	if len(changes.MetadataToRemove) != 1 || changes.MetadataToRemove[0] != targetOnlyMetadata {
+		t.Errorf("metadata to remove = %v, want %v", changes.MetadataToRemove, []api.Metadata{targetOnlyMetadata})
+	}
+
+	if len(changes.AccessToAdd) != 0 {
+		t.Errorf("ACLs to add = %v, want none", changes.AccessToAdd)
+	}
+
+	if len(changes.AccessToRemove) != 1 || changes.AccessToRemove[0].User.Name != testRemovedUser {
+		t.Errorf("ACLs to remove = %v, want user %q", changes.AccessToRemove, testRemovedUser)
+	}
 }
 
 func TestAttributeChangesApplyCopiesMetadataAndACL(t *testing.T) {

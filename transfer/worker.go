@@ -735,7 +735,7 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string, f
 			return
 		}
 
-		attributes, err = ComputeAttributeChanges(sourceRecord, targetRecord, flags.CopyMetadata, flags.CopyACL, false)
+		attributes, err = ComputeAttributeChanges(sourceRecord, targetRecord, flags, false)
 		if err != nil {
 			worker.Error(ctx, remote1, remote2, err)
 
@@ -1174,16 +1174,13 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 // verifies the source and target checksums after copying. SyncModTime preserves
 // the source modification time.
 func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags Flags) {
-	if !flags.CopyACL {
+	if !flags.CopyACL && (!flags.CopyMetadata || !flags.Delete) {
 		worker.copyWithoutACL(ctx, remote1, remote2, flags)
 
 		return
 	}
 
-	recordOptions := []api.WalkOption{api.FetchAccess}
-	if flags.CopyMetadata {
-		recordOptions = append(recordOptions, api.FetchMetadata)
-	}
+	recordOptions := copyAttributeWalkOptions(flags)
 
 	sourceRecord, err := worker.TransferPool.GetRecord(ctx, remote1, recordOptions...)
 	if err != nil {
@@ -1209,7 +1206,7 @@ func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags F
 		targetRecord = nil
 	}
 
-	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags.CopyMetadata, true, true)
+	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags, true)
 	if err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 
@@ -1405,7 +1402,7 @@ func (worker *Worker) copyRootAttributes(ctx context.Context, sourceAPI, targetA
 		return api.ErrInvalidItemType
 	}
 
-	changes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags.CopyMetadata, flags.CopyACL, sameZone)
+	changes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags, sameZone)
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,8 @@ const (
 	testMetadataName  = "name"
 	testMetadataAdd   = "add"
 	testDifferent     = "different"
+	testTargetOnly    = "target-only"
+	testRemovedUser   = "removeduser"
 	testInherit       = "inherit"
 	testNoInherit     = "noinherit"
 )

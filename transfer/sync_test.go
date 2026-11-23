@@ -124,6 +124,80 @@ func TestSynchronizeDoesNotQueueUnselectedMetadata(t *testing.T) {
 	}
 }
 
+func TestSynchronizeRecreatedFileDoesNotRemoveOldAttributes(t *testing.T) {
+	record := func(path string, size int64, metadata []api.Metadata, access []api.Access) *testCopyRecord {
+		return &testCopyRecord{
+			DataObject: &api.DataObject{
+				Path: path,
+				Replicas: []api.Replica{{
+					Size:       size,
+					ModifiedAt: time.Unix(10000, 0),
+				}},
+			},
+			metadata: metadata,
+			access:   access,
+		}
+	}
+
+	sourceRecord := record(testCopySrc, 2, []api.Metadata{{Name: testMetadataName, Value: testValue}},
+		[]api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}})
+
+	targetRecord := record(testCopyDest, 1, []api.Metadata{{Name: testTargetOnly, Value: testDifferent}},
+		[]api.Access{{User: api.User{Name: testRemovedUser, Zone: testZone}, Permission: testOwnPermission}})
+
+	left := make(chan *object, 1)
+	left <- &object{source: testCopySrc, target: testCopyDest, info: sourceRecord}
+
+	close(left)
+
+	right := make(chan *object, 1)
+	right <- &object{source: testCopyDest, target: testCopyDest, info: targetRecord}
+
+	close(right)
+
+	queue := make(chan Task, 2)
+	if err := Synchronize(t.Context(), left, right, queue, SynchronizeOptions{
+		DisableUpdateInPlace: true,
+		Delete:               true,
+		CopyMetadata:         true,
+		CopyACL:              true,
+		SameZone:             true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if task := <-queue; task.Action != RemoveFile {
+		t.Fatalf("first task action = %v, want %v", task.Action, RemoveFile)
+	}
+
+	task := <-queue
+	if task.Action != TransferFile {
+		t.Fatalf("second task action = %v, want %v", task.Action, TransferFile)
+	}
+
+	assertRecreatedFileAttributes(t, task.Attributes)
+}
+
+func assertRecreatedFileAttributes(t *testing.T, attributes AttributeChanges) {
+	t.Helper()
+
+	if len(attributes.MetadataToRemove) != 0 || len(attributes.AccessToRemove) != 0 {
+		t.Errorf("recreated object has removals for old target attributes: %+v", attributes)
+	}
+
+	if attributes.MetadataToCopyFrom != "" {
+		t.Errorf("recreated object uses CopyMetadata from %q", attributes.MetadataToCopyFrom)
+	}
+
+	if len(attributes.MetadataToAdd) != 1 || attributes.MetadataToAdd[0].Name != testMetadataName {
+		t.Errorf("recreated object metadata to add = %v", attributes.MetadataToAdd)
+	}
+
+	if len(attributes.AccessToAdd) != 1 || attributes.AccessToAdd[0].User.Name != testUser {
+		t.Errorf("recreated object access to add = %v", attributes.AccessToAdd)
+	}
+}
+
 func TestSynchronizeMetadataForExistingCollections(t *testing.T) {
 	sourceRecord := &testCollectionRecord{
 		Collection: &api.Collection{Path: testCopySrc, Inheritance: true},
@@ -131,6 +205,8 @@ func TestSynchronizeMetadataForExistingCollections(t *testing.T) {
 		access:     []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
 	}
 	targetRecord := &testCollectionRecord{Collection: &api.Collection{Path: testCopyDest}}
+	targetRecord.metadata = []api.Metadata{{Name: testTargetOnly, Value: testDifferent}}
+	targetRecord.access = []api.Access{{User: api.User{Name: testRemovedUser, Zone: testZone}, Permission: testOwnPermission}}
 
 	left := make(chan *object, 1)
 	left <- &object{source: testCopySrc, target: testCopyDest, info: sourceRecord}
@@ -147,6 +223,7 @@ func TestSynchronizeMetadataForExistingCollections(t *testing.T) {
 		ResyncMetadata: true,
 		CopyMetadata:   true,
 		CopyACL:        true,
+		Delete:         true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -172,12 +249,26 @@ func TestSynchronizeMetadataForExistingCollections(t *testing.T) {
 		t.Errorf("access to add = %v, want %v", task.Attributes.AccessToAdd, sourceRecord.access)
 	}
 
+	assertAttributeRemovals(t, task.Attributes)
+
 	if task.Attributes.CollectionInheritance == nil || !*task.Attributes.CollectionInheritance {
 		t.Errorf("collection inheritance = %v, want true", task.Attributes.CollectionInheritance)
 	}
 
 	if _, ok := <-queue; ok {
 		t.Fatal("existing collection scheduled unexpected additional tasks")
+	}
+}
+
+func assertAttributeRemovals(t *testing.T, attributes AttributeChanges) {
+	t.Helper()
+
+	if len(attributes.MetadataToRemove) != 1 || attributes.MetadataToRemove[0].Name != testTargetOnly {
+		t.Errorf("metadata to remove = %v, want target-only metadata", attributes.MetadataToRemove)
+	}
+
+	if len(attributes.AccessToRemove) != 1 || attributes.AccessToRemove[0].User.Name != testRemovedUser {
+		t.Errorf("access to remove = %v, want user %q", attributes.AccessToRemove, testRemovedUser)
 	}
 }
 
