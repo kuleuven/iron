@@ -47,6 +47,9 @@ type Flags struct {
 	// CopyMetadata indicates whether AVU metadata should be copied along with
 	// data objects and collections when copying (Copy, CopyDir, RemoteCopy, RemoteCopyDir).
 	CopyMetadata bool
+	// CopyACL indicates whether access permissions should be copied along with
+	// data objects and collections when copying (Copy, CopyDir, RemoteCopy, RemoteCopyDir).
+	CopyACL bool
 	// FilterPatterns indicates patterns to include when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir, RemoteCopyDir).
 	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file, directories are always included.
 	// If multiple patterns are specified, a file must match at least one of them to be included.
@@ -392,40 +395,6 @@ func tryOpenDataObject(ctx context.Context, a *api.API, remote string, mode int)
 	return nil, err
 }
 
-func verifyChecksumAndClose(ctx context.Context, integrityChecksums bool, sourceChecksum func(ctx context.Context) ([]byte, error), remote api.File) error {
-	if !integrityChecksums {
-		return remote.Close()
-	}
-
-	_, _, err := compareChecksums(ctx, sourceChecksum, func(ctx context.Context) ([]byte, error) {
-		return computeChecksumAndClose(ctx, remote)
-	})
-
-	return err
-}
-
-func computeChecksumAndClose(ctx context.Context, f api.File) ([]byte, error) {
-	conn, err := f.CloseReturnConnection()
-	if err != nil {
-		return nil, errors.Join(err, conn.Close())
-	}
-
-	request := msg.DataObjectRequest{
-		Path: f.Name(),
-	}
-
-	var irodsChecksum msg.String
-
-	err = conn.Request(ctx, msg.DATA_OBJ_CHKSUM_AN, request, &irodsChecksum)
-
-	err = errors.Join(err, conn.Close())
-	if err != nil {
-		return nil, err
-	}
-
-	return api.ParseIrodsChecksum(irodsChecksum.String)
-}
-
 // FromStream schedules the upload of a io.Reader to the iRODS server using parallel transfers.
 // In contrast to FromReader, FromStream will block until the full file has been uploaded.
 // The remote file refers to an iRODS path.
@@ -747,6 +716,37 @@ func (worker *Worker) ToStream(ctx context.Context, name string, w io.Writer, re
 // The remote files refer to an iRODS path.
 // The call blocks until the transfer of all chunks has started.
 func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string, flags Flags) {
+	var attributes AttributeChanges
+
+	if options := copyAttributeWalkOptions(flags); len(options) > 0 {
+		var err error
+
+		sourceRecord, err := worker.TransferPool.GetRecord(ctx, remote1, options...)
+		if err != nil {
+			worker.Error(ctx, remote1, remote2, err)
+
+			return
+		}
+
+		targetRecord, err := worker.RemoteTransferPool.GetRecord(ctx, remote2, options...)
+		if err != nil && !errors.Is(err, api.ErrNoRowFound) {
+			worker.Error(ctx, remote1, remote2, err)
+
+			return
+		}
+
+		attributes, err = ComputeAttributeChanges(sourceRecord, targetRecord, flags.CopyMetadata, flags.CopyACL, false)
+		if err != nil {
+			worker.Error(ctx, remote1, remote2, err)
+
+			return
+		}
+	}
+
+	worker.remoteCopy(ctx, remote1, remote2, flags, attributes)
+}
+
+func (worker *Worker) remoteCopy(ctx context.Context, remote1, remote2 string, flags Flags, attributes AttributeChanges) {
 	// Find out size and other metadata of the source file (remote1) before proceeding with the remote copy.
 	r, err := worker.TransferPool.OpenDataObject(ctx, remote1, api.O_RDONLY)
 	if err != nil {
@@ -772,10 +772,10 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string, f
 		return
 	}
 
-	worker.remoteCopyFrom(ctx, r, remote1, remote2, size, flags)
+	worker.remoteCopyFrom(ctx, r, remote1, remote2, size, flags, attributes)
 }
 
-func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, remote2 string, size int64, flags Flags) {
+func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, remote2 string, size int64, flags Flags, attributes AttributeChanges) {
 	mode := api.O_CREAT | api.O_WRONLY | api.O_TRUNC
 
 	if flags.Exclusive {
@@ -825,11 +825,11 @@ func (worker *Worker) remoteCopyFrom(ctx context.Context, r api.File, remote1, r
 
 		defer a.Close()
 
-		return worker.finishRemoteCopy(ctx, a.API, w, remote1, remote2, flags)
+		return worker.finishRemoteCopy(ctx, a.API, w, remote1, remote2, flags, attributes)
 	})
 }
 
-func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.File, remote1, remote2 string, flags Flags) error {
+func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.File, remote1, remote2 string, flags Flags, attributes AttributeChanges) error {
 	var err error
 
 	if flags.SyncModTime {
@@ -857,10 +857,7 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 		})
 	}
 
-	if flags.CopyMetadata {
-		err = errors.Join(err, RemoteCopyMetadata(ctx, a, b.API, remote1, api.DataObjectType, remote2, api.DataObjectType))
-	}
-
+	err = errors.Join(err, attributes.Apply(ctx, b.API, remote2))
 	if err == nil {
 		return nil
 	}
@@ -893,6 +890,8 @@ func (worker *Worker) UploadDir(ctx context.Context, local, remote string, flags
 
 			switch u.Action {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
+
+			case SyncMetadata:
 
 			case SetModificationTime:
 				worker.action(ctx, u, func() error { return worker.TransferPool.ModifyModificationTime(ctx, u.Target, u.ModTime) })
@@ -992,6 +991,8 @@ func (worker *Worker) DownloadDir(ctx context.Context, local, remote string, fla
 
 			switch u.Action {
 			case ComputeChecksum: // This is a special case for the progress handler, it doesn't correspond to an actual task
+
+			case SyncMetadata:
 
 			case SetModificationTime:
 				worker.action(ctx, u, func() error { return os.Chtimes(u.Target, time.Time{}, u.ModTime) })
@@ -1173,7 +1174,42 @@ func (worker *Worker) computeChecksum(irodsPath string, record api.Record, queue
 // verifies the source and target checksums after copying. SyncModTime preserves
 // the source modification time.
 func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags Flags) {
-	obj, err := worker.TransferPool.GetDataObject(ctx, remote1)
+	if !flags.CopyACL {
+		worker.copyWithoutACL(ctx, remote1, remote2, flags)
+
+		return
+	}
+
+	recordOptions := []api.WalkOption{api.FetchAccess}
+	if flags.CopyMetadata {
+		recordOptions = append(recordOptions, api.FetchMetadata)
+	}
+
+	sourceRecord, err := worker.TransferPool.GetRecord(ctx, remote1, recordOptions...)
+	if err != nil {
+		worker.Error(ctx, remote1, remote2, err)
+
+		return
+	}
+
+	if sourceRecord.Type() != api.DataObjectType {
+		worker.Error(ctx, remote1, remote2, api.ErrInvalidItemType)
+
+		return
+	}
+
+	targetRecord, err := worker.TransferPool.GetRecord(ctx, remote2, recordOptions...)
+	if err != nil && !errors.Is(err, api.ErrNoRowFound) {
+		worker.Error(ctx, remote1, remote2, err)
+
+		return
+	}
+
+	if targetRecord != nil && targetRecord.Type() != api.DataObjectType {
+		targetRecord = nil
+	}
+
+	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags.CopyMetadata, true, true)
 	if err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 
@@ -1181,17 +1217,52 @@ func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags F
 	}
 
 	worker.copyObject(ctx, Task{
+		Action:     TransferFile,
+		Source:     remote1,
+		Target:     remote2,
+		Size:       sourceRecord.Size(),
+		ModTime:    sourceRecord.ModTime(),
+		Attributes: attributes,
+	}, flags)
+}
+
+func (worker *Worker) copyWithoutACL(ctx context.Context, remote1, remote2 string, flags Flags) {
+	source, err := worker.TransferPool.GetDataObject(ctx, remote1)
+	if err != nil {
+		worker.Error(ctx, remote1, remote2, err)
+
+		return
+	}
+
+	task := Task{
 		Action:  TransferFile,
 		Source:  remote1,
 		Target:  remote2,
-		Size:    obj.Size(),
-		ModTime: obj.ModTime(),
-	}, flags)
+		Size:    source.Size(),
+		ModTime: source.ModTime(),
+	}
+	if flags.CopyMetadata {
+		task.Attributes = AttributeChanges{
+			ItemType:           api.DataObjectType,
+			MetadataToCopyFrom: remote1,
+		}
+	}
+
+	worker.copyObject(ctx, task, flags)
+}
+
+type copyDirCallbacks struct {
+	copyObject     func(context.Context, Task, Flags)
+	syncMetadata   func(context.Context, Task, Flags)
+	copyCollection func(context.Context, Task, Flags) error
+	compute        func(context.Context, string, string, chan<- Task, Flags) error
 }
 
 // CopyDir copies one directory to another on the same iRODS server.
 // It handles the recursion client side, but individual files are copied server-side only.
 // The call blocks until the source directory has been completely scanned.
+//
+//nolint:dupl // Keep server selection explicit in the two directory-copy entry points.
 func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
 	if !worker.options.DryRun {
 		if err := worker.IndexPool.CreateCollectionAll(ctx, remote2); err != nil {
@@ -1201,20 +1272,15 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flag
 		}
 	}
 
-	if flags.CopyMetadata && !worker.options.DryRun {
-		if err := worker.IndexPool.CopyMetadata(ctx, remote1, api.CollectionType, remote2, api.CollectionType); err != nil {
-			worker.Error(ctx, remote1, remote2, err)
+	if err := worker.copyRootAttributes(ctx, worker.IndexPool, worker.IndexPool, remote1, remote2, flags, true); err != nil {
+		worker.Error(ctx, remote1, remote2, err)
 
-			return
-		}
+		return
 	}
 
-	worker.copyDir(ctx, remote1, remote2, worker.TransferPool, struct {
-		copyObject     func(context.Context, Task, Flags)
-		copyCollection func(context.Context, Task, Flags) error
-		compute        func(context.Context, string, string, chan<- Task, Flags) error
-	}{
+	worker.copyDir(ctx, remote1, remote2, worker.TransferPool, copyDirCallbacks{
 		copyObject:     worker.copyObject,
+		syncMetadata:   worker.copyObjectMetadata,
 		copyCollection: worker.copyCollection,
 		compute:        worker.ComputeCopyDir,
 	}, flags)
@@ -1222,11 +1288,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flag
 
 func (worker *Worker) copyDir(
 	ctx context.Context, remote1, remote2 string, target *api.API,
-	callbacks struct {
-		copyObject     func(context.Context, Task, Flags)
-		copyCollection func(context.Context, Task, Flags) error
-		compute        func(context.Context, string, string, chan<- Task, Flags) error
-	}, flags Flags,
+	callbacks copyDirCallbacks, flags Flags,
 ) {
 	queue := make(chan Task, worker.options.MaxQueued)
 
@@ -1241,6 +1303,8 @@ func (worker *Worker) copyDir(
 			case ComputeChecksum:
 			case TransferFile:
 				callbacks.copyObject(ctx, u, flags)
+			case SyncMetadata:
+				callbacks.syncMetadata(ctx, u, flags)
 			case SetModificationTime:
 				worker.action(ctx, u, func() error { return target.ModifyModificationTime(ctx, u.Target, u.ModTime) })
 			case RemoveFile:
@@ -1250,7 +1314,9 @@ func (worker *Worker) copyDir(
 			case RemoveDirectoryAll:
 				worker.action(ctx, u, func() error { return target.DeleteCollectionAll(ctx, u.Target, flags.SkipTrash) })
 			case CreateDirectory:
-				worker.action(ctx, u, func() error { return callbacks.copyCollection(ctx, u, flags) })
+				worker.action(ctx, u, func() error {
+					return callbacks.copyCollection(ctx, u, flags)
+				})
 			}
 		}
 
@@ -1268,6 +1334,18 @@ func (worker *Worker) copyObject(ctx context.Context, u Task, flags Flags) {
 	})
 }
 
+func (worker *Worker) copyObjectMetadata(ctx context.Context, u Task, flags Flags) {
+	worker.deferredAction(ctx, u, func(a *api.API) error {
+		return u.Attributes.Apply(ctx, a, u.Target)
+	})
+}
+
+func (worker *Worker) remoteCopyObjectMetadata(ctx context.Context, u Task, _ Flags) {
+	worker.action(ctx, u, func() error {
+		return u.Attributes.Apply(ctx, worker.RemoteTransferPool, u.Target)
+	})
+}
+
 func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task, flags Flags) error {
 	if err := a.CopyDataObject(ctx, u.Source, u.Target, !flags.Exclusive); err != nil {
 		return err
@@ -1279,10 +1357,8 @@ func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task, fl
 		}
 	}
 
-	if flags.CopyMetadata {
-		if err := a.CopyMetadata(ctx, u.Source, api.DataObjectType, u.Target, api.DataObjectType); err != nil {
-			return err
-		}
+	if err := u.Attributes.Apply(ctx, a, u.Target); err != nil {
+		return err
 	}
 
 	if flags.IntegrityChecksums {
@@ -1296,22 +1372,53 @@ func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task, fl
 
 // copyCollection creates the target collection and, if requested, copies the
 // AVU metadata of the source collection onto it.
-func (worker *Worker) copyCollection(ctx context.Context, u Task, flags Flags) error {
+func (worker *Worker) copyCollection(ctx context.Context, u Task, _ Flags) error {
 	if err := worker.TransferPool.CreateCollection(ctx, u.Target); err != nil {
 		return err
 	}
 
-	if !flags.CopyMetadata {
+	return u.Attributes.Apply(ctx, worker.TransferPool, u.Target)
+}
+
+func (worker *Worker) copyRootAttributes(ctx context.Context, sourceAPI, targetAPI *api.API, source, target string, flags Flags, sameZone bool) error {
+	if worker.options.DryRun || (!flags.CopyMetadata && !flags.CopyACL) {
 		return nil
 	}
 
-	return worker.TransferPool.CopyMetadata(ctx, u.Source, api.CollectionType, u.Target, api.CollectionType)
+	options := copyAttributeWalkOptions(flags)
+
+	sourceRecord, err := sourceAPI.GetRecord(ctx, source, options...)
+	if err != nil {
+		return err
+	}
+
+	if sourceRecord.Type() != api.CollectionType {
+		return api.ErrInvalidItemType
+	}
+
+	targetRecord, err := targetAPI.GetRecord(ctx, target, options...)
+	if err != nil && !errors.Is(err, api.ErrNoRowFound) {
+		return err
+	}
+
+	if targetRecord != nil && targetRecord.Type() != api.CollectionType {
+		return api.ErrInvalidItemType
+	}
+
+	changes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags.CopyMetadata, flags.CopyACL, sameZone)
+	if err != nil {
+		return err
+	}
+
+	return changes.Apply(ctx, targetAPI, target)
 }
 
 // RemoteCopyDir copies one collection to another on a different iRODS server.
 // The worker needs to have OtherIndexPool and OtherTransferPool set.
 // It handles the recursion client side. Files are streamed through the local client.
 // The call blocks until the source directory has been completely scanned.
+//
+//nolint:dupl // Keep server selection explicit in the two directory-copy entry points.
 func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
 	if !worker.options.DryRun {
 		if err := worker.RemoteIndexPool.CreateCollectionAll(ctx, remote2); err != nil {
@@ -1321,20 +1428,15 @@ func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string
 		}
 	}
 
-	if flags.CopyMetadata && !worker.options.DryRun {
-		if err := RemoteCopyMetadata(ctx, worker.IndexPool, worker.RemoteIndexPool, remote1, api.CollectionType, remote2, api.CollectionType); err != nil {
-			worker.Error(ctx, remote1, remote2, err)
+	if err := worker.copyRootAttributes(ctx, worker.IndexPool, worker.RemoteIndexPool, remote1, remote2, flags, false); err != nil {
+		worker.Error(ctx, remote1, remote2, err)
 
-			return
-		}
+		return
 	}
 
-	worker.copyDir(ctx, remote1, remote2, worker.RemoteTransferPool, struct {
-		copyObject     func(context.Context, Task, Flags)
-		copyCollection func(context.Context, Task, Flags) error
-		compute        func(context.Context, string, string, chan<- Task, Flags) error
-	}{
+	worker.copyDir(ctx, remote1, remote2, worker.RemoteTransferPool, copyDirCallbacks{
 		copyObject:     worker.remoteCopyObject,
+		syncMetadata:   worker.remoteCopyObjectMetadata,
 		copyCollection: worker.remoteCopyCollection,
 		compute:        worker.ComputeRemoteCopyDir,
 	}, flags)
@@ -1347,21 +1449,17 @@ func (worker *Worker) remoteCopyObject(ctx context.Context, u Task, flags Flags)
 		return
 	}
 
-	worker.RemoteCopy(ctx, u.Source, u.Target, flags)
+	worker.remoteCopy(ctx, u.Source, u.Target, flags, u.Attributes)
 }
 
 // remoteCopyCollection creates the target collection and, if requested, copies the
 // AVU metadata of the source collection onto it.
-func (worker *Worker) remoteCopyCollection(ctx context.Context, u Task, flags Flags) error {
+func (worker *Worker) remoteCopyCollection(ctx context.Context, u Task, _ Flags) error {
 	if err := worker.RemoteTransferPool.CreateCollection(ctx, u.Target); err != nil {
 		return err
 	}
 
-	if !flags.CopyMetadata {
-		return nil
-	}
-
-	return RemoteCopyMetadata(ctx, worker.TransferPool, worker.RemoteTransferPool, u.Source, api.CollectionType, u.Target, api.CollectionType)
+	return u.Attributes.Apply(ctx, worker.RemoteTransferPool, u.Target)
 }
 
 // log logs a task without performing it, for dry-run mode.

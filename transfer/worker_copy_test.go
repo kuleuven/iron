@@ -31,12 +31,20 @@ func TestWorkerCopy(t *testing.T) {
 		{name: "sync modification time", flags: Flags{SyncModTime: true}},
 		{name: "modification time error", flags: Flags{SyncModTime: true}, touchErr: touchErr, wantErr: touchErr},
 		{name: "metadata", flags: Flags{CopyMetadata: true}},
+		{name: "ACL", flags: Flags{CopyACL: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target := &api.MockConn{}
 			target.AddResponse(copySourceResponse())
 
 			if !tc.dryRun {
+				if tc.flags.CopyACL {
+					addACLDialog(target, api.DataObjectType)
+					target.AddResponse(copySourceResponse())
+					target.AddResponse(msg.QueryResponse{})
+					target.AddResponse(msg.QueryResponse{})
+				}
+
 				addCopyDialog(target, tc.flags, tc.copyErr, tc.touchErr, tc.mismatch)
 			}
 
@@ -50,6 +58,38 @@ func TestWorkerCopy(t *testing.T) {
 			assertTransferDialogs(t, target)
 		})
 	}
+}
+
+func TestWorkerCopySkipsIdenticalACL(t *testing.T) {
+	conn := &api.MockConn{}
+	conn.AddResponse(copySourceResponse())
+	addACLDialog(conn, api.DataObjectType)
+	conn.AddResponse(copySourceResponse())
+	addACLDialog(conn, api.DataObjectType)
+	addCopyDialog(conn, Flags{}, nil, nil, false)
+
+	worker := New(nil, mockTransferAPI(conn), Options{})
+	worker.Copy(t.Context(), testCopySrc, testCopyDest, Flags{CopyACL: true})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, conn)
+}
+
+func TestWorkerCopyRequiresDataObject(t *testing.T) {
+	conn := &api.MockConn{}
+	conn.AddResponse(msg.QueryResponse{})
+
+	worker := New(nil, mockTransferAPI(conn), Options{})
+	worker.Copy(t.Context(), testCopySrc, testCopyDest, Flags{})
+
+	if err := worker.Wait(); !errors.Is(err, api.ErrNoRowFound) {
+		t.Fatalf("Wait() = %v, want %v", err, api.ErrNoRowFound)
+	}
+
+	assertTransferDialogs(t, conn)
 }
 
 type gatedCopyConn struct {
@@ -200,6 +240,10 @@ func addCopyDialog(conn *api.MockConn, options Flags, copyErr, touchErr error, m
 		conn.AddResponse(msg.EmptyResponse{})
 	}
 
+	if options.CopyACL {
+		addACLModification(conn)
+	}
+
 	if !options.IntegrityChecksums {
 		return
 	}
@@ -211,4 +255,125 @@ func addCopyDialog(conn *api.MockConn, options Flags, copyErr, touchErr error, m
 	}
 
 	conn.AddResponses([]any{msg.String{String: testSha}, msg.String{String: testSha}})
+}
+
+func TestWorkerCopyDirectoryMetadataOnly(t *testing.T) {
+	testConn := &api.MockConn{}
+	testConn.Add(msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, &msg.AtomicMetadataRequest{
+		ItemName: testCopyDest,
+		ItemType: api.DataObjectType.String(),
+		Operations: []msg.MetadataOperation{{
+			Operation: testMetadataAdd,
+			Name:      testMetadataName,
+			Value:     testValue,
+		}},
+	}, msg.EmptyResponse{})
+	testConn.Add(msg.MOD_ACCESS_CONTROL_AN, msg.ModifyAccessRequest{
+		Path:        testCopyDest,
+		UserName:    testUser,
+		Zone:        testZone,
+		AccessLevel: testOwnPermission,
+	}, msg.EmptyResponse{})
+
+	testAPI := mockTransferAPI(testConn)
+	worker := New(testAPI, testAPI, Options{MaxQueued: 1})
+	task := Task{
+		Action: SyncMetadata,
+		Source: testCopySrc,
+		Target: testCopyDest,
+		Attributes: AttributeChanges{
+			ItemType:      api.DataObjectType,
+			MetadataToAdd: []api.Metadata{{Name: testMetadataName, Value: testValue}},
+			AccessToAdd:   []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
+		},
+	}
+
+	worker.copyDir(t.Context(), testCopySrc, testCopyDest, testAPI, copyDirCallbacks{
+		copyObject:   worker.copyObject,
+		syncMetadata: worker.copyObjectMetadata,
+		copyCollection: func(context.Context, Task, Flags) error {
+			return nil
+		},
+		compute: func(_ context.Context, _, _ string, queue chan<- Task, _ Flags) error {
+			defer close(queue)
+
+			queue <- task
+
+			return nil
+		},
+	}, Flags{CopyMetadata: true, CopyACL: true})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, testConn)
+}
+
+func TestWorkerRemoteCopyMetadataOnly(t *testing.T) {
+	sourceConn, targetConn := &api.MockConn{}, &api.MockConn{}
+	sourceRecord := &testCollectionRecord{
+		Collection: &api.Collection{Inheritance: true},
+		metadata:   []api.Metadata{{Name: testMetadataName, Value: testValue}},
+		access:     []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
+	}
+	targetAPI := mockTransferAPI(targetConn)
+	inheritance := true
+
+	targetConn.Add(msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, &msg.AtomicMetadataRequest{
+		ItemName: testCopyDest,
+		ItemType: api.CollectionType.String(),
+		Operations: []msg.MetadataOperation{{
+			Operation: testMetadataAdd,
+			Name:      testMetadataName,
+			Value:     testValue,
+		}},
+	}, msg.EmptyResponse{})
+	targetConn.Add(msg.MOD_ACCESS_CONTROL_AN, msg.ModifyAccessRequest{
+		Path:        testCopyDest,
+		UserName:    testUser,
+		Zone:        testZone,
+		AccessLevel: testOwnPermission,
+	}, msg.EmptyResponse{})
+	targetConn.Add(msg.MOD_ACCESS_CONTROL_AN, msg.ModifyAccessRequest{
+		Path:        testCopyDest,
+		AccessLevel: testInherit,
+	}, msg.EmptyResponse{})
+
+	worker := New(mockTransferAPI(sourceConn), mockTransferAPI(sourceConn), Options{})
+	worker.RemoteTransferPool = targetAPI
+	worker.remoteCopyObjectMetadata(t.Context(), Task{
+		Source: testCopySrc,
+		Target: testCopyDest,
+		Attributes: AttributeChanges{
+			ItemType:              api.CollectionType,
+			MetadataToAdd:         sourceRecord.metadata,
+			AccessToAdd:           sourceRecord.access,
+			CollectionInheritance: &inheritance,
+		},
+	}, Flags{CopyMetadata: true, CopyACL: true})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, sourceConn, targetConn)
+}
+
+type testCopyRecord struct {
+	*api.DataObject
+	metadata []api.Metadata
+	access   []api.Access
+}
+
+func (record testCopyRecord) Metadata() []api.Metadata {
+	return record.metadata
+}
+
+func (record testCopyRecord) Access() []api.Access {
+	return record.access
+}
+
+func (testCopyRecord) Type() api.ObjectType {
+	return api.DataObjectType
 }

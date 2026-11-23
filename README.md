@@ -138,13 +138,13 @@ upload --exclusive ./results/part1.csv /zone/home/alice/incoming/part1.csv
 wait
 upload --include '*.csv' --ignore '*.tmp' ./results/ /zone/home/alice/incoming/
 wait
-cp --metadata /zone/home/alice/incoming/part1.csv /zone/home/alice/archive/
+cp --metadata --acl /zone/home/alice/incoming/part1.csv /zone/home/alice/archive/
 wait
-cp --remote --metadata /zone/home/alice/archive/part1.csv /archive/home/alice/
+cp --remote --metadata --acl /zone/home/alice/archive/part1.csv /archive/home/alice/
 ```
 
 Each line starts with fresh flag defaults; flags do not carry over to subsequent
-commands. `cp` supports `--metadata`, `--delete-skip-trash`, and
+commands. `cp` supports `--metadata`, `--acl`, `--delete-skip-trash`, and
 `--no-update-in-place`; `upload` supports `--delete-skip-trash` and
 `--no-update-in-place`. The common transfer flags, such as `--exclusive`,
 `--delete`, `--checksum`, `--verify-checksum`, `--include`, and `--ignore`, are

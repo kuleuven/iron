@@ -666,6 +666,7 @@ func (a *App) cp() *cobra.Command {
 	addTransferOptionFlags(cmd, &options)
 	cmd.Flags().BoolVarP(&flags.SkipTrash, "delete-skip-trash", "S", false, "Do not move to trash if a file is deleted")
 	cmd.Flags().BoolVarP(&flags.CopyMetadata, "metadata", "m", false, "Copy AVU metadata along with the data objects and collections")
+	cmd.Flags().BoolVar(&flags.CopyACL, "acl", false, "Copy access permissions along with the data objects and collections")
 	cmd.Flags().StringVar(&targetEnvironment, "target-environment", "", "Environment label of the target iRODS server")
 
 	return cmd

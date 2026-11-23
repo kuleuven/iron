@@ -26,6 +26,54 @@ func TestWorkerFileTransfers(t *testing.T) {
 	}
 }
 
+func TestRemoteCopyFetchesMetadataRecords(t *testing.T) {
+	sourceConn, targetConn := &api.MockConn{}, &api.MockConn{}
+	metadata := []api.Metadata{{Name: testMetadataName, Value: testValue}}
+
+	sourceConn.AddResponse(copySourceResponse())
+	addMetadataResponse(sourceConn, metadata, msg.ICAT_COLUMN_META_DATA_ATTR_NAME, nil)
+	sourceConn.AddResponse(msg.FileDescriptor(1))
+	sourceConn.AddResponses([]any{
+		msg.SeekResponse{Offset: int64(len(testStr))},
+		msg.SeekResponse{},
+	})
+	sourceConn.AddBuffer(msg.DATA_OBJ_READ_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 1,
+		Size:           int(BufferSize),
+	}, msg.ReadResponse(len(testStr)), nil, []byte(testStr))
+	sourceConn.AddResponse(msg.EmptyResponse{})
+
+	targetConn.AddResponse(copySourceResponse())
+	addMetadataResponse(targetConn, nil, msg.ICAT_COLUMN_META_DATA_ATTR_NAME, nil)
+	targetConn.AddResponse(msg.FileDescriptor(2))
+	targetConn.AddBuffer(msg.DATA_OBJ_WRITE_AN, msg.OpenedDataObjectRequest{
+		FileDescriptor: 2,
+		Size:           len(testStr),
+	}, msg.EmptyResponse{}, []byte(testStr), nil)
+	targetConn.AddResponse(msg.EmptyResponse{})
+	targetConn.Add(msg.ATOMIC_APPLY_METADATA_OPERATIONS_APN, &msg.AtomicMetadataRequest{
+		ItemName: testCopyDest,
+		ItemType: api.DataObjectType.String(),
+		Operations: []msg.MetadataOperation{{
+			Operation: testMetadataAdd,
+			Name:      testMetadataName,
+			Value:     testValue,
+		}},
+	}, msg.EmptyResponse{})
+
+	sourceAPI, targetAPI := mockTransferAPI(sourceConn), mockTransferAPI(targetConn)
+	worker := New(sourceAPI, sourceAPI, Options{})
+	worker.RemoteTransferPool = targetAPI
+	worker.RemoteIndexPool = targetAPI
+	worker.RemoteCopy(t.Context(), testCopySrc, testCopyDest, Flags{CopyMetadata: true})
+
+	if err := worker.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTransferDialogs(t, sourceConn, targetConn)
+}
+
 func TestWorkerFromReader(t *testing.T) {
 	for _, tc := range []fileTransferTest{
 		{name: "content", data: testStr},
@@ -97,6 +145,7 @@ func testWorkerFileTransfers(t *testing.T, remoteCopy bool) {
 		{name: "integrity verification", data: testStr, integrity: true},
 		{name: "checksum mismatch", data: testStr, integrity: true, mismatch: true, wantErr: ErrChecksumMismatch},
 		{name: "read error", data: testStr, readErr: readErr, wantErr: readErr},
+		{name: "ACL", data: testStr, acl: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.run(t, remoteCopy)
@@ -109,6 +158,7 @@ type fileTransferTest struct {
 	data      string
 	dryRun    bool
 	integrity bool
+	acl       bool
 	mismatch  bool
 	readErr   error
 	wantErr   error
@@ -132,10 +182,12 @@ func (tc fileTransferTest) run(t *testing.T, remoteCopy bool) {
 	worker.RemoteIndexPool = targetAPI
 
 	local := filepath.Join(t.TempDir(), testLocalTxt)
+	flags := Flags{IntegrityChecksums: tc.integrity, CopyACL: tc.acl && remoteCopy}
+
 	if remoteCopy {
-		worker.RemoteCopy(t.Context(), testCopySrc, testCopyDest, Flags{IntegrityChecksums: tc.integrity})
+		worker.RemoteCopy(t.Context(), testCopySrc, testCopyDest, flags)
 	} else {
-		worker.Download(t.Context(), local, testCopySrc, Flags{IntegrityChecksums: tc.integrity})
+		worker.Download(t.Context(), local, testCopySrc, flags)
 	}
 
 	if err := worker.Wait(); !errors.Is(err, tc.wantErr) {
@@ -178,6 +230,10 @@ func (tc fileTransferTest) target(remoteCopy bool) *api.MockConn {
 		return conn
 	}
 
+	if tc.acl {
+		conn.AddResponses([]any{msg.QueryResponse{}, msg.QueryResponse{}})
+	}
+
 	conn.AddResponse(msg.FileDescriptor(2))
 
 	if tc.data != "" && tc.readErr == nil {
@@ -191,6 +247,10 @@ func (tc fileTransferTest) target(remoteCopy bool) *api.MockConn {
 
 	if tc.integrity {
 		conn.AddResponse(transferTestChecksum(tc.data, tc.mismatch))
+	}
+
+	if tc.acl {
+		addACLModification(conn)
 	}
 
 	if tc.mismatch {
@@ -226,6 +286,12 @@ func mockTransferAPI(conn *api.MockConn) *api.API {
 
 func (tc fileTransferTest) source(remoteCopy bool) *api.MockConn {
 	conn := &api.MockConn{}
+
+	if remoteCopy && tc.acl {
+		conn.AddResponse(copySourceResponse())
+		addACLDialog(conn, api.DataObjectType)
+	}
+
 	conn.AddResponse(msg.FileDescriptor(1))
 	conn.AddResponse(msg.SeekResponse{Offset: int64(len(tc.data))})
 

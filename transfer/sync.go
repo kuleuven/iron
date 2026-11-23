@@ -27,6 +27,7 @@ const (
 	RemoveDirectoryAll  // RemoveDirectoryAll removes the Target directory and all its contents
 	ComputeChecksum     // ComputeChecksum computes the checksum of the Target file
 	SetModificationTime // SetModificationTime sets the modification time of the Target file
+	SyncMetadata        // SyncMetadata copies AVU metadata and ACLs for an unchanged object
 )
 
 func (a Action) Format(label string) string {
@@ -36,6 +37,9 @@ func (a Action) Format(label string) string {
 
 	case SetModificationTime:
 		return fmt.Sprintf("\x1B[35mt %s\x1B[0m", label)
+
+	case SyncMetadata:
+		return fmt.Sprintf("\x1B[35ma %s\x1B[0m", label)
 
 	case CreateDirectory:
 		return fmt.Sprintf("\x1B[34m+ %s/\x1B[0m", label)
@@ -60,6 +64,7 @@ type Task struct {
 	Size           int64
 	Checksum       []byte
 	ModTime        time.Time
+	Attributes     AttributeChanges
 }
 
 type object struct {
@@ -232,8 +237,8 @@ func (worker *Worker) ComputeDownloadDir(ctx context.Context, remote, local stri
 // or whether files might be updated in place.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 string, queue chan<- Task, flags Flags) error {
-	r1ch := make(chan *object)
-	r2ch := make(chan *object)
+	r1ch, r2ch := make(chan *object), make(chan *object)
+	walkOptions := copyWalkOptions(flags)
 
 	wg, ctx := errgroup.WithContext(ctx)
 
@@ -251,7 +256,7 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 			r1ch <- &object{source, target, record}
 
 			return nil
-		}, api.LexographicalOrder, api.NoSkip)
+		}, walkOptions...)
 	})
 
 	// Walk through the target directory
@@ -268,7 +273,7 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 			r2ch <- &object{source, target, record}
 
 			return nil
-		}, api.LexographicalOrder, api.NoSkip)
+		}, walkOptions...)
 	})
 
 	// Process the records
@@ -277,6 +282,10 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 			Exclusive:                        flags.Exclusive,
 			OnlyIfNewer:                      flags.OnlyIfNewer,
 			CompareChecksums:                 flags.CompareChecksums,
+			ResyncMetadata:                   flags.CopyMetadata || flags.CopyACL,
+			CopyMetadata:                     flags.CopyMetadata,
+			CopyACL:                          flags.CopyACL,
+			SameZone:                         true,
 			Delete:                           flags.Delete,
 			DisableUpdateInPlace:             true,
 			RemovePerDirectory:               flags.RemovePerDirectory,
@@ -299,8 +308,8 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 // or whether files might be updated in place.
 // The call blocks until the source directory has been completely scanned.
 func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2 string, queue chan<- Task, flags Flags) error {
-	r1ch := make(chan *object)
-	r2ch := make(chan *object)
+	r1ch, r2ch := make(chan *object), make(chan *object)
+	walkOptions := copyWalkOptions(flags)
 
 	wg, ctx := errgroup.WithContext(ctx)
 
@@ -318,7 +327,7 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 			r1ch <- &object{source, target, record}
 
 			return nil
-		}, api.LexographicalOrder, api.NoSkip)
+		}, walkOptions...)
 	})
 
 	// Walk through the target directory
@@ -335,7 +344,7 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 			r2ch <- &object{source, target, record}
 
 			return nil
-		}, api.LexographicalOrder, api.NoSkip)
+		}, walkOptions...)
 	})
 
 	// Process the records
@@ -344,6 +353,10 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 			Exclusive:                        flags.Exclusive,
 			OnlyIfNewer:                      flags.OnlyIfNewer,
 			CompareChecksums:                 flags.CompareChecksums,
+			ResyncMetadata:                   flags.CopyMetadata || flags.CopyACL,
+			CopyMetadata:                     flags.CopyMetadata,
+			CopyACL:                          flags.CopyACL,
+			SameZone:                         false,
 			Delete:                           flags.Delete,
 			DisableUpdateInPlace:             flags.DisableUpdateInPlace,
 			RemovePerDirectory:               flags.RemovePerDirectory,
@@ -358,6 +371,24 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 	})
 
 	return wg.Wait()
+}
+
+func copyWalkOptions(flags Flags) []api.WalkOption {
+	return append([]api.WalkOption{api.LexographicalOrder, api.NoSkip}, copyAttributeWalkOptions(flags)...)
+}
+
+func copyAttributeWalkOptions(flags Flags) []api.WalkOption {
+	var options []api.WalkOption
+
+	if flags.CopyMetadata {
+		options = append(options, api.FetchMetadata)
+	}
+
+	if flags.CopyACL {
+		options = append(options, api.FetchAccess)
+	}
+
+	return options
 }
 
 func toIrodsPath(base, path string) string {
@@ -402,6 +433,16 @@ type SynchronizeOptions struct {
 	// Only applies when CompareChecksums is enabled.
 	SyncModTimeForIdenticalChecksums bool
 
+	// ResyncMetadata indicates whether attributes should be synchronized for unchanged objects.
+	ResyncMetadata bool
+
+	// CopyMetadata and CopyACL select which attributes to include when synchronizing.
+	CopyMetadata bool
+	CopyACL      bool
+
+	// SameZone indicates whether the source and target are in the same iRODS zone, so direct metadata copying is possible.
+	SameZone bool
+
 	// FilterPatterns indicates patterns to include.
 	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file, directories are always included.
 	// If multiple patterns are specified, a file must match at least one of them to be included.
@@ -439,14 +480,12 @@ func Synchronize(ctx context.Context, left, right <-chan *object, queue chan<- T
 			rightObject, hasRight = skipAll(right, rightObject)
 
 		case !hasLeft, hasRight && api.ComparePaths(leftObject.target, rightObject.target) > 0:
-			if opts.Delete {
-				rightObject, hasRight = removeAll(right, rightObject, queue, opts)
-			} else {
-				rightObject, hasRight = skipAll(right, rightObject)
-			}
+			rightObject, hasRight = removeOrSkipTarget(right, rightObject, queue, opts)
 
 		case !hasRight, api.ComparePaths(leftObject.target, rightObject.target) < 0:
-			transferNewCollectionOrObject(leftObject, queue)
+			if err := transferNewCollectionOrObject(leftObject, queue, opts); err != nil {
+				return err
+			}
 
 			leftObject, hasLeft = <-left
 
@@ -455,6 +494,10 @@ func Synchronize(ctx context.Context, left, right <-chan *object, queue chan<- T
 			panic(fmt.Errorf("expected same iRODS path: %s != %s", leftObject.target, rightObject.target))
 
 		case leftObject.info.IsDir() && rightObject.info.IsDir():
+			if err := queueMetadataSync(leftObject, rightObject, queue, opts); err != nil {
+				return err
+			}
+
 			leftObject, hasLeft = <-left
 			rightObject, hasRight = <-right
 
@@ -474,6 +517,43 @@ func Synchronize(ctx context.Context, left, right <-chan *object, queue chan<- T
 			rightObject, hasRight = <-right
 		}
 	}
+}
+
+func queueMetadataSync(source, target *object, queue chan<- Task, opts SynchronizeOptions) error {
+	if !opts.ResyncMetadata || (!opts.CopyMetadata && !opts.CopyACL) {
+		return nil
+	}
+
+	sourceRecord, targetRecord := recordFrom(source.info), recordFrom(target.info)
+	if sourceRecord == nil || targetRecord == nil {
+		return fmt.Errorf("metadata synchronization requires source and target records for %q", source.target)
+	}
+
+	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+	if err != nil {
+		return err
+	}
+
+	if !attributes.HasChanges() {
+		return nil
+	}
+
+	queue <- Task{
+		Action:     SyncMetadata,
+		Source:     source.source,
+		Target:     source.target,
+		Attributes: attributes,
+	}
+
+	return nil
+}
+
+func removeOrSkipTarget(right <-chan *object, obj *object, queue chan<- Task, opts SynchronizeOptions) (*object, bool) {
+	if opts.Delete {
+		return removeAll(right, obj, queue, opts)
+	}
+
+	return skipAll(right, obj)
 }
 
 func (opts SynchronizeOptions) shouldIgnore(obj *object) bool {
@@ -533,6 +613,10 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 
 		checksum, _, err = opts.ChecksumVerify(ctx, left.source, left.target, left.info, right.info)
 		if err == nil {
+			if err := queueMetadataSync(left, right, queue, opts); err != nil {
+				return err
+			}
+
 			if !opts.SyncModTimeForIdenticalChecksums || modTimeCompare == 0 {
 				return nil
 			}
@@ -560,6 +644,10 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 		return err
 
 	case modTimeCompare == 0:
+		if err := queueMetadataSync(left, right, queue, opts); err != nil {
+			return err
+		}
+
 		return nil
 	}
 
@@ -571,13 +659,19 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 		}
 	}
 
+	attributes, err := ComputeAttributeChanges(recordFrom(left.info), recordFrom(right.info), opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+	if err != nil {
+		return err
+	}
+
 	queue <- Task{
-		Action:   TransferFile,
-		Source:   left.source,
-		Target:   left.target,
-		Size:     left.info.Size(),
-		ModTime:  left.info.ModTime(),
-		Checksum: checksum,
+		Action:     TransferFile,
+		Source:     left.source,
+		Target:     left.target,
+		Size:       left.info.Size(),
+		ModTime:    left.info.ModTime(),
+		Checksum:   checksum,
+		Attributes: attributes,
 	}
 
 	return nil
@@ -650,29 +744,49 @@ func skipAll(ch <-chan *object, obj *object) (*object, bool) {
 	return next, ok
 }
 
-func transferNewCollectionOrObject(obj *object, queue chan<- Task) {
+func transferNewCollectionOrObject(obj *object, queue chan<- Task, opts SynchronizeOptions) error {
 	if obj.info.IsDir() {
-		queue <- Task{
-			Action: CreateDirectory,
-			Source: obj.source,
-			Target: obj.target,
+		attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+		if err != nil {
+			return err
 		}
 
-		return
+		queue <- Task{
+			Action:     CreateDirectory,
+			Source:     obj.source,
+			Target:     obj.target,
+			Attributes: attributes,
+		}
+
+		return nil
 	}
 
 	// Ignore non-regular files
 	if !obj.info.Mode().IsRegular() {
-		return
+		return nil
+	}
+
+	attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, opts.CopyMetadata, opts.CopyACL, opts.SameZone)
+	if err != nil {
+		return err
 	}
 
 	queue <- Task{
-		Action:  TransferFile,
-		Source:  obj.source,
-		Target:  obj.target,
-		Size:    obj.info.Size(),
-		ModTime: obj.info.ModTime(),
+		Action:     TransferFile,
+		Source:     obj.source,
+		Target:     obj.target,
+		Size:       obj.info.Size(),
+		ModTime:    obj.info.ModTime(),
+		Attributes: attributes,
 	}
+
+	return nil
+}
+
+func recordFrom(info os.FileInfo) api.Record {
+	record, _ := info.(api.Record)
+
+	return record
 }
 
 func checkOrder(ch <-chan *object) <-chan *object {

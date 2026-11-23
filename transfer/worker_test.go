@@ -752,8 +752,8 @@ func TestWorkerCopyCollectionMetadata(t *testing.T) {
 		DefaultResource: testDemoResc,
 	}
 
-	// With CopyMetadata enabled, copyCollection should create the collection
-	// and copy the AVU metadata (two requests).
+	// With precomputed metadata changes, copyCollection should create the
+	// collection and apply its metadata (two requests).
 	testConn.AddResponse(msg.EmptyResponse{}) // CreateCollection
 	testConn.AddResponse(msg.EmptyResponse{}) // CopyMetadata
 
@@ -761,7 +761,14 @@ func TestWorkerCopyCollectionMetadata(t *testing.T) {
 		MaxThreads: 1,
 	})
 
-	if err := worker.copyCollection(t.Context(), Task{Source: testCopySrc, Target: testCopyDest}, Flags{CopyMetadata: true}); err != nil {
+	if err := worker.copyCollection(t.Context(), Task{
+		Source: testCopySrc,
+		Target: testCopyDest,
+		Attributes: AttributeChanges{
+			ItemType:           api.CollectionType,
+			MetadataToCopyFrom: testCopySrc,
+		},
+	}, Flags{CopyMetadata: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -810,8 +817,8 @@ func TestWorkerCopyActionMetadata(t *testing.T) {
 		DefaultResource: testDemoResc,
 	}
 
-	// With CopyMetadata enabled, copyAction should copy the data object and
-	// then copy the AVU metadata (two requests).
+	// With precomputed metadata changes, copyAction should copy the data
+	// object and then apply the AVUs (two requests).
 	testConn.AddResponse(msg.EmptyResponse{}) // CopyDataObject
 	testConn.AddResponse(msg.EmptyResponse{}) // CopyMetadata
 
@@ -819,7 +826,15 @@ func TestWorkerCopyActionMetadata(t *testing.T) {
 		MaxThreads: 1,
 	})
 
-	worker.copyObject(t.Context(), Task{Source: testCopySrc, Target: testCopyDest, Size: 4}, Flags{CopyMetadata: true})
+	worker.copyObject(t.Context(), Task{
+		Source: testCopySrc,
+		Target: testCopyDest,
+		Size:   4,
+		Attributes: AttributeChanges{
+			ItemType:           api.DataObjectType,
+			MetadataToCopyFrom: testCopySrc,
+		},
+	}, Flags{CopyMetadata: true})
 
 	if err := worker.Wait(); err != nil {
 		t.Fatal(err)

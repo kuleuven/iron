@@ -20,4 +20,11 @@ const (
 	testResourceHier  = "resource_hierarchy"
 	testCopySrc       = "/test/src"
 	testCopyDest      = "/test/dest"
+	testOwnPermission = "own"
+	testValue         = "value"
+	testMetadataName  = "name"
+	testMetadataAdd   = "add"
+	testDifferent     = "different"
+	testInherit       = "inherit"
+	testNoInherit     = "noinherit"
 )

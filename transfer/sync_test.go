@@ -40,6 +40,232 @@ func TestDownloadDirCompareChecksumPaths(t *testing.T) {
 	assertTransferDialogs(t, conn)
 }
 
+func TestCopyWalkOptionsFetchRequestedAttributes(t *testing.T) {
+	options := copyWalkOptions(Flags{CopyMetadata: true, CopyACL: true})
+
+	var metadata, access bool
+
+	for _, option := range options {
+		metadata = metadata || option == api.FetchMetadata
+		access = access || option == api.FetchAccess
+	}
+
+	if !metadata || !access {
+		t.Errorf("copy walk options = %v, want FetchMetadata and FetchAccess", options)
+	}
+}
+
+type synchronizeMetadataCase struct {
+	name                 string
+	sourceModTime        time.Time
+	targetModTime        time.Time
+	compareChecksums     bool
+	syncModificationTime bool
+	wantModificationTime bool
+}
+
+func TestSynchronizeMetadataForIdenticalObjects(t *testing.T) {
+	modTime := time.Unix(10000, 0)
+	tests := []synchronizeMetadataCase{
+		{name: "same modification time", sourceModTime: modTime, targetModTime: modTime},
+		{
+			name:                 "identical checksums",
+			sourceModTime:        modTime.Add(time.Second),
+			targetModTime:        modTime,
+			compareChecksums:     true,
+			syncModificationTime: true,
+			wantModificationTime: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testSynchronizeMetadataCase(t, tc)
+		})
+	}
+}
+
+func TestSynchronizeDoesNotQueueUnselectedMetadata(t *testing.T) {
+	record := func(path string) *testCopyRecord {
+		return &testCopyRecord{
+			DataObject: &api.DataObject{
+				Path: path,
+				Replicas: []api.Replica{{
+					Size:       int64(len(testStr)),
+					ModifiedAt: time.Unix(10000, 0),
+				}},
+			},
+		}
+	}
+
+	sourceRecord, targetRecord := record(testCopySrc), record(testCopyDest)
+	sourceRecord.metadata = []api.Metadata{{Name: testMetadataName, Value: testValue}}
+	sourceRecord.access = []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}}
+
+	left := make(chan *object, 1)
+	left <- &object{source: testCopySrc, target: testCopyDest, info: sourceRecord}
+
+	close(left)
+
+	right := make(chan *object, 1)
+	right <- &object{source: testCopyDest, target: testCopyDest, info: targetRecord}
+
+	close(right)
+
+	queue := make(chan Task, 1)
+	if err := Synchronize(t.Context(), left, right, queue, SynchronizeOptions{
+		ResyncMetadata: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if task, ok := <-queue; ok {
+		t.Fatalf("queued attributes without a narrow option selected: %+v", task)
+	}
+}
+
+func TestSynchronizeMetadataForExistingCollections(t *testing.T) {
+	sourceRecord := &testCollectionRecord{
+		Collection: &api.Collection{Path: testCopySrc, Inheritance: true},
+		metadata:   []api.Metadata{{Name: testMetadataName, Value: testValue}},
+		access:     []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
+	}
+	targetRecord := &testCollectionRecord{Collection: &api.Collection{Path: testCopyDest}}
+
+	left := make(chan *object, 1)
+	left <- &object{source: testCopySrc, target: testCopyDest, info: sourceRecord}
+
+	close(left)
+
+	right := make(chan *object, 1)
+	right <- &object{source: testCopyDest, target: testCopyDest, info: targetRecord}
+
+	close(right)
+
+	queue := make(chan Task, 1)
+	if err := Synchronize(t.Context(), left, right, queue, SynchronizeOptions{
+		ResyncMetadata: true,
+		CopyMetadata:   true,
+		CopyACL:        true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	task, ok := <-queue
+	if !ok {
+		t.Fatal("existing collection did not schedule metadata and ACL synchronization")
+	}
+
+	if task.Action != SyncMetadata {
+		t.Fatalf("task action = %v, want %v", task.Action, SyncMetadata)
+	}
+
+	if task.Attributes.ItemType != api.CollectionType {
+		t.Errorf("metadata task item type = %v, want %v", task.Attributes.ItemType, api.CollectionType)
+	}
+
+	if len(task.Attributes.MetadataToAdd) != 1 || task.Attributes.MetadataToAdd[0] != sourceRecord.metadata[0] {
+		t.Errorf("metadata to add = %v, want %v", task.Attributes.MetadataToAdd, sourceRecord.metadata)
+	}
+
+	if len(task.Attributes.AccessToAdd) != 1 || task.Attributes.AccessToAdd[0] != sourceRecord.access[0] {
+		t.Errorf("access to add = %v, want %v", task.Attributes.AccessToAdd, sourceRecord.access)
+	}
+
+	if task.Attributes.CollectionInheritance == nil || !*task.Attributes.CollectionInheritance {
+		t.Errorf("collection inheritance = %v, want true", task.Attributes.CollectionInheritance)
+	}
+
+	if _, ok := <-queue; ok {
+		t.Fatal("existing collection scheduled unexpected additional tasks")
+	}
+}
+
+func testSynchronizeMetadataCase(t *testing.T, tc synchronizeMetadataCase) {
+	t.Helper()
+
+	sourceRecord := &testCopyRecord{
+		DataObject: &api.DataObject{
+			Path: testCopySrc,
+			Replicas: []api.Replica{{
+				Size:       int64(len(testStr)),
+				ModifiedAt: tc.sourceModTime,
+			}},
+		},
+		metadata: []api.Metadata{{Name: testMetadataName, Value: testValue}},
+		access: []api.Access{
+			{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission},
+		},
+	}
+
+	left := make(chan *object, 1)
+	left <- &object{source: testCopySrc, target: testCopyDest, info: sourceRecord}
+
+	close(left)
+
+	targetRecord := &testCopyRecord{
+		DataObject: &api.DataObject{
+			Path: testCopyDest,
+			Replicas: []api.Replica{{
+				Size:       int64(len(testStr)),
+				ModifiedAt: tc.targetModTime,
+			}},
+		},
+	}
+
+	right := make(chan *object, 1)
+	right <- &object{source: testCopyDest, target: testCopyDest, info: targetRecord}
+
+	close(right)
+
+	queue := make(chan Task, 2)
+
+	err := Synchronize(t.Context(), left, right, queue, SynchronizeOptions{
+		CompareChecksums:                 tc.compareChecksums,
+		SyncModTimeForIdenticalChecksums: tc.syncModificationTime,
+		ResyncMetadata:                   true,
+		CopyMetadata:                     true,
+		CopyACL:                          true,
+		ChecksumVerify: func(context.Context, string, string, os.FileInfo, os.FileInfo) ([]byte, []byte, error) {
+			return []byte(testSha), []byte(testSha), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertSynchronizedMetadataTasks(t, queue, tc)
+}
+
+func assertSynchronizedMetadataTasks(t *testing.T, queue <-chan Task, tc synchronizeMetadataCase) {
+	t.Helper()
+
+	var metadata, modificationTime, foundMetadata, foundACL bool
+
+	for task := range queue {
+		metadata = metadata || task.Action == SyncMetadata
+		modificationTime = modificationTime || task.Action == SetModificationTime
+		foundMetadata = foundMetadata || task.Action == SyncMetadata && len(task.Attributes.MetadataToAdd) == 1
+		foundACL = foundACL || task.Action == SyncMetadata && len(task.Attributes.AccessToAdd) == 1
+
+		if task.Action != SyncMetadata && task.Action != SetModificationTime {
+			t.Fatalf("unexpected task for identical objects: %+v", task)
+		}
+	}
+
+	if !metadata {
+		t.Error("identical object did not schedule metadata and ACL synchronization")
+	}
+
+	if !foundMetadata || !foundACL {
+		t.Error("metadata synchronization task did not include the attribute changes")
+	}
+
+	if modificationTime != tc.wantModificationTime {
+		t.Errorf("modification-time task = %t, want %t", modificationTime, tc.wantModificationTime)
+	}
+}
+
 func TestDownloadDirDryRunExistingTarget(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
