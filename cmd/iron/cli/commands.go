@@ -985,7 +985,13 @@ func addTransferFlags(cmd *cobra.Command, opts *transfer.Flags) {
 	flags.BoolVar(&opts.Delete, "delete", false, "Delete destination files that no longer exist in the source (applies only to directories and collections)")
 	flags.BoolVar(&opts.CompareChecksums, "checksum", false, "Compare checksums to skip identical files (applies only to directories and collections)")
 	flags.BoolVar(&opts.IntegrityChecksums, "verify-checksum", false, "Verify checksums after transferring files")
-	flags.BoolVar(&opts.SyncModTime, "sync-modtime", opts.SyncModTime, "Set destination modification times to match source files. Disable with --sync-modtime=false.")
+
+	syncModTimeDescription := "Set destination modification times to match source files."
+	if opts.SyncModTime {
+		syncModTimeDescription += " Disable with --sync-modtime=false."
+	}
+
+	flags.BoolVar(&opts.SyncModTime, "sync-modtime", opts.SyncModTime, syncModTimeDescription)
 	flags.StringSliceVar(&opts.FilterPatterns, "include", envList("IRON_INCLUDE"), "Comma-separated patterns matching regular file names, not full paths (directories and collections only). Defaults to IRON_INCLUDE; includes all files if unset.")
 	flags.StringSliceVar(&opts.IgnorePatterns, "ignore", envList("IRON_IGNORE"), "Comma-separated patterns matching file or directory names, not full paths (directories and collections only). Overrides --include; defaults to IRON_IGNORE.")
 }

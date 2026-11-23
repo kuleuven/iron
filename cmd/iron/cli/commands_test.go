@@ -558,6 +558,10 @@ func TestTransferFlags(t *testing.T) {
 			t.Fatalf("unexpected defaults: %+v, %+v", options, flags)
 		}
 
+		if got := strings.Contains(cmd.Flags().Lookup("sync-modtime").Usage, "Disable with --sync-modtime=false."); got != syncModTime {
+			t.Errorf("sync-modtime help disable hint = %v, want %v", got, syncModTime)
+		}
+
 		if err := cmd.ParseFlags([]string{
 			"--exclusive", "--newer", "--delete", "--checksum",
 			"--verify-checksum", "--" + dryrunOption, "--sync-modtime=false", "--threads=2",
