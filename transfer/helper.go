@@ -200,7 +200,21 @@ type AttributeChanges struct {
 	CollectionInheritance *bool
 }
 
-func ComputeAttributeChanges(source, target api.Record, flags Flags, sameZone bool) (AttributeChanges, error) {
+// AttributeOptions describes the relation between the source and target servers
+// when computing attribute changes.
+type AttributeOptions struct {
+	// SameZone indicates whether the source and target are in the same iRODS zone,
+	// so metadata can be copied server-side.
+	SameZone bool
+	// SourceZone and TargetZone are the zones of the source and target servers.
+	// They are used to map ACL principals when Flags.MapACLZone is set.
+	SourceZone string
+	TargetZone string
+}
+
+// ComputeAttributeChanges computes the metadata and ACL changes needed to make
+// the target attributes match the source, according to flags.
+func ComputeAttributeChanges(source, target api.Record, flags Flags, opts AttributeOptions) (AttributeChanges, error) {
 	if !flags.CopyMetadata && !flags.CopyACL {
 		return AttributeChanges{}, nil
 	}
@@ -212,13 +226,18 @@ func ComputeAttributeChanges(source, target api.Record, flags Flags, sameZone bo
 	changes := AttributeChanges{ItemType: source.Type()}
 
 	if flags.CopyMetadata {
-		if err := setMetadataChanges(&changes, source, target, sameZone, flags.Delete); err != nil {
+		if err := setMetadataChanges(&changes, source, target, opts.SameZone, flags.Delete); err != nil {
 			return AttributeChanges{}, err
 		}
 	}
 
 	if flags.CopyACL {
-		if err := setACLChanges(&changes, source, target, flags.Delete); err != nil {
+		sourceAccess := source.Access()
+		if flags.MapACLZone {
+			sourceAccess = mapAccessZone(sourceAccess, opts.SourceZone, opts.TargetZone)
+		}
+
+		if err := setACLChanges(&changes, source, sourceAccess, target, flags.Delete); err != nil {
 			return AttributeChanges{}, err
 		}
 	}
@@ -261,14 +280,33 @@ func setMetadataChanges(changes *AttributeChanges, source, target api.Record, sa
 	return nil
 }
 
-func setACLChanges(changes *AttributeChanges, source, target api.Record, deleteMissing bool) error {
+// mapAccessZone returns a copy of access in which principals of sourceZone
+// (or without zone) are moved to targetZone. Principals of other zones are kept.
+func mapAccessZone(access []api.Access, sourceZone, targetZone string) []api.Access {
+	if sourceZone == targetZone || targetZone == "" {
+		return access
+	}
+
+	mapped := make([]api.Access, len(access))
+
+	for i, entry := range access {
+		if entry.User.Zone == sourceZone || entry.User.Zone == "" {
+			entry.User.Zone = targetZone
+		}
+
+		mapped[i] = entry
+	}
+
+	return mapped
+}
+
+func setACLChanges(changes *AttributeChanges, source api.Record, sourceAccess []api.Access, target api.Record, deleteMissing bool) error {
 	var targetAccess []api.Access
 
 	if target != nil {
 		targetAccess = target.Access()
 	}
 
-	sourceAccess := source.Access()
 	changes.AccessToAdd = accessToAdd(sourceAccess, targetAccess)
 
 	if deleteMissing {
@@ -372,7 +410,7 @@ func RemoteCopyACL(ctx context.Context, a, b *api.API, source string, itemType a
 		return api.ErrInvalidItemType
 	}
 
-	changes, err := ComputeAttributeChanges(record, nil, Flags{CopyACL: true}, true)
+	changes, err := ComputeAttributeChanges(record, nil, Flags{CopyACL: true}, AttributeOptions{SameZone: true})
 	if err != nil {
 		return err
 	}

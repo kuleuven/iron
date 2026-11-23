@@ -278,23 +278,8 @@ func (worker *Worker) ComputeCopyDir(ctx context.Context, remote1, remote2 strin
 
 	// Process the records
 	wg.Go(func() error {
-		opts := SynchronizeOptions{
-			Exclusive:                        flags.Exclusive,
-			OnlyIfNewer:                      flags.OnlyIfNewer,
-			CompareChecksums:                 flags.CompareChecksums,
-			ResyncMetadata:                   flags.CopyMetadata || flags.CopyACL,
-			CopyMetadata:                     flags.CopyMetadata,
-			CopyACL:                          flags.CopyACL,
-			SameZone:                         true,
-			Delete:                           flags.Delete,
-			DisableUpdateInPlace:             true,
-			RemovePerDirectory:               flags.RemovePerDirectory,
-			SyncModTimeForIdenticalChecksums: flags.SyncModTime,
-			FilterPatterns:                   flags.FilterPatterns,
-			IgnorePatterns:                   flags.IgnorePatterns,
-			ChecksumVerify:                   VerifyRemoteToRemote(worker.IndexPool, worker.IndexPool, worker.options.ProgressHandler),
-			ErrorHandler:                     worker.options.ErrorHandler,
-		}
+		opts := worker.copySynchronizeOptions(flags, AttributeOptions{SameZone: true}, worker.IndexPool)
+		opts.DisableUpdateInPlace = true
 
 		return Synchronize(ctx, checkOrder(r1ch), checkOrder(r2ch), registerProgress(ctx, queue, worker.options.ProgressHandler), opts)
 	})
@@ -349,28 +334,35 @@ func (worker *Worker) ComputeRemoteCopyDir(ctx context.Context, remote1, remote2
 
 	// Process the records
 	wg.Go(func() error {
-		opts := SynchronizeOptions{
-			Exclusive:                        flags.Exclusive,
-			OnlyIfNewer:                      flags.OnlyIfNewer,
-			CompareChecksums:                 flags.CompareChecksums,
-			ResyncMetadata:                   flags.CopyMetadata || flags.CopyACL,
-			CopyMetadata:                     flags.CopyMetadata,
-			CopyACL:                          flags.CopyACL,
-			SameZone:                         false,
-			Delete:                           flags.Delete,
-			DisableUpdateInPlace:             flags.DisableUpdateInPlace,
-			RemovePerDirectory:               flags.RemovePerDirectory,
-			SyncModTimeForIdenticalChecksums: flags.SyncModTime,
-			FilterPatterns:                   flags.FilterPatterns,
-			IgnorePatterns:                   flags.IgnorePatterns,
-			ChecksumVerify:                   VerifyRemoteToRemote(worker.IndexPool, worker.RemoteIndexPool, worker.options.ProgressHandler),
-			ErrorHandler:                     worker.options.ErrorHandler,
-		}
+		opts := worker.copySynchronizeOptions(flags, worker.remoteAttributeOptions(), worker.RemoteIndexPool)
 
 		return Synchronize(ctx, checkOrder(r1ch), checkOrder(r2ch), registerProgress(ctx, queue, worker.options.ProgressHandler), opts)
 	})
 
 	return wg.Wait()
+}
+
+// copySynchronizeOptions returns the synchronization options for copying
+// between iRODS collections on the index pool and the given target pool.
+func (worker *Worker) copySynchronizeOptions(flags Flags, attributes AttributeOptions, target *api.API) SynchronizeOptions {
+	return SynchronizeOptions{
+		Exclusive:                        flags.Exclusive,
+		OnlyIfNewer:                      flags.OnlyIfNewer,
+		CompareChecksums:                 flags.CompareChecksums,
+		ResyncMetadata:                   flags.CopyMetadata || flags.CopyACL,
+		CopyMetadata:                     flags.CopyMetadata,
+		CopyACL:                          flags.CopyACL,
+		MapACLZone:                       flags.MapACLZone,
+		Attributes:                       attributes,
+		Delete:                           flags.Delete,
+		DisableUpdateInPlace:             flags.DisableUpdateInPlace,
+		RemovePerDirectory:               flags.RemovePerDirectory,
+		SyncModTimeForIdenticalChecksums: flags.SyncModTime,
+		FilterPatterns:                   flags.FilterPatterns,
+		IgnorePatterns:                   flags.IgnorePatterns,
+		ChecksumVerify:                   VerifyRemoteToRemote(worker.IndexPool, target, worker.options.ProgressHandler),
+		ErrorHandler:                     worker.options.ErrorHandler,
+	}
 }
 
 func copyWalkOptions(flags Flags) []api.WalkOption {
@@ -440,8 +432,11 @@ type SynchronizeOptions struct {
 	CopyMetadata bool
 	CopyACL      bool
 
-	// SameZone indicates whether the source and target are in the same iRODS zone, so direct metadata copying is possible.
-	SameZone bool
+	// MapACLZone maps ACL principals of the source zone to the target zone.
+	MapACLZone bool
+
+	// Attributes describes the source and target zones for attribute synchronization.
+	Attributes AttributeOptions
 
 	// FilterPatterns indicates patterns to include.
 	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file, directories are always included.
@@ -529,11 +524,7 @@ func queueMetadataSync(source, target *object, queue chan<- Task, opts Synchroni
 		return fmt.Errorf("metadata synchronization requires source and target records for %q", source.target)
 	}
 
-	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, Flags{
-		CopyMetadata: opts.CopyMetadata,
-		CopyACL:      opts.CopyACL,
-		Delete:       opts.Delete,
-	}, opts.SameZone)
+	attributes, err := opts.computeAttributeChanges(sourceRecord, targetRecord)
 	if err != nil {
 		return err
 	}
@@ -550,6 +541,15 @@ func queueMetadataSync(source, target *object, queue chan<- Task, opts Synchroni
 	}
 
 	return nil
+}
+
+func (opts SynchronizeOptions) computeAttributeChanges(source, target api.Record) (AttributeChanges, error) {
+	return ComputeAttributeChanges(source, target, Flags{
+		CopyMetadata: opts.CopyMetadata,
+		CopyACL:      opts.CopyACL,
+		MapACLZone:   opts.MapACLZone,
+		Delete:       opts.Delete,
+	}, opts.Attributes)
 }
 
 func removeOrSkipTarget(right <-chan *object, obj *object, queue chan<- Task, opts SynchronizeOptions) (*object, bool) {
@@ -668,11 +668,7 @@ func compareAndTransferObject(ctx context.Context, left, right *object, queue ch
 		targetRecord = nil
 	}
 
-	attributes, err := ComputeAttributeChanges(recordFrom(left.info), targetRecord, Flags{
-		CopyMetadata: opts.CopyMetadata,
-		CopyACL:      opts.CopyACL,
-		Delete:       opts.Delete,
-	}, opts.SameZone)
+	attributes, err := opts.computeAttributeChanges(recordFrom(left.info), targetRecord)
 	if err != nil {
 		return err
 	}
@@ -759,11 +755,7 @@ func skipAll(ch <-chan *object, obj *object) (*object, bool) {
 
 func transferNewCollectionOrObject(obj *object, queue chan<- Task, opts SynchronizeOptions) error {
 	if obj.info.IsDir() {
-		attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, Flags{
-			CopyMetadata: opts.CopyMetadata,
-			CopyACL:      opts.CopyACL,
-			Delete:       opts.Delete,
-		}, opts.SameZone)
+		attributes, err := opts.computeAttributeChanges(recordFrom(obj.info), nil)
 		if err != nil {
 			return err
 		}
@@ -783,11 +775,7 @@ func transferNewCollectionOrObject(obj *object, queue chan<- Task, opts Synchron
 		return nil
 	}
 
-	attributes, err := ComputeAttributeChanges(recordFrom(obj.info), nil, Flags{
-		CopyMetadata: opts.CopyMetadata,
-		CopyACL:      opts.CopyACL,
-		Delete:       opts.Delete,
-	}, opts.SameZone)
+	attributes, err := opts.computeAttributeChanges(recordFrom(obj.info), nil)
 	if err != nil {
 		return err
 	}

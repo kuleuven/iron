@@ -102,6 +102,32 @@ other replicas after the replication succeeds:
 iron replicate /zone/home/alice/file archive-resource --trim-replicas
 ```
 
+### Copying access permissions
+
+`cp --acl` copies the access permissions (ACLs) of the source data objects and
+collections onto the copies. Combined with `--delete`, permissions on the target
+that are not present on the source are removed.
+
+> [!WARNING]
+> Permissions are applied as soon as each collection or data object is created,
+> so `--acl` can revoke your own access to the copies. For example, if you only
+> have read access to the source collection, the copied collection becomes
+> read-only for you as well, and copying its contents fails. With `--delete`,
+> your own permission on existing target items may be removed entirely, e.g.
+> when you only have access to the source through a group. Run the copy as an
+> iRODS administrator with `--admin` to avoid these problems.
+
+When copying to another zone with `--remote`, ACL entries keep their original
+zone by default, e.g. `alice#zoneA`. Pass `--acl-map-zone` to grant the
+permissions of users and groups of the source zone to the users and groups with
+the same name in the target zone instead (`alice#zoneB`). Users and groups of
+other zones are copied unchanged. If a mapped user or group does not exist in the
+target zone, the copy of that item reports an error.
+
+```shell
+iron cp --remote --target-environment archive --acl --acl-map-zone /zoneA/home/alice/project /zoneB/home/alice/
+```
+
 ### Command files
 
 Use `iron exec workflow.iron` to feed multiple commands to one transfer worker,
@@ -140,12 +166,12 @@ upload --include '*.csv' --ignore '*.tmp' ./results/ /zone/home/alice/incoming/
 wait
 cp --metadata --acl /zone/home/alice/incoming/part1.csv /zone/home/alice/archive/
 wait
-cp --remote --metadata --acl /zone/home/alice/archive/part1.csv /archive/home/alice/
+cp --remote --metadata --acl --acl-map-zone /zone/home/alice/archive/part1.csv /archive/home/alice/
 ```
 
 Each line starts with fresh flag defaults; flags do not carry over to subsequent
-commands. `cp` supports `--metadata`, `--acl`, `--delete-skip-trash`, and
-`--no-update-in-place`; `upload` supports `--delete-skip-trash` and
+commands. `cp` supports `--metadata`, `--acl`, `--acl-map-zone`,
+`--delete-skip-trash`, and `--no-update-in-place`; `upload` supports `--delete-skip-trash` and
 `--no-update-in-place`. The common transfer flags, such as `--exclusive`,
 `--delete`, `--checksum`, `--verify-checksum`, `--include`, and `--ignore`, are
 available on `cp`, `upload`/`put`, and `download`/`get`. Operation-specific flags

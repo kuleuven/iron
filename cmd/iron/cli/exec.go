@@ -249,7 +249,8 @@ func (a *App) scriptCommand(ctx context.Context, worker *transfer.Worker, target
 	addTransferFlags(copyCmd, &copyFlags)
 	copyCmd.Flags().BoolVarP(&copyFlags.SkipTrash, "delete-skip-trash", "S", false, "Do not move deleted files to trash")
 	copyCmd.Flags().BoolVarP(&copyFlags.CopyMetadata, "metadata", "m", false, "Copy AVU metadata on copy operations")
-	copyCmd.Flags().BoolVar(&copyFlags.CopyACL, "acl", false, "Copy access permissions on copy operations")
+	copyCmd.Flags().BoolVar(&copyFlags.CopyACL, "acl", false, "Copy access permissions on copy operations. May revoke your own access to the copies; use --admin to avoid this")
+	copyCmd.Flags().BoolVar(&copyFlags.MapACLZone, "acl-map-zone", false, "With --remote --acl, grant permissions of source-zone users and groups to the same names in the target zone")
 	copyCmd.Flags().BoolVar(&copyFlags.DisableUpdateInPlace, "no-update-in-place", false, "Replace existing objects instead of updating in place")
 	root.AddCommand(copyCmd)
 

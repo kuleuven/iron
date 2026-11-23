@@ -32,6 +32,8 @@ func TestWorkerCopy(t *testing.T) {
 		{name: "modification time error", flags: Flags{SyncModTime: true}, touchErr: touchErr, wantErr: touchErr},
 		{name: "metadata", flags: Flags{CopyMetadata: true}},
 		{name: "ACL", flags: Flags{CopyACL: true}},
+		{name: "verify before modification time and ACL", flags: Flags{IntegrityChecksums: true, SyncModTime: true, CopyACL: true}},
+		{name: "checksum mismatch skips ACL", flags: Flags{IntegrityChecksums: true, CopyACL: true}, mismatch: true, wantErr: ErrChecksumMismatch},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target := &api.MockConn{}
@@ -244,6 +246,16 @@ func addCopyDialog(conn *api.MockConn, options Flags, copyErr, touchErr error, m
 		return
 	}
 
+	if options.IntegrityChecksums {
+		if mismatch { // Checksum requests run concurrently, so either path may be requested first.
+			conn.AddResponses([]any{msg.String{String: testSha}, transferTestChecksum(testStr, true)})
+
+			return
+		}
+
+		conn.AddResponses([]any{msg.String{String: testSha}, msg.String{String: testSha}})
+	}
+
 	if options.SyncModTime {
 		response = msg.EmptyResponse{}
 		if touchErr != nil {
@@ -270,18 +282,6 @@ func addCopyDialog(conn *api.MockConn, options Flags, copyErr, touchErr error, m
 	if options.CopyACL {
 		addACLModification(conn)
 	}
-
-	if !options.IntegrityChecksums {
-		return
-	}
-
-	if mismatch { // Checksum requests run concurrently, so either path may be requested first.
-		conn.AddResponses([]any{msg.String{String: testSha}, transferTestChecksum(testStr, true)})
-
-		return
-	}
-
-	conn.AddResponses([]any{msg.String{String: testSha}, msg.String{String: testSha}})
 }
 
 func TestWorkerCopyDirectoryMetadataOnly(t *testing.T) {

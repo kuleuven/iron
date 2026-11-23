@@ -50,6 +50,11 @@ type Flags struct {
 	// CopyACL indicates whether access permissions should be copied along with
 	// data objects and collections when copying (Copy, CopyDir, RemoteCopy, RemoteCopyDir).
 	CopyACL bool
+	// MapACLZone indicates whether access permissions of users and groups in the
+	// source zone should be granted to the users and groups with the same name in
+	// the target zone when copying ACLs between servers (RemoteCopy, RemoteCopyDir).
+	// Principals of other zones are copied unchanged.
+	MapACLZone bool
 	// FilterPatterns indicates patterns to include when uploading, downloading or copying a directory (UploadDir, DownloadDir, CopyDir, RemoteCopyDir).
 	// The pattern syntax is the same as filepath.Match. The matching is done against the base name of the file, directories are always included.
 	// If multiple patterns are specified, a file must match at least one of them to be included.
@@ -735,7 +740,7 @@ func (worker *Worker) RemoteCopy(ctx context.Context, remote1, remote2 string, f
 			return
 		}
 
-		attributes, err = ComputeAttributeChanges(sourceRecord, targetRecord, flags, false)
+		attributes, err = ComputeAttributeChanges(sourceRecord, targetRecord, flags, worker.remoteAttributeOptions())
 		if err != nil {
 			worker.Error(ctx, remote1, remote2, err)
 
@@ -857,7 +862,10 @@ func (worker *Worker) finishRemoteCopy(ctx context.Context, a *api.API, w api.Fi
 		})
 	}
 
-	err = errors.Join(err, attributes.Apply(ctx, b.API, remote2))
+	if err == nil {
+		err = attributes.Apply(ctx, b.API, remote2)
+	}
+
 	if err == nil {
 		return nil
 	}
@@ -1206,7 +1214,7 @@ func (worker *Worker) Copy(ctx context.Context, remote1, remote2 string, flags F
 		targetRecord = nil
 	}
 
-	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags, true)
+	attributes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags, AttributeOptions{SameZone: true})
 	if err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 
@@ -1258,8 +1266,6 @@ type copyDirCallbacks struct {
 // CopyDir copies one directory to another on the same iRODS server.
 // It handles the recursion client side, but individual files are copied server-side only.
 // The call blocks until the source directory has been completely scanned.
-//
-//nolint:dupl // Keep server selection explicit in the two directory-copy entry points.
 func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
 	if !worker.options.DryRun {
 		if err := worker.IndexPool.CreateCollectionAll(ctx, remote2); err != nil {
@@ -1269,7 +1275,7 @@ func (worker *Worker) CopyDir(ctx context.Context, remote1, remote2 string, flag
 		}
 	}
 
-	if err := worker.copyRootAttributes(ctx, worker.IndexPool, worker.IndexPool, remote1, remote2, flags, true); err != nil {
+	if err := worker.copyRootAttributes(ctx, worker.IndexPool, worker.IndexPool, remote1, remote2, flags, AttributeOptions{SameZone: true}); err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 
 		return
@@ -1348,27 +1354,40 @@ func (worker *Worker) copyDataObject(ctx context.Context, a *api.API, u Task, fl
 		return err
 	}
 
+	// Verify and set the modification time before applying ACLs, which might revoke our own access.
+	if flags.IntegrityChecksums {
+		if _, _, err := VerifyRemoteToRemote(a, a, worker.options.ProgressHandler)(ctx, u.Source, u.Target, nil, nil); err != nil {
+			return err
+		}
+	}
+
 	if flags.SyncModTime {
 		if err := a.ModifyModificationTime(ctx, u.Target, u.ModTime); err != nil {
 			return err
 		}
 	}
 
-	if err := u.Attributes.Apply(ctx, a, u.Target); err != nil {
-		return err
-	}
-
-	if flags.IntegrityChecksums {
-		_, _, err := VerifyRemoteToRemote(a, a, worker.options.ProgressHandler)(ctx, u.Source, u.Target, nil, nil)
-
-		return err
-	}
-
-	return nil
+	return u.Attributes.Apply(ctx, a, u.Target)
 }
 
-// copyCollection creates the target collection and, if requested, copies the
-// AVU metadata of the source collection onto it.
+// remoteAttributeOptions returns the attribute options for copies between the
+// source and the remote server.
+func (worker *Worker) remoteAttributeOptions() AttributeOptions {
+	var opts AttributeOptions
+
+	if worker.IndexPool != nil {
+		opts.SourceZone = worker.IndexPool.Zone
+	}
+
+	if worker.RemoteIndexPool != nil {
+		opts.TargetZone = worker.RemoteIndexPool.Zone
+	}
+
+	return opts
+}
+
+// copyCollection creates the target collection and applies the precomputed
+// metadata and ACL changes to it.
 func (worker *Worker) copyCollection(ctx context.Context, u Task, _ Flags) error {
 	if err := worker.TransferPool.CreateCollection(ctx, u.Target); err != nil {
 		return err
@@ -1377,7 +1396,7 @@ func (worker *Worker) copyCollection(ctx context.Context, u Task, _ Flags) error
 	return u.Attributes.Apply(ctx, worker.TransferPool, u.Target)
 }
 
-func (worker *Worker) copyRootAttributes(ctx context.Context, sourceAPI, targetAPI *api.API, source, target string, flags Flags, sameZone bool) error {
+func (worker *Worker) copyRootAttributes(ctx context.Context, sourceAPI, targetAPI *api.API, source, target string, flags Flags, opts AttributeOptions) error {
 	if worker.options.DryRun || (!flags.CopyMetadata && !flags.CopyACL) {
 		return nil
 	}
@@ -1402,7 +1421,7 @@ func (worker *Worker) copyRootAttributes(ctx context.Context, sourceAPI, targetA
 		return api.ErrInvalidItemType
 	}
 
-	changes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags, sameZone)
+	changes, err := ComputeAttributeChanges(sourceRecord, targetRecord, flags, opts)
 	if err != nil {
 		return err
 	}
@@ -1414,8 +1433,6 @@ func (worker *Worker) copyRootAttributes(ctx context.Context, sourceAPI, targetA
 // The worker needs to have OtherIndexPool and OtherTransferPool set.
 // It handles the recursion client side. Files are streamed through the local client.
 // The call blocks until the source directory has been completely scanned.
-//
-//nolint:dupl // Keep server selection explicit in the two directory-copy entry points.
 func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string, flags Flags) {
 	if !worker.options.DryRun {
 		if err := worker.RemoteIndexPool.CreateCollectionAll(ctx, remote2); err != nil {
@@ -1425,7 +1442,7 @@ func (worker *Worker) RemoteCopyDir(ctx context.Context, remote1, remote2 string
 		}
 	}
 
-	if err := worker.copyRootAttributes(ctx, worker.IndexPool, worker.RemoteIndexPool, remote1, remote2, flags, false); err != nil {
+	if err := worker.copyRootAttributes(ctx, worker.IndexPool, worker.RemoteIndexPool, remote1, remote2, flags, worker.remoteAttributeOptions()); err != nil {
 		worker.Error(ctx, remote1, remote2, err)
 
 		return
@@ -1449,8 +1466,8 @@ func (worker *Worker) remoteCopyObject(ctx context.Context, u Task, flags Flags)
 	worker.remoteCopy(ctx, u.Source, u.Target, flags, u.Attributes)
 }
 
-// remoteCopyCollection creates the target collection and, if requested, copies the
-// AVU metadata of the source collection onto it.
+// remoteCopyCollection creates the target collection on the remote server and
+// applies the precomputed metadata and ACL changes to it.
 func (worker *Worker) remoteCopyCollection(ctx context.Context, u Task, _ Flags) error {
 	if err := worker.RemoteTransferPool.CreateCollection(ctx, u.Target); err != nil {
 		return err

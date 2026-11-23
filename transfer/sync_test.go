@@ -161,7 +161,7 @@ func TestSynchronizeRecreatedFileDoesNotRemoveOldAttributes(t *testing.T) {
 		Delete:               true,
 		CopyMetadata:         true,
 		CopyACL:              true,
-		SameZone:             true,
+		Attributes:           AttributeOptions{SameZone: true},
 	}); err != nil {
 		t.Fatal(err)
 	}

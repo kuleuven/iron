@@ -3,6 +3,7 @@ package transfer
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/kuleuven/iron/api"
@@ -138,7 +139,7 @@ func TestCopyACLCollectionInheritance(t *testing.T) {
 		access:     []api.Access{{User: api.User{Name: testUser, Zone: testZone}, Permission: testOwnPermission}},
 	}
 
-	attributes, err := ComputeAttributeChanges(record, nil, Flags{CopyACL: true}, true)
+	attributes, err := ComputeAttributeChanges(record, nil, Flags{CopyACL: true}, AttributeOptions{SameZone: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestAttributeChangesMetadataStrategy(t *testing.T) {
 		{name: "different zones", wantAdd: 1, wantChanges: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			changes, err := ComputeAttributeChanges(source, target, Flags{CopyMetadata: true}, tc.sameZone)
+			changes, err := ComputeAttributeChanges(source, target, Flags{CopyMetadata: true}, AttributeOptions{SameZone: tc.sameZone})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -193,7 +194,7 @@ func TestAttributeChangesMetadataStrategy(t *testing.T) {
 	t.Run("identical metadata", func(t *testing.T) {
 		target.metadata = append([]api.Metadata(nil), source.metadata...)
 
-		changes, err := ComputeAttributeChanges(source, target, Flags{CopyMetadata: true}, true)
+		changes, err := ComputeAttributeChanges(source, target, Flags{CopyMetadata: true}, AttributeOptions{SameZone: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -231,7 +232,7 @@ func TestDeleteAttributeChangesRemoveMetadataAndACL(t *testing.T) {
 		CopyMetadata: true,
 		CopyACL:      true,
 		Delete:       true,
-	}, true)
+	}, AttributeOptions{SameZone: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,4 +458,56 @@ func metadataQueryResponse(metadata []api.Metadata, nameColumn msg.ColumnNumber)
 	}
 
 	return response
+}
+
+func TestComputeAttributeChangesMapACLZone(t *testing.T) {
+	source := &testCopyRecord{
+		DataObject: &api.DataObject{Path: testCopySrc},
+		access: []api.Access{
+			{User: api.User{Name: testUser, Zone: testSourceZone}, Permission: testOwnPermission},
+			{User: api.User{Name: testRemovedUser, Zone: testOtherZone}, Permission: testOwnPermission},
+		},
+	}
+	target := &testCopyRecord{
+		DataObject: &api.DataObject{Path: testCopyDest},
+		access:     []api.Access{{User: api.User{Name: testUser, Zone: testTargetZone}, Permission: testOwnPermission}},
+	}
+	opts := AttributeOptions{SourceZone: testSourceZone, TargetZone: testTargetZone}
+
+	t.Run("mapped", func(t *testing.T) {
+		changes, err := ComputeAttributeChanges(source, target, Flags{CopyACL: true, MapACLZone: true, Delete: true}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// The source-zone user maps onto the existing target-zone entry; the
+		// other-zone user is kept as is.
+		want := []api.Access{{User: api.User{Name: testRemovedUser, Zone: testOtherZone}, Permission: testOwnPermission}}
+		if !reflect.DeepEqual(changes.AccessToAdd, want) {
+			t.Errorf("AccessToAdd = %v, want %v", changes.AccessToAdd, want)
+		}
+
+		if len(changes.AccessToRemove) != 0 {
+			t.Errorf("AccessToRemove = %v, want none", changes.AccessToRemove)
+		}
+
+		if source.access[0].User.Zone != testSourceZone {
+			t.Errorf("source access was modified: %v", source.access)
+		}
+	})
+
+	t.Run("not mapped", func(t *testing.T) {
+		changes, err := ComputeAttributeChanges(source, target, Flags{CopyACL: true, Delete: true}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(changes.AccessToAdd) != 2 || changes.AccessToAdd[0].User.Zone != testSourceZone {
+			t.Errorf("AccessToAdd = %v, want both source entries unchanged", changes.AccessToAdd)
+		}
+
+		if len(changes.AccessToRemove) != 1 || changes.AccessToRemove[0].User.Zone != testTargetZone {
+			t.Errorf("AccessToRemove = %v, want target-zone user", changes.AccessToRemove)
+		}
+	})
 }

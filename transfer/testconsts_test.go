@@ -29,4 +29,7 @@ const (
 	testRemovedUser   = "removeduser"
 	testInherit       = "inherit"
 	testNoInherit     = "noinherit"
+	testSourceZone    = "zoneA"
+	testTargetZone    = "zoneB"
+	testOtherZone     = "zoneC"
 )
