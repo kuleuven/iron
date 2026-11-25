@@ -29,6 +29,10 @@ func (a *App) PathIn(path, workdir string) string {
 		return "/"
 	}
 
+	if a.Literal {
+		return path
+	}
+
 	parts := strings.Split(path, "/")
 	kept := make([]string, 0, len(parts))
 
