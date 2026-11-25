@@ -382,48 +382,61 @@ func (a *App) replicate() *cobra.Command {
 	var trimReplicas bool
 
 	cmd := &cobra.Command{
-		Use:               "replicate <object path> <resource>",
-		Short:             "Replicate an object to another resource",
-		Args:              cobra.ExactArgs(2),
+		Use:               "replicate <object path> <resource>...",
+		Short:             "Replicate an object to one or more resources",
+		Args:              cobra.MinimumNArgs(2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.replicateDataObject(cmd.Context(), a.Path(args[0]), args[1], trimReplicas)
+			return a.replicateDataObject(cmd.Context(), a.Path(args[0]), args[1:], trimReplicas)
 		},
 	}
 
-	cmd.Flags().BoolVar(&trimReplicas, "trim-replicas", false, "Trim replicas after replication")
+	cmd.Flags().BoolVar(&trimReplicas, "trim-replicas", false, "Trim replicas that are not on any of the target resources after replication")
 
 	return cmd
 }
 
-func (a *App) replicateDataObject(ctx context.Context, path, targetResourceName string, trimReplicas bool) error {
+func (a *App) replicateDataObject(ctx context.Context, path string, targetResourceNames []string, trimReplicas bool) error {
 	object, err := a.GetDataObject(ctx, path)
 	if err != nil {
 		return fmt.Errorf("cannot lookup data object: %w", err)
 	}
 
-	targetResource, err := a.GetResource(ctx, targetResourceName)
-	if err != nil {
-		return fmt.Errorf("cannot lookup target resource: %w", err)
+	targets := make([]string, 0, len(targetResourceNames))
+
+	for _, name := range targetResourceNames {
+		targetResource, err := a.GetResource(ctx, name)
+		if err != nil {
+			return fmt.Errorf("cannot lookup target resource %s: %w", name, err)
+		}
+
+		if !slices.Contains(targets, targetResource.Name) {
+			targets = append(targets, targetResource.Name)
+		}
 	}
 
-	replicated, removeReplicas := replicasToRemove(object, targetResource.Name)
+	existingReplicas, otherReplicas := classifyReplicas(object, targets)
 
-	if !replicated {
-		if err := a.Client.WithNumThreads(1).ReplicateDataObject(ctx, object.Path, targetResource.Name); err != nil {
-			if api.Is(err, msg.REPLICA_IS_BEING_STAGED) {
-				return fmt.Errorf("archive is in GLACIER and is currently being restored, please resubmit request later")
-			}
-
-			return err
-		}
+	changed, err := a.replicateToTargets(ctx, object.Path, targets, existingReplicas)
+	if err != nil {
+		return err
 	}
 
 	if !trimReplicas {
 		return nil
 	}
 
-	for _, replicaNumber := range removeReplicas {
+	// Replication may have created or repaired replicas, so look at the current state
+	if changed {
+		object, err = a.GetDataObject(ctx, object.Path)
+		if err != nil {
+			return fmt.Errorf("cannot lookup data object: %w", err)
+		}
+
+		_, otherReplicas = classifyReplicas(object, targets)
+	}
+
+	for _, replicaNumber := range otherReplicas {
 		if err := a.TrimDataObjectReplica(ctx, object.Path, replicaNumber); err != nil {
 			return fmt.Errorf("cannot trim data object replica: %w", err)
 		}
@@ -432,23 +445,65 @@ func (a *App) replicateDataObject(ctx context.Context, path, targetResourceName 
 	return nil
 }
 
-func replicasToRemove(object *api.DataObject, targetResourceName string) (bool, []int) {
-	var (
-		removeReplicas []int
-		replicated     bool
-	)
+// replicateToTargets replicates the object to each target that has no good
+// replica yet, and reports whether any replication was performed.
+func (a *App) replicateToTargets(ctx context.Context, path string, targets []string, existingReplicas map[string][]int) (bool, error) {
+	var changed bool
+
+	for _, target := range targets {
+		if len(existingReplicas[target]) > 0 {
+			continue
+		}
+
+		if err := a.Client.WithNumThreads(1).ReplicateDataObject(ctx, path, target); err != nil {
+			if api.Is(err, msg.REPLICA_IS_BEING_STAGED) {
+				return changed, fmt.Errorf("archive is in GLACIER and is currently being restored, please resubmit request later")
+			}
+
+			return changed, fmt.Errorf("cannot replicate to %s: %w", target, err)
+		}
+
+		changed = true
+	}
+
+	return changed, nil
+}
+
+// classifyReplicas determines, for each target resource, whether a good replica
+// exists on it, and the replica numbers that can be trimmed: replicas that are
+// not on any target, and bad replicas.
+func classifyReplicas(object *api.DataObject, targetResourceNames []string) (map[string][]int, []int) {
+	// goodReplicas contains the replica numbers of good replicas for each target resource.
+	goodReplicas := map[string][]int{}
+
+	// otherReplicas contains the replica numbers of replicas that are not on any target or are bad replicas.
+	var otherReplicas []int
 
 	for _, replica := range object.Replicas {
-		if replica.ResourceHierarchy == targetResourceName || strings.HasPrefix(replica.ResourceHierarchy, targetResourceName+";") {
-			replicated = replicated || replica.Status == "1"
+		if replica.Status != "1" {
+			// Bad replica, add to otherReplicas
+			otherReplicas = append(otherReplicas, replica.Number)
 
 			continue
 		}
 
-		removeReplicas = append(removeReplicas, replica.Number)
+		idx := slices.IndexFunc(targetResourceNames, func(target string) bool {
+			return replica.ResourceHierarchy == target || strings.HasPrefix(replica.ResourceHierarchy, target+";")
+		})
+
+		if idx < 0 {
+			// Unknown target, add to otherReplicas
+			otherReplicas = append(otherReplicas, replica.Number)
+
+			continue
+		}
+
+		target := targetResourceNames[idx]
+
+		goodReplicas[target] = append(goodReplicas[target], replica.Number)
 	}
 
-	return replicated, removeReplicas
+	return goodReplicas, otherReplicas
 }
 
 const (

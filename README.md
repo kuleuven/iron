@@ -53,7 +53,7 @@ Available Commands:
   mkdir       Create a collection
   mv          Move a data object or collection
   put         Upload a file
-  replicate   Replicate a data object to a resource
+  replicate   Replicate an object to one or more resources
   rm          Remove a data object or collection
   rmdir       Remove a collection
   shell       Start an interactive shell.
@@ -95,11 +95,12 @@ $ ls /home/peter/sub/localdir
 peter.txt
 ```
 
-Replicate a data object to a resource. Use `--trim-replicas` to remove its
-other replicas after the replication succeeds:
+Replicate a data object to one or more resources. Use `--trim-replicas` to
+remove, after the replication succeeds, its replicas on all other resources and
+any bad replicas:
 
 ```shell
-iron replicate /zone/home/alice/file archive-resource --trim-replicas
+iron replicate /zone/home/alice/file archive-resource backup-resource --trim-replicas
 ```
 
 ### Copying access permissions

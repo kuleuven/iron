@@ -122,55 +122,81 @@ func TestRmdir(t *testing.T) {
 
 func TestReplicate(t *testing.T) {
 	const (
-		targetResource   = "target"
-		replicateCommand = "replicate"
+		targetResource = "target"
+		secondResource = "second"
 	)
 
 	tests := []struct {
-		name           string
-		targetStatus   string
-		trimReplicas   bool
-		expectedAction string
+		name         string
+		targets      []string
+		targetStatus string
+		trimReplicas bool
+		replications int
+		trims        int
 	}{
 		{
-			name:           "replicate target without trimming",
-			targetStatus:   "0",
-			expectedAction: "replicate",
+			name:         "replicate target without trimming",
+			targets:      []string{targetResource},
+			targetStatus: "0",
+			replications: 1,
 		},
 		{
-			name:           "trim replicas when target is already valid",
-			targetStatus:   "1",
-			trimReplicas:   true,
-			expectedAction: "trim",
+			name:         "trim replicas when target is already valid",
+			targets:      []string{targetResource},
+			targetStatus: "1",
+			trimReplicas: true,
+			trims:        1,
+		},
+		{
+			name:         "replicate to multiple targets",
+			targets:      []string{targetResource, secondResource},
+			targetStatus: "0",
+			replications: 2,
+		},
+		{
+			name:         "replicate to missing target and trim others",
+			targets:      []string{targetResource, secondResource},
+			targetStatus: "1",
+			trimReplicas: true,
+			replications: 1,
+			trims:        1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := testApp(t)
-			addReplicateResponses(app, targetResource, tt.targetStatus)
-
-			args := []string{replicateCommand, testTestZoneObj1, targetResource}
-			if tt.trimReplicas {
-				args = append([]string{replicateCommand, "--trim-replicas"}, testTestZoneObj1, targetResource)
-			}
-
-			cmd := app.Command()
-			cmd.SetArgs(args)
-
-			if err := cmd.ExecuteContext(t.Context()); err != nil {
-				t.Fatal(err)
-			}
-
-			if len(app.Dialog) != 0 {
-				t.Fatalf("expected command to perform %s and consume all responses, %d remain", tt.expectedAction, len(app.Dialog))
-			}
+			addReplicateResponses(app, targetResource, tt.targetStatus, tt.targets, tt.replications, tt.trims)
+			runReplicate(t, app, tt.trimReplicas, tt.targets)
 		})
 	}
 }
 
-func addReplicateResponses(app *mockApp, targetResource, targetStatus string) {
-	app.AddResponse(msg.QueryResponse{
+func runReplicate(t *testing.T, app *mockApp, trimReplicas bool, targets []string) {
+	t.Helper()
+
+	args := []string{"replicate"}
+	if trimReplicas {
+		args = append(args, "--trim-replicas")
+	}
+
+	args = append(args, testTestZoneObj1)
+	args = append(args, targets...)
+
+	cmd := app.Command()
+	cmd.SetArgs(args)
+
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(app.Dialog) != 0 {
+		t.Fatalf("expected command to consume all responses, %d remain", len(app.Dialog))
+	}
+}
+
+func addReplicateResponses(app *mockApp, targetResource, targetStatus string, targets []string, replications, trims int) {
+	objectResponse := msg.QueryResponse{
 		RowCount:       2,
 		AttributeCount: 14,
 		TotalRowCount:  2,
@@ -190,26 +216,67 @@ func addReplicateResponses(app *mockApp, targetResource, targetStatus string) {
 			{AttributeIndex: 419, ResultLen: 2, Values: []string{"10000", "10000"}},
 			{AttributeIndex: 420, ResultLen: 2, Values: []string{"10000", "10000"}},
 		},
-	})
-	app.AddResponse(msg.QueryResponse{
-		RowCount:       1,
-		AttributeCount: 11,
-		TotalRowCount:  1,
-		SQLResult: []msg.SQLResult{
-			{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
-			{AttributeIndex: 302, ResultLen: 1, Values: []string{targetResource}},
-			{AttributeIndex: 303, ResultLen: 1, Values: []string{testTestZoneName}},
-			{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
-			{AttributeIndex: 305, ResultLen: 1, Values: []string{"class"}},
-			{AttributeIndex: 306, ResultLen: 1, Values: []string{"server"}},
-			{AttributeIndex: 307, ResultLen: 1, Values: []string{"/path/to/resc"}},
-			{AttributeIndex: 316, ResultLen: 1, Values: []string{"context string"}},
-			{AttributeIndex: 311, ResultLen: 1, Values: []string{"10000"}},
-			{AttributeIndex: 312, ResultLen: 1, Values: []string{"10000"}},
+	}
+
+	app.AddResponse(objectResponse)
+
+	for _, target := range targets {
+		app.AddResponse(msg.QueryResponse{
+			RowCount:       1,
+			AttributeCount: 11,
+			TotalRowCount:  1,
+			SQLResult: []msg.SQLResult{
+				{AttributeIndex: 301, ResultLen: 1, Values: []string{"1"}},
+				{AttributeIndex: 317, ResultLen: 1, Values: []string{"1"}},
+				{AttributeIndex: 302, ResultLen: 1, Values: []string{target}},
+				{AttributeIndex: 303, ResultLen: 1, Values: []string{testTestZoneName}},
+				{AttributeIndex: 304, ResultLen: 1, Values: []string{"posix"}},
+				{AttributeIndex: 305, ResultLen: 1, Values: []string{"class"}},
+				{AttributeIndex: 306, ResultLen: 1, Values: []string{"server"}},
+				{AttributeIndex: 307, ResultLen: 1, Values: []string{"/path/to/resc"}},
+				{AttributeIndex: 316, ResultLen: 1, Values: []string{"context string"}},
+				{AttributeIndex: 311, ResultLen: 1, Values: []string{"10000"}},
+				{AttributeIndex: 312, ResultLen: 1, Values: []string{"10000"}},
+			},
+		})
+	}
+
+	for range replications {
+		app.AddResponse(msg.EmptyResponse{})
+	}
+
+	if trims == 0 {
+		return
+	}
+
+	if replications > 0 {
+		app.AddResponse(objectResponse)
+	}
+
+	for range trims {
+		app.AddResponse(msg.EmptyResponse{})
+	}
+}
+
+func TestClassifyReplicas(t *testing.T) {
+	object := &api.DataObject{
+		Replicas: []api.Replica{
+			{Number: 0, Status: "0", ResourceHierarchy: "target;leaf1"},
+			{Number: 1, Status: "1", ResourceHierarchy: "target;leaf2"},
+			{Number: 2, Status: "1", ResourceHierarchy: "elsewhere"},
+			{Number: 3, Status: "0", ResourceHierarchy: "second"},
 		},
-	})
-	app.AddResponse(msg.EmptyResponse{})
+	}
+
+	goodReplicas, otherReplicas := classifyReplicas(object, []string{"target", "second"})
+
+	if !reflect.DeepEqual(goodReplicas, map[string][]int{"target": {1}}) {
+		t.Errorf("unexpected good replicas: %v", goodReplicas)
+	}
+
+	if !slices.Equal(otherReplicas, []int{0, 2, 3}) {
+		t.Errorf("expected other replicas [0 2 3], got %v", otherReplicas)
+	}
 }
 
 func TestUnlock(t *testing.T) {
