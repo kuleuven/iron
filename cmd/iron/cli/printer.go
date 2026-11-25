@@ -162,6 +162,8 @@ func (tp *TablePrinter) Print(name string, i api.Record) {
 		color = Green
 	}
 
+	name = EscapeString(name)
+
 	mainRowEnd := "\n"
 	if tp.inlineSubtableHeader {
 		// In inline mode the first subtable value row continues on the main row,
@@ -286,9 +288,9 @@ func (tp *TablePrinter) printMetaSubtable(meta []api.Metadata, first bool) bool 
 	for idx, m := range meta {
 		fmt.Fprintf(tp.Writer, "%s\t%s%s%s\t%s\t%s\n",
 			tp.subtableRowLead(idx, first),
-			Yellow, m.Name, NoColor,
-			m.Value,
-			m.Units,
+			Yellow, EscapeString(m.Name), NoColor,
+			EscapeString(m.Value),
+			EscapeString(m.Units),
 		)
 	}
 
