@@ -97,7 +97,8 @@ peter.txt
 
 Replicate a data object to one or more resources. Use `--trim-replicas` to
 remove, after the replication succeeds, its replicas on all other resources and
-any bad replicas:
+any bad replicas. Use `--server-threads` (default 1) to set the number of
+server threads used for the replication:
 
 ```shell
 iron replicate /zone/home/alice/file archive-resource backup-resource --trim-replicas

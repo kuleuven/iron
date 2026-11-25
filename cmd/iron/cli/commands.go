@@ -379,7 +379,10 @@ func (a *App) rm() *cobra.Command {
 }
 
 func (a *App) replicate() *cobra.Command {
-	var trimReplicas bool
+	var (
+		trimReplicas  bool
+		serverThreads int
+	)
 
 	cmd := &cobra.Command{
 		Use:               "replicate <object path> <resource>...",
@@ -387,16 +390,17 @@ func (a *App) replicate() *cobra.Command {
 		Args:              cobra.MinimumNArgs(2),
 		ValidArgsFunction: a.CompleteArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.replicateDataObject(cmd.Context(), a.Path(args[0]), args[1:], trimReplicas)
+			return a.replicateDataObject(cmd.Context(), a.Path(args[0]), args[1:], trimReplicas, serverThreads)
 		},
 	}
 
 	cmd.Flags().BoolVar(&trimReplicas, "trim-replicas", false, "Trim replicas that are not on any of the target resources after replication")
+	cmd.Flags().IntVar(&serverThreads, "server-threads", 1, "Number of server threads used for the replication")
 
 	return cmd
 }
 
-func (a *App) replicateDataObject(ctx context.Context, path string, targetResourceNames []string, trimReplicas bool) error {
+func (a *App) replicateDataObject(ctx context.Context, path string, targetResourceNames []string, trimReplicas bool, serverThreads int) error {
 	object, err := a.GetDataObject(ctx, path)
 	if err != nil {
 		return fmt.Errorf("cannot lookup data object: %w", err)
@@ -417,7 +421,7 @@ func (a *App) replicateDataObject(ctx context.Context, path string, targetResour
 
 	existingReplicas, otherReplicas := classifyReplicas(object, targets)
 
-	changed, err := a.replicateToTargets(ctx, object.Path, targets, existingReplicas)
+	changed, err := a.replicateToTargets(ctx, object.Path, targets, existingReplicas, serverThreads)
 	if err != nil {
 		return err
 	}
@@ -447,7 +451,7 @@ func (a *App) replicateDataObject(ctx context.Context, path string, targetResour
 
 // replicateToTargets replicates the object to each target that has no good
 // replica yet, and reports whether any replication was performed.
-func (a *App) replicateToTargets(ctx context.Context, path string, targets []string, existingReplicas map[string][]int) (bool, error) {
+func (a *App) replicateToTargets(ctx context.Context, path string, targets []string, existingReplicas map[string][]int, serverThreads int) (bool, error) {
 	var changed bool
 
 	for _, target := range targets {
@@ -455,7 +459,7 @@ func (a *App) replicateToTargets(ctx context.Context, path string, targets []str
 			continue
 		}
 
-		if err := a.Client.WithNumThreads(1).ReplicateDataObject(ctx, path, target); err != nil {
+		if err := a.Client.WithNumThreads(serverThreads).ReplicateDataObject(ctx, path, target); err != nil {
 			if api.Is(err, msg.REPLICA_IS_BEING_STAGED) {
 				return changed, fmt.Errorf("archive is in GLACIER and is currently being restored, please resubmit request later")
 			}
