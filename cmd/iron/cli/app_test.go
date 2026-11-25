@@ -54,9 +54,9 @@ func TestAbbreviatePath(t *testing.T) {
 	}{
 		{
 			name:      "path fits",
-			path:      "/zone/home/user",
+			path:      "/zone/home/user1",
 			maxLength: 20,
-			expected:  "/zone/home/user",
+			expected:  "/zone/home/user1",
 		},
 		{
 			name:      "abbreviates parent directories",

@@ -1684,7 +1684,7 @@ func (a *App) metaop(op, description string, fn func(*api.API) func(context.Cont
 			}
 
 			return fn(a.Client.API)(cmd.Context(), path, stat.Type(), api.Metadata{
-				Name: args[1], Value: args[2], Units: args[3],
+				Name: a.Unescape(args[1]), Value: a.Unescape(args[2]), Units: a.Unescape(args[3]),
 			})
 		},
 	}
@@ -1704,10 +1704,11 @@ func (a *App) metaunset() *cobra.Command {
 				return err
 			}
 
+			keyToRemove := a.Unescape(args[1])
 			toremove := []api.Metadata{}
 
 			for _, triplet := range stat.Metadata() {
-				if triplet.Name == args[1] {
+				if triplet.Name == keyToRemove {
 					toremove = append(toremove, triplet)
 				}
 			}

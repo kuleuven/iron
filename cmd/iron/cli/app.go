@@ -229,7 +229,7 @@ func (a *App) addRootFlags(rootCmd *cobra.Command) {
 	rootCmd.PersistentFlags().BoolVar(&a.Native, "native", false, "Use native protocol")
 	rootCmd.PersistentFlags().StringVar(&a.Workdir, "workdir", a.Workdir, fmt.Sprintf("Override the working directory derived from the environment for this command. Using this flag does not prevent the application from changing the environment's working directory when combined with %s.", overrideEnvCommands))
 	rootCmd.PersistentFlags().DurationVar(&a.PamTTL, "ttl", 168*time.Hour, "In case pam authentication is used, request a session that is valid for the given duration. This value is rounded down to the nearest hour.")
-	rootCmd.PersistentFlags().BoolVar(&a.Literal, "literal", false, "Treat irods path segments '.' and '..' as literal rather than special directory references.")
+	rootCmd.PersistentFlags().BoolVar(&a.Literal, "literal", false, "Treat irods path segments '.' and '..' as literal rather than special directory references, and disable escape sequence processing in arguments (\\n, \\r, \\t, \\xHH, \\uHHHH, etc.).")
 
 	if a.environmentFlag {
 		rootCmd.PersistentFlags().StringVarP(&a.Environment, "environment", "e", "", "Environment label to use. Useful for multi-zone environments to specify which iRODS configuration to use (e.g., 'production', 'staging'). If not set, uses automatic detection.")

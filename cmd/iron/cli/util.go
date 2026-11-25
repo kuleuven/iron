@@ -11,6 +11,8 @@ func (a *App) Path(path string) string {
 }
 
 func (a *App) PathIn(path, workdir string) string {
+	path = a.Unescape(path)
+
 	if path == "" || path == "." {
 		return workdir
 	}
