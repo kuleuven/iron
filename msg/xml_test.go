@@ -224,3 +224,79 @@ func TestPreprocessXMLEmpty(t *testing.T) {
 		t.Errorf("expected empty result, got %q", result)
 	}
 }
+
+func TestFixBareCRInXML(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		expected []byte
+	}{
+		{
+			name:     "bare CR is encoded",
+			input:    []byte("hello\rworld"),
+			expected: []byte("hello&#xD;world"),
+		},
+		{
+			name:     "multiple CRs are encoded",
+			input:    []byte("line1\rline2\rline3"),
+			expected: []byte("line1&#xD;line2&#xD;line3"),
+		},
+		{
+			name:     "already encoded CR is preserved",
+			input:    []byte("hello&#xD;world"),
+			expected: []byte("hello&#xD;world"),
+		},
+		{
+			name:     "CRLF sequences are handled",
+			input:    []byte("line1\r\nline2"),
+			expected: []byte("line1&#xD;\nline2"),
+		},
+		{
+			name:     "no CR present",
+			input:    []byte("hello world"),
+			expected: []byte("hello world"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := fixBareCRInXML(tt.input)
+			if !bytes.Equal(result, tt.expected) {
+				t.Errorf("fixBareCRInXML(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestBareCarriageReturnInXMLUnmarshal(t *testing.T) {
+	// This test verifies the fix for the iRODS XML protocol bug where bare CR
+	// characters in filenames get converted to LF by Go's XML unmarshaler.
+	xmlWithBareCR := []byte("<root><value>.\r</value></root>")
+
+	msg := Message{
+		Header: Header{
+			Type:       "RESPONSE",
+			MessageLen: uint32(len(xmlWithBareCR)),
+		},
+		Body: Body{
+			Message: xmlWithBareCR,
+		},
+	}
+
+	var result struct {
+		Value string `xml:"value"`
+	}
+
+	err := unmarshalXML(msg, &result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The value should contain the CR character, not LF
+	expected := ".\r"
+	if result.Value != expected {
+		t.Errorf("unmarshalXML did not preserve bare CR: got %q, want %q", result.Value, expected)
+		t.Logf("Got bytes: %v", []byte(result.Value))
+		t.Logf("Expected bytes: %v", []byte(expected))
+	}
+}

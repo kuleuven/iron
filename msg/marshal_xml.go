@@ -67,6 +67,11 @@ func unmarshalXML(msg Message, obj any) error {
 		return fmt.Errorf("failed to postprocess xml: %w", err)
 	}
 
+	// Fix bare CR characters that iRODS sends in XML without proper encoding.
+	// Go's XML unmarshaler converts bare CR (0x0d) to LF (0x0a), which breaks filenames
+	// containing carriage returns. We encode bare CRs as &#xD; before unmarshaling.
+	body = fixBareCRInXML(body)
+
 	return xml.Unmarshal(body, obj)
 }
 
@@ -141,6 +146,29 @@ func PostprocessXML(in []byte) ([]byte, error) {
 	}
 
 	return out.Bytes(), nil
+}
+
+// fixBareCRInXML converts bare carriage return characters (0x0d) in XML to their
+// encoded form (&#xD;). This is necessary because iRODS sometimes sends literal CR
+// characters in XML instead of properly encoding them. Go's xml.Unmarshal treats
+// bare CR as line-ending normalization and converts it to LF (0x0a), which corrupts
+// filenames and metadata containing carriage returns.
+// See: https://www.w3.org/TR/xml/#sec-line-ends
+func fixBareCRInXML(in []byte) []byte {
+	out := &bytes.Buffer{}
+	i := 0
+
+	for i < len(in) {
+		if in[i] == '\r' {
+			out.Write(escCR)
+		} else {
+			out.WriteByte(in[i])
+		}
+
+		i++
+	}
+
+	return out.Bytes()
 }
 
 func isValidChar(r rune) bool {
