@@ -13,7 +13,7 @@ func (a *App) setDefaultWorkdir(ctx context.Context) error {
 	if a.Client.Env().WorkingDirectory != "" {
 		a.Workdir = a.Client.Env().WorkingDirectory
 
-		return a.saveWorkdir(ctx)
+		return nil
 	}
 
 	homedir := fmt.Sprintf("/%s/home/%s", a.Client.Env().Zone, a.Client.Env().Username)
